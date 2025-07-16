@@ -24,6 +24,8 @@ interface ProductFormData {
   min_stock_alert: number;
   production_status: string;
   image_url?: string;
+  availability: 'In Stock' | 'Low Stock' | 'Out of Stock';
+
 }
 
 const AdminProducts = () => {
@@ -45,7 +47,8 @@ const AdminProducts = () => {
     inventory: 0,
     min_stock_alert: 0,
     production_status: '',
-    image_url: ''
+    image_url: '',
+    availability: "In Stock",
   });
   const { toast } = useToast();
 
@@ -226,7 +229,9 @@ const AdminProducts = () => {
       inventory: product.inventory || 0,
       min_stock_alert: product.min_stock_alert || 0,
       production_status: product.production_status || '',
-      image_url: product.image_url || ''
+      image_url: product.image_url || '',
+      availability:product.availability || 'In Stock',
+      
     });
     setIsEditModalOpen(true);
   };
@@ -241,9 +246,13 @@ const AdminProducts = () => {
       inventory: 0,
       min_stock_alert: 0,
       production_status: '',
-      image_url: ''
+      image_url: '',
+      availability: 'In Stock',
+
     });
   };
+
+
 
   const getStatusBadgeVariant = (status: string | null) => {
     switch (status) {
@@ -361,16 +370,32 @@ const AdminProducts = () => {
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="image_url">Image URL</Label>
-        <Input
-          id="image_url"
-          type="url"
-          value={formData.image_url}
-          onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
-          placeholder="https://example.com/image.jpg"
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="image_url">Image URL</Label>
+          <Input
+            id="image_url"
+            type="url"
+            value={formData.image_url}
+            onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+            placeholder="https://example.com/image.jpg"
+          />
+        </div>
+        <div>
+          <Label htmlFor="availability">Production Status</Label>
+          <Select value={formData.availability} onValueChange={(value) => setFormData(prev => ({ ...prev, availability: value }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="In Stock">In Stock</SelectItem>
+              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+              <SelectItem value="Low Stock">Low Stock</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
 
       <div className="flex justify-end gap-2 pt-4">
         <Button type="button" variant="outline" onClick={() => {
@@ -398,7 +423,7 @@ const AdminProducts = () => {
       </div>
     );
   }
-
+console.log(formData)
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}

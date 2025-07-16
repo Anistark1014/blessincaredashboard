@@ -151,7 +151,7 @@ const handleRequestProducts = async () => {
   }
 };
 
-
+console.log(products)
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
