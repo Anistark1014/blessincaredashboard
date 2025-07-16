@@ -1,0 +1,230 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Women's Healthcare Management System Design System */
+@layer base {
+  :root {
+    /* Core Background & Text */
+    --background: 60 40% 99%; /* Ivory base */
+    --foreground: 340 15% 25%; /* Dark soft text */
+
+    /* Card System */
+    --card: 60 40% 99%;
+    --card-foreground: 340 15% 25%;
+
+    /* Healthcare Color Palette - HSL Values */
+    --lavender: 270 100% 94%; /* #E6E6FA - Pastel Lavender */
+    --lavender-dark: 270 50% 75%; /* Darker lavender for accents */
+    --lavender-foreground: 270 30% 25%;
+
+    --blush: 350 100% 88%; /* #FFC0CB - Blush Pink */
+    --blush-dark: 350 60% 70%; /* Darker blush for interactions */
+    --blush-foreground: 350 40% 25%;
+
+    --peach: 28 100% 86%; /* #FFDAB9 - Peach */
+    --peach-dark: 28 80% 65%; /* Darker peach */
+    --peach-foreground: 28 50% 25%;
+
+    --mint: 120 100% 80%; /* #98FF98 - Mint Green */
+    --mint-dark: 120 60% 60%; /* Darker mint */
+    --mint-foreground: 120 40% 25%;
+
+    /* Primary Theme - Lavender */
+    --primary: 270 100% 94%;
+    --primary-dark: 270 50% 75%;
+    --primary-foreground: 270 30% 25%;
+
+    /* Secondary - Blush */
+    --secondary: 350 100% 88%;
+    --secondary-dark: 350 60% 70%;
+    --secondary-foreground: 350 40% 25%;
+
+    /* Status Colors */
+    --pending: 28 100% 86%; /* Peach for pending */
+    --approved: 120 100% 80%; /* Mint for approved */
+    --warning: 39 100% 70%; /* Warm orange */
+    --success: 120 60% 50%; /* Success green */
+    --error: 0 70% 60%; /* Soft red */
+
+    /* UI Elements */
+    --muted: 270 100% 96%;
+    --muted-foreground: 340 15% 50%;
+    --accent: 350 100% 88%;
+    --accent-foreground: 350 40% 25%;
+
+    --border: 270 50% 90%;
+    --input: 270 30% 95%;
+    --ring: 270 50% 75%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--lavender)), hsl(var(--blush)));
+    --gradient-success: linear-gradient(135deg, hsl(var(--mint)), hsl(var(--mint-dark)));
+    --gradient-warning: linear-gradient(135deg, hsl(var(--peach)), hsl(var(--peach-dark)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--background)), hsl(var(--muted)));
+
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -4px hsl(var(--lavender) / 0.3);
+    --shadow-card: 0 8px 32px -8px hsl(var(--lavender) / 0.2);
+    --shadow-floating: 0 12px 40px -12px hsl(var(--primary) / 0.4);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --radius: 1rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-['Poppins',_sans-serif] antialiased;
+  }
+}
+
+@layer components {
+  /* Healthcare Card Components */
+  .healthcare-card {
+    @apply bg-gradient-to-br from-background to-muted border border-border rounded-2xl p-6 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-floating)] transition-[var(--transition-smooth)] hover:-translate-y-1;
+  }
+
+  .status-badge {
+    @apply px-3 py-1 rounded-full text-sm font-medium transition-[var(--transition-smooth)];
+  }
+
+  .status-pending {
+    @apply bg-[hsl(var(--pending))] text-[hsl(var(--peach-foreground))];
+  }
+
+  .status-approved {
+    @apply bg-[hsl(var(--approved))] text-[hsl(var(--mint-foreground))];
+  }
+
+  .status-warning {
+    @apply bg-[hsl(var(--warning))] text-white;
+  }
+
+  .status-success {
+    @apply bg-[hsl(var(--success))] text-white;
+  }
+
+  .status-error {
+    @apply bg-[hsl(var(--error))] text-white;
+  }
+
+  /* Button Variants */
+  .btn-healthcare {
+    @apply bg-gradient-to-r from-[hsl(var(--lavender))] to-[hsl(var(--blush))] text-[hsl(var(--primary-foreground))] hover:from-[hsl(var(--lavender-dark))] hover:to-[hsl(var(--blush-dark))] shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-floating)] transition-[var(--transition-bounce)];
+  }
+
+  /* Notification Styles */
+  .notification-unread {
+    @apply opacity-100 border-l-4 border-[hsl(var(--lavender))];
+  }
+
+  .notification-read {
+    @apply opacity-60 border-l-4 border-[hsl(var(--muted))];
+  }
+
+  /* Animations */
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  .float-gentle {
+    animation: floatGentle 3s ease-in-out infinite;
+  }
+
+  .pulse-soft {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
