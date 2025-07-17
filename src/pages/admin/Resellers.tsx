@@ -14,7 +14,7 @@ import { Eye, Flag, FlagOff, Search, Users, UserCheck, UserX } from 'lucide-reac
 //   id: string;
 //   email: string;
 //   role: string;
-//   company_name: string | null;
+//   name: string | null;
 //   contact_info: JSON | null;
 //   created_at: string | null;
 //   exclusive_features: string | null;
@@ -22,15 +22,22 @@ import { Eye, Flag, FlagOff, Search, Users, UserCheck, UserX } from 'lucide-reac
 //   is_active: boolean | null;
 // }
 
+
 interface Reseller {
   id: string;
   email: string;
-  company_name: string;
+  name: string;
   contact_info: any;
   flagged_status: boolean;
   is_active: boolean;
   exclusive_features: string;
   created_at: string;
+  region:string;
+  role:string;
+  total_products_sold:number;
+  payment_status:"pending" | "clear"
+  payment_amount_remaining: number;
+
 }
 
 interface Request {
@@ -44,6 +51,13 @@ interface Request {
   special_instructions: string;
   admin_notes: string;
 }
+
+  
+interface InfoItemProps {
+  label: string;
+  value: string | number | null | undefined;
+}
+
 
 // interface Payment {
 //   id: string;
@@ -65,29 +79,90 @@ const AdminResellers: React.FC = () => {
   const [exclusiveFeatures, setExclusiveFeatures] = useState('');
   const { toast } = useToast();
 
+
+
   // Fetch resellers
   useEffect(() => {
-    const fetchResellers = async () => {
-      try {
-        const { data:reseller, error:resellerError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('role', 'reseller')
-          .order('created_at', { ascending: false });
+    // const fetchResellers = async () => {
+    //   try {
+    //     const { data:reseller, error:resellerError } = await supabase
+    //       .from('users')
+    //       .select('*')
+    //       .eq('role', 'reseller')
+    //       .order('created_at', { ascending: false });
 
-        if (resellerError) throw resellerError;
-        setResellers(reseller as Reseller[]);
-      } catch (error: any) {
-        console.error('Error fetching resellers:', error);
-        toast({
-          title: "Error",
-          description: "Failed to fetch resellers",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+    //     if (resellerError) throw resellerError;
+    //     setResellers(reseller as Reseller[]);
+    //   } catch (error: any) {
+    //     console.error('Error fetching resellers:', error);
+    //     toast({
+    //       title: "Error",
+    //       description: "Failed to fetch resellers",
+    //       variant: "destructive",
+    //     });
+    //   } finally {
+    //     setLoading(false);
+    //   }
+    // };
+    const fetchResellers = async () => {
+  try {
+    const { data: resellerList, error: resellerError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('role', 'reseller')
+      .order('created_at', { ascending: false });
+
+    if (resellerError) throw resellerError;
+
+    const updatedResellers: Reseller[] = await Promise.all(
+      (resellerList as Reseller[]).map(async (reseller) => {
+        const { data: requests, error: requestError } = await supabase
+          .from('requests')
+          .select('total_amount, amount_paid')
+          .eq('reseller_id', reseller.id);
+
+        if (requestError) {
+          console.error(`Error fetching requests for ${reseller.name}`, requestError);
+          return {
+            ...reseller,
+            payment_status: 'pending',
+            payment_amount_remaining: 0,
+          };
+        }
+
+        let totalRemaining = 0;
+        for (const req of requests) {
+          const total = req.total_amount ?? 0;
+          const paid = req.amount_paid ?? 0;
+          totalRemaining += Math.max(0, total - paid);
+        }
+
+        return {
+          ...reseller,
+          name: reseller.name ?? "Unnamed",
+          region: reseller.region ?? "Unknown",
+          created_at: reseller.created_at ?? "",
+          total_products_sold: reseller.total_products_sold ?? 0,
+          payment_status: totalRemaining === 0 ? "clear" : "pending",
+          payment_amount_remaining: totalRemaining,
+        } as Reseller;
+
+      })
+    );
+
+    setResellers(updatedResellers);
+  } catch (error: any) {
+    console.error('Error fetching resellers:', error);
+    toast({
+      title: "Error",
+      description: "Failed to fetch resellers",
+      variant: "destructive",
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
 
     fetchResellers();
 
@@ -235,7 +310,7 @@ const AdminResellers: React.FC = () => {
   };
 
   const filteredResellers = resellers.filter(reseller =>
-    reseller.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    reseller.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     reseller.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -256,6 +331,14 @@ const AdminResellers: React.FC = () => {
       </div>
     );
   }
+
+const InfoItem: React.FC<InfoItemProps> = ({ label, value }) => (
+  <div>
+    <label className="text-sm font-medium text-gray-600">{label}</label>
+    <p className="text-sm text-gray-900">{value ?? 'Not provided'}</p>
+  </div>
+);
+
 console.log(resellers)
   return (
     <div className="space-y-6">
@@ -322,175 +405,168 @@ console.log(resellers)
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {filteredResellers.map((reseller) => (
-              <div key={reseller.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <h3 className="font-semibold">{reseller.company_name || 'No Company Name'}</h3>
-                    {reseller.flagged_status && (
-                      <Badge variant="destructive">
-                        <Flag className="h-3 w-3 mr-1" />
-                        Flagged
-                      </Badge>
-                    )}
-                    {!reseller.is_active && (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
+           {filteredResellers.map((reseller) => (
+              <div
+                key={reseller.id}
+                className="flex flex-col gap-3 p-4 border rounded-lg shadow-sm bg-white"
+              >
+                {/* Header Summary Row */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-medium text-base text-gray-800 w-1/3">
+                    {reseller.name} <span className="text-sm text-gray-500">| {reseller.region}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">{reseller.email}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Phone: {reseller.contact_info?.phone || 'Not provided'}
-                  </p>
-                </div>
-                <Dialog open={detailsOpen && selectedReseller?.id === reseller.id} onOpenChange={setDetailsOpen}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedReseller(reseller)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View Details
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Reseller Details - {reseller.company_name}</DialogTitle>
-                    </DialogHeader>
-                    
-                    {selectedReseller && (
-                      <div className="space-y-6">
-                        {/* Basic Info */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-sm font-medium">Email</label>
-                            <p className="text-sm">{selectedReseller.email}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium">Company</label>
-                            <p className="text-sm">{selectedReseller.company_name || 'Not provided'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium">Phone</label>
-                            <p className="text-sm">{selectedReseller.contact_info?.phone || 'Not provided'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium">Joined</label>
-                            <p className="text-sm">{new Date(selectedReseller.created_at).toLocaleDateString()}</p>
-                          </div>
-                        </div>
 
-                        {/* Actions */}
-                        <div className="flex space-x-2">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant={selectedReseller.flagged_status ? "destructive" : "outline"} size="sm">
-                                {selectedReseller.flagged_status ? <FlagOff className="h-4 w-4 mr-1" /> : <Flag className="h-4 w-4 mr-1" />}
-                                {selectedReseller.flagged_status ? 'Unflag' : 'Flag'} Reseller
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  {selectedReseller.flagged_status ? 'Unflag' : 'Flag'} Reseller
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to {selectedReseller.flagged_status ? 'unflag' : 'flag'} this reseller?
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleToggleFlag(selectedReseller.id, selectedReseller.flagged_status)}
+                  <div className="flex items-center gap-4 text-sm text-gray-700 w-1/3">
+                    <span className="font-medium">
+                      Sold: <span className="text-black">{reseller.total_products_sold}</span>
+                    </span>
+                    <span className="font-medium">
+                      Payment: <span className={reseller.payment_status === 'clear' ? 'text-green-600' : 'text-red-600'}>
+                        {reseller.payment_status}
+                      </span>
+                    </span>
+                  </div>
+
+                  <Dialog
+                    open={detailsOpen && selectedReseller?.id === reseller.id}
+                    onOpenChange={setDetailsOpen}
+                  >
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedReseller(reseller)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View Details
+                      </Button>
+                    </DialogTrigger>
+
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Reseller Details - {reseller.name}</DialogTitle>
+                      </DialogHeader>
+
+                      {selectedReseller && (
+                        <div className="space-y-6">
+
+                          {/* Basic Info */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <InfoItem label="Email" value={selectedReseller.email} />
+                            <InfoItem label="Company" value={selectedReseller.name || 'Not provided'} />
+                            <InfoItem label="Phone" value={selectedReseller.contact_info?.phone || 'Not provided'} />
+                            <InfoItem label="Joined" value={new Date(selectedReseller.created_at).toLocaleDateString()} />
+                          </div>
+
+                          {/* Flag Action */}
+                          <div className="flex space-x-2">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant={selectedReseller.flagged_status ? "destructive" : "outline"}
+                                  size="sm"
                                 >
-                                  Confirm
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-
-                        {/* Exclusive Features */}
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Exclusive Features</label>
-                          <Textarea
-                            value={exclusiveFeatures}
-                            onChange={(e) => setExclusiveFeatures(e.target.value)}
-                            placeholder="Enter exclusive features for this reseller..."
-                          />
-                          <Button onClick={handleUpdateExclusiveFeatures} size="sm">
-                            Save Features
-                          </Button>
-                        </div>
-
-                        {/* Requests */}
-                        <div>
-                          <h3 className="text-lg font-semibold mb-3">Requests ({resellerRequests.length})</h3>
-                          <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {resellerRequests.map((request) => (
-                              <div key={request.id} className="flex items-center justify-between p-3 border rounded">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="font-medium">#{request.id.slice(0, 8)}</span>
-                                    <Badge className={getStatusBadge(request.status)}>
-                                      {request.status}
-                                    </Badge>
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Amount: ${request.total_amount} | Date: {new Date(request.request_date).toLocaleDateString()}
-                                  </p>
-                                </div>
-                                {request.status === 'Pending' && (
-                                  <div className="flex space-x-2">
-                                    <Button
-                                      size="sm"
-                                      onClick={() => handleRequestStatusUpdate(request.id, 'Approved')}
-                                    >
-                                      Approve
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => handleRequestStatusUpdate(request.id, 'Rejected')}
-                                    >
-                                      Reject
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            {resellerRequests.length === 0 && (
-                              <p className="text-sm text-muted-foreground text-center py-4">No requests found</p>
-                            )}
+                                  {selectedReseller.flagged_status ? (
+                                    <FlagOff className="h-4 w-4 mr-1" />
+                                  ) : (
+                                    <Flag className="h-4 w-4 mr-1" />
+                                  )}
+                                  {selectedReseller.flagged_status ? 'Unflag' : 'Flag'} Reseller
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    {selectedReseller.flagged_status ? 'Unflag' : 'Flag'} Reseller
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to {selectedReseller.flagged_status ? 'unflag' : 'flag'} this reseller?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleToggleFlag(selectedReseller.id, selectedReseller.flagged_status)}
+                                  >
+                                    Confirm
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
-                        </div>
 
-                        {/* Payments */}
-                        {/* <div>
-                          <h3 className="text-lg font-semibold mb-3">Payments ({resellerPayments.length})</h3>
-                          <div className="space-y-2 max-h-40 overflow-y-auto">
-                            {resellerPayments.map((payment) => (
-                              <div key={payment.id} className="flex items-center justify-between p-3 border rounded">
-                                <div>
-                                  <span className="font-medium">${payment.amount}</span>
-                                  <p className="text-sm text-muted-foreground">
-                                    {payment.method} | {new Date(payment.payment_date).toLocaleDateString()}
-                                  </p>
-                                </div>
-                                <Badge variant="outline">{payment.payment_type}</Badge>
-                              </div>
-                            ))}
-                            {resellerPayments.length === 0 && (
-                              <p className="text-sm text-muted-foreground text-center py-4">No payments found</p>
-                            )}
+                          {/* Exclusive Features */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Exclusive Features</label>
+                            <Textarea
+                              value={exclusiveFeatures}
+                              onChange={(e) => setExclusiveFeatures(e.target.value)}
+                              placeholder="Enter exclusive features for this reseller..."
+                            />
+                            <Button onClick={handleUpdateExclusiveFeatures} size="sm">
+                              Save Features
+                            </Button>
                           </div>
-                        </div> */}
-                      </div>
-                    )}
-                  </DialogContent>
-                </Dialog>
+
+                          {/* Requests */}
+                          <div>
+                            <h3 className="text-lg font-semibold mb-3">
+                              Requests ({resellerRequests.length})
+                            </h3>
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {resellerRequests.length > 0 ? (
+                                resellerRequests.map((request) => (
+                                  <div key={request.id} className="flex items-center justify-between p-3 border rounded">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-medium">#{request.id.slice(0, 8)}</span>
+                                        <Badge className={getStatusBadge(request.status)}>
+                                          {request.status}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground">
+                                        Amount: ${request.total_amount} | Date: {new Date(request.request_date).toLocaleDateString()}
+                                      </p>
+                                    </div>
+                                    {request.status === 'Pending' && (
+                                      <div className="flex space-x-2">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleRequestStatusUpdate(request.id, 'Approved')}
+                                        >
+                                          Approve
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          onClick={() => handleRequestStatusUpdate(request.id, 'Rejected')}
+                                        >
+                                          Reject
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">
+                                  No requests found
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Payments Section (optional future use) */}
+                          {/* Uncomment if needed later */}
+
+                        </div>
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </div>
             ))}
+
+
 
             {filteredResellers.length === 0 && (
               <div className="text-center py-8">
