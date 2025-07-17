@@ -142,10 +142,17 @@ const ResellerRequests: React.FC = () => {
     return JSON.stringify(products);
   };
 
-  const getTotalRequests = () => requests.length;
-  const getPendingRequests = () => requests.filter(r => r.status === 'Pending').length;
-  const getApprovedRequests = () => requests.filter(r => r.status === 'Approved').length;
-  const getTotalValue = () => requests.reduce((sum, r) => sum + Number(r.total_amount), 0);
+const getTotalRequests = () => requests.length;
+
+const getPendingRequests = () =>
+  requests.filter(r => r.status === 'pending' || r.status === 'Pending').length;
+
+const getApprovedRequests = () =>
+  requests.filter(r => r.status === 'approved' || r.status === 'Approved').length;
+
+const getTotalValue = () =>
+  requests.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
+
 
   if (loading) {
     return (
@@ -154,7 +161,7 @@ const ResellerRequests: React.FC = () => {
       </div>
     );
   }
-
+console.log(requests)
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -221,7 +228,6 @@ const ResellerRequests: React.FC = () => {
             <SelectItem value="Pending">Pending</SelectItem>
             <SelectItem value="Approved">Approved</SelectItem>
             <SelectItem value="Rejected">Rejected</SelectItem>
-            <SelectItem value="Shipped">Shipped</SelectItem>
           </SelectContent>
         </Select>
         <Select value={paymentFilter} onValueChange={setPaymentFilter}>
@@ -264,6 +270,9 @@ const ResellerRequests: React.FC = () => {
                         </div>
                         <div>
                           <span className="font-medium">Amount Paid:</span> ${Number(request.amount_paid).toFixed(2)}
+                        </div>
+                        <div>
+                          <span className="font-medium">Products Ordered:</span> {Number(request.products_ordered).toFixed(2)}
                         </div>
                         <div>
                           <span className="font-medium">Request Date:</span> {new Date(request.request_date).toLocaleDateString()}

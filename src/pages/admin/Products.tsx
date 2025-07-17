@@ -1,4 +1,4 @@
-import  { useState, useEffect } from 'react';
+import  { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Tables } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -276,129 +276,174 @@ const AdminProducts = () => {
     ? products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length 
     : 0;
 
-  const ProductForm = ({ onSubmit, isEdit = false }: { onSubmit: (e: React.FormEvent) => void; isEdit?: boolean }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
+const ProductForm = ({
+  onSubmit,
+  isEdit = false,
+}: {
+  onSubmit: (e: React.FormEvent) => void;
+  isEdit?: boolean;
+}) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div>
+      <Label htmlFor="name">Name *</Label>
+      <Input
+        id="name"
+        value={formData?.name ?? ""}
+        onChange={(e) =>
+          setFormData((prev) => ({ ...prev, name: e.target.value }))
+        }
+        required
+      />
+    </div>
+
+    <div>
+      <Label htmlFor="description">Description</Label>
+      <Textarea
+        id="description"
+        value={formData?.description ?? ""}
+        onChange={(e) =>
+          setFormData((prev) => ({ ...prev, description: e.target.value }))
+        }
+        rows={3}
+      />
+    </div>
+
+    <div className="grid grid-cols-2 gap-4">
       <div>
-        <Label htmlFor="name">Name *</Label>
+        <Label htmlFor="category">Category *</Label>
         <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          id="category"
+          value={formData?.category ?? ""}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, category: e.target.value }))
+          }
           required
         />
       </div>
-      
       <div>
-        <Label htmlFor="description">Description</Label>
-        <Textarea
-          id="description"
-          value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-          rows={3}
+        <Label htmlFor="type">Type</Label>
+        <Input
+          id="type"
+          value={formData?.type ?? ""}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, type: e.target.value }))
+          }
         />
       </div>
+    </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="category">Category *</Label>
-          <Input
-            id="category"
-            value={formData.category}
-            onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="type">Type</Label>
-          <Input
-            id="type"
-            value={formData.type}
-            onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
-          />
-        </div>
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="price">Price *</Label>
+        <Input
+          id="price"
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData?.price ?? ""}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              price: parseFloat(e.target.value) || 0,
+            }))
+          }
+          required
+        />
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="price">Price *</Label>
-          <Input
-            id="price"
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.price}
-            onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="inventory">Inventory</Label>
-          <Input
-            id="inventory"
-            type="number"
-            min="0"
-            value={formData.inventory}
-            onChange={(e) => setFormData(prev => ({ ...prev, inventory: parseInt(e.target.value) || 0 }))}
-          />
-        </div>
+      <div>
+        <Label htmlFor="inventory">Inventory</Label>
+        <Input
+          id="inventory"
+          type="number"
+          min="0"
+          value={formData?.inventory ?? ""}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              inventory: parseInt(e.target.value) || 0,
+            }))
+          }
+        />
       </div>
+    </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="min_stock_alert">Min Stock Alert</Label>
-          <Input
-            id="min_stock_alert"
-            type="number"
-            min="0"
-            value={formData.min_stock_alert}
-            onChange={(e) => setFormData(prev => ({ ...prev, min_stock_alert: parseInt(e.target.value) || 0 }))}
-          />
-        </div>
-        <div>
-          <Label htmlFor="production_status">Production Status</Label>
-          <Select value={formData.production_status} onValueChange={(value) => setFormData(prev => ({ ...prev, production_status: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-              <SelectItem value="Ready for Distribution">Ready for Distribution</SelectItem>
-              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-              <SelectItem value="Discontinued">Discontinued</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="min_stock_alert">Min Stock Alert</Label>
+        <Input
+          id="min_stock_alert"
+          type="number"
+          min="0"
+          value={formData?.min_stock_alert ?? ""}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              min_stock_alert: parseInt(e.target.value) || 0,
+            }))
+          }
+        />
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="image_url">Image URL</Label>
-          <Input
-            id="image_url"
-            type="url"
-            value={formData.image_url}
-            onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
-            placeholder="https://example.com/image.jpg"
-          />
-        </div>
-        <div>
-          <Label htmlFor="availability">Production Status</Label>
-          <Select value={formData.availability} onValueChange={(value) => setFormData(prev => ({ ...prev, availability: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="In Stock">In Stock</SelectItem>
-              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-              <SelectItem value="Low Stock">Low Stock</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div>
+        <Label htmlFor="production_status">Production Status</Label>
+        <Select
+          value={formData?.production_status ?? ""}
+          onValueChange={(value) =>
+            setFormData((prev) => ({ ...prev, production_status: value }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Manufacturing">Manufacturing</SelectItem>
+            <SelectItem value="Ready for Distribution">
+              Ready for Distribution
+            </SelectItem>
+            <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+            <SelectItem value="Discontinued">Discontinued</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+    </div>
 
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="image_url">Image URL</Label>
+        <Input
+          id="image_url"
+          type="url"
+          value={formData?.image_url ?? ""}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, image_url: e.target.value }))
+          }
+          placeholder="https://example.com/image.jpg"
+        />
+      </div>
+      <div>
+        <Label htmlFor="availability">Availability</Label>
+        <Select
+          value={formData?.availability ?? ""}
+          onValueChange={(value) =>
+            setFormData((prev) => ({ ...prev, availability: value }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="In Stock">In Stock</SelectItem>
+            <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+            <SelectItem value="Low Stock">Low Stock</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
 
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={() => {
+    <div className="flex justify-end gap-2 pt-4">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => {
           if (isEdit) {
             setIsEditModalOpen(false);
             setEditingProduct(null);
@@ -406,15 +451,18 @@ const AdminProducts = () => {
             setIsAddModalOpen(false);
           }
           resetForm();
-        }}>
-          Cancel
-        </Button>
-        <Button type="submit">
-          {isEdit ? 'Update Product' : 'Add Product'}
-        </Button>
-      </div>
-    </form>
-  );
+        }}
+      >
+        Cancel
+      </Button>
+      <Button type="submit">
+        {isEdit ? "Update Product" : "Add Product"}
+      </Button>
+    </div>
+  </form>
+);
+
+
 
   if (loading) {
     return (

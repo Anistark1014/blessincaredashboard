@@ -30,6 +30,7 @@ const ProductCatalog = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [selectedProductQuantities, setSelectedProductQuantities] = useState<Map<string, number>>(new Map());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -69,89 +70,114 @@ const ProductCatalog = () => {
   };
 
   const toggleProductSelection = (productId: string) => {
-    const newSelected = new Set(selectedProducts);
-    newSelected.has(productId) ? newSelected.delete(productId) : newSelected.add(productId);
-    setSelectedProducts(newSelected);
+    setSelectedProducts(prev => {
+      const updated = new Set(prev);
+      if (updated.has(productId)) {
+        updated.delete(productId);
+      } else {
+        updated.add(productId);
+      }
+      return updated;
+    });
+
+    setSelectedProductQuantities(prev => {
+      const updated = new Map(prev);
+      if (updated.has(productId)) {
+        updated.delete(productId);
+      } else {
+        updated.set(productId, 1);
+      }
+      return updated;
+    });
   };
 
-const handleRequestProducts = async () => {
-  if (selectedProducts.size === 0) {
-    toast({
-      title: "No products selected",
-      description: "Please select at least one product to request.",
-      variant: "destructive",
+  const handleQuantityChange = (productId: string, quantity: number) => {
+    setSelectedProductQuantities(prev => {
+      const updated = new Map(prev);
+      updated.set(productId, quantity);
+      return updated;
     });
-    return;
-  }
+  };
 
-  try {
-    const userId = (await supabase.auth.getUser()).data.user?.id;
-
-    if (!userId) {
+  const handleRequestProducts = async () => {
+    if (selectedProducts.size === 0) {
       toast({
-        title: "Unauthorized",
-        description: "You must be logged in to request products.",
+        title: "No products selected",
+        description: "Please select at least one product to request.",
         variant: "destructive",
       });
       return;
     }
 
-    // 1. Create product_request entry
-    const { data: request, error: requestError } = await supabase
-      .from('requests')
-      .insert({
-        reseller_id: userId,
-        status: 'pending',
-        request_date: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    try {
+      const userId = (await supabase.auth.getUser()).data.user?.id;
 
-    if (requestError) throw requestError;
+      if (!userId) {
+        toast({
+          title: "Unauthorized",
+          description: "You must be logged in to request products.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    // 2. Create product_request_items entries
-    const itemsToInsert = products
-      .filter((p) => selectedProducts.has(p.id))
-      .map((p) => ({
-        request_id: request.id,
-        product_id: p.id,
-        product_name: p.name,
-        quantity: 1, // Default 1 — can be updated if UI adds quantity input
-        price: p.price,
-      }));
+      const { data: request, error: requestError } = await supabase
+        .from('requests')
+        .insert({
+          reseller_id: userId,
+          status: 'pending',
+          request_date: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
-    const { error: itemsError } = await supabase
-      .from('product_request_items')
-      .insert(itemsToInsert);
+      if (requestError) throw requestError;
 
-    if (itemsError) throw itemsError;
+      const itemsToInsert = products
+        .filter((p) => selectedProducts.has(p.id))
+        .map((p) => ({
+          request_id: request.id,
+          product_id: p.id,
+          product_name: p.name,
+          quantity: selectedProductQuantities.get(p.id) || 1,
+          price: selectedProductQuantities.get(p.id)*p.price,
+        }));
+        console.log("ItemstoInsert",itemsToInsert)
 
-    // 3. Optional: Create a notification
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      message: `You requested ${selectedProducts.size} product(s).`,
-      type: 'info',
-      timestamp: new Date().toISOString(),
-    });
+      const { error: itemsError } = await supabase
+        .from('product_request_items')
+        .insert(itemsToInsert);
 
-    toast({
-      title: "Request Submitted",
-      description: `${selectedProducts.size} products requested successfully.`,
-      className: "border-mint bg-mint/10",
-    });
+      if (itemsError) throw itemsError;
 
-    setSelectedProducts(new Set());
-  } catch (err: any) {
-    console.error(err);
-    toast({
-      title: "Request Failed",
-      description: err.message || "An unexpected error occurred.",
-      variant: "destructive",
-    });
-  }
-};
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        message: `You requested ${selectedProducts.size} product(s).`,
+        type: 'info',
+        timestamp: new Date().toISOString(),
+      });
 
-console.log(products)
+      toast({
+        title: "Request Submitted",
+        description: `${selectedProducts.size} products requested successfully.`,
+        className: "border-mint bg-mint/10",
+      });
+
+      setSelectedProducts(new Set());
+      setSelectedProductQuantities(new Map());
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Request Failed",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  console.log(products)
+  console.log(selectedProducts)
+
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
@@ -291,6 +317,25 @@ console.log(products)
                     {isOutOfStock ? 'Out of Stock' : isSelected ? 'Selected' : 'Select'}
                   </Button>
                 </div>
+
+                {isSelected && (
+                  <div className="pt-2 flex items-center gap-2">
+                    <label htmlFor={`qty-${product.id}`} className="text-sm text-muted-foreground">
+                      Qty:
+                    </label>
+                    <Input
+                      id={`qty-${product.id}`}
+                      type="number"
+                      min={5}
+                      value={selectedProductQuantities.get(product.id) || 1}
+                      onChange={(e) =>
+                        handleQuantityChange(product.id, parseInt(e.target.value) || 1)
+                      }
+                      className="w-28 text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
