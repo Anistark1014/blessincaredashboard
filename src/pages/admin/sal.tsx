@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabaseClient';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface Sale {
   id: string;
@@ -19,7 +18,6 @@ interface Sale {
   clearance: string | null;
   balance: number;
   description: string;
-  payment_status: 'Fully Paid' | 'Partially Paid' | 'Pending';
 }
 
 const formatCurrency = (amount: number) =>
@@ -40,12 +38,6 @@ const rowColor = (type: string) => {
     default:
       return '';
   }
-};
-
-const statusColors = {
-  'Fully Paid': 'text-green-700 font-semibold',
-  'Partially Paid': 'text-yellow-600 font-semibold',
-  'Pending': 'text-red-600 font-semibold',
 };
 
 const SalesTable: React.FC = () => {
@@ -89,31 +81,6 @@ const SalesTable: React.FC = () => {
     const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
     const rawValue = sale[field];
     const displayValue = formatter ? formatter(rawValue) : rawValue;
-
-    if (field === 'payment_status') {
-      return (
-        <TableCell
-          onClick={() => setEditingCell({ rowId: sale.id, field })}
-          className="cursor-pointer"
-        >
-          {isEditing ? (
-            <select
-              className="w-32 px-2 py-1 border rounded"
-              value={sale.payment_status}
-              onChange={(e) => handleEditChange(sale.id, field, e.target.value)}
-              onBlur={() => setEditingCell(null)}
-              autoFocus
-            >
-              <option value="Fully Paid">Fully Paid</option>
-              <option value="Partially Paid">Partially Paid</option>
-              <option value="Pending">Pending</option>
-            </select>
-          ) : (
-            <span className={cn(statusColors[sale.payment_status])}>{sale.payment_status}</span>
-          )}
-        </TableCell>
-      );
-    }
 
     return (
       <TableCell
@@ -160,8 +127,7 @@ const SalesTable: React.FC = () => {
       newSale.paid !== undefined &&
       newSale.incoming !== undefined &&
       newSale.balance !== undefined &&
-      newSale.description &&
-      newSale.payment_status
+      newSale.description
     ) {
       const { data, error } = await supabase.from('sales').insert([newSale]).select();
 
@@ -199,7 +165,6 @@ const SalesTable: React.FC = () => {
                 <TableHead>Clearance Date</TableHead>
                 <TableHead>Total Balance</TableHead>
                 <TableHead>Transaction Description</TableHead>
-                <TableHead>Payment Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -217,7 +182,6 @@ const SalesTable: React.FC = () => {
                   {renderEditableCell(sale, 'clearance', undefined, false, 'date')}
                   {renderEditableCell(sale, 'balance', formatCurrency, true, 'number')}
                   {renderEditableCell(sale, 'description')}
-                  {renderEditableCell(sale, 'payment_status')}
                 </TableRow>
               ))}
               {addingNew && (
@@ -317,17 +281,6 @@ const SalesTable: React.FC = () => {
                       value={newSale.description ?? ''}
                       onChange={(e) => handleNewChange('description', e.target.value)}
                     />
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      className="w-32 px-2 py-1 border rounded"
-                      value={newSale.payment_status ?? 'Pending'}
-                      onChange={(e) => handleNewChange('payment_status', e.target.value)}
-                    >
-                      <option value="Fully Paid">Fully Paid</option>
-                      <option value="Partially Paid">Partially Paid</option>
-                      <option value="Pending">Pending</option>
-                    </select>
                   </TableCell>
                 </TableRow>
               )}
