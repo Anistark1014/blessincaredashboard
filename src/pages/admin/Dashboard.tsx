@@ -28,7 +28,7 @@ const AdminDashboard = () => {
       setLoading(true);
 
       const { data: reqData, error: reqError } = await supabase
-        .from('product_request_items')
+        .from('requests')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -79,7 +79,7 @@ const AdminDashboard = () => {
       default: return 'bg-muted text-muted-foreground';
     }
   };
-
+console.log(requests)
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}

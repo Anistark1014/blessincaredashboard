@@ -256,7 +256,7 @@ const AdminResellers: React.FC = () => {
       </div>
     );
   }
-
+console.log(resellers)
   return (
     <div className="space-y-6">
       {/* Header */}
