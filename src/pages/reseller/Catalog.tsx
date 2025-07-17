@@ -19,6 +19,7 @@ type Product = {
   name: string;
   description: string;
   price: number;
+  image_url:string;
   category: string;
   availability: 'in-stock' | 'low-stock' | 'out-of-stock';
 };
@@ -176,7 +177,6 @@ const ProductCatalog = () => {
   };
 
   console.log(products)
-  console.log(selectedProducts)
 
   return (
     <div className="space-y-6 fade-in-up">
@@ -203,7 +203,7 @@ const ProductCatalog = () => {
 
       {/* Filters */}
       <Card className="healthcare-card">
-        <CardContent className="pt-6">
+        <CardContent className="-mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -227,18 +227,6 @@ const ProductCatalog = () => {
                       {category === 'all' ? 'All Categories' : category}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                <SelectTrigger className="w-40 border-lavender/30">
-                  <SelectValue placeholder="Availability" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="in-stock">In Stock</SelectItem>
-                  <SelectItem value="low-stock">Low Stock</SelectItem>
-                  <SelectItem value="out-of-stock">Out of Stock</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -276,7 +264,13 @@ const ProductCatalog = () => {
                 </div>
 
                 <div className="aspect-video bg-gradient-to-br from-lavender/10 to-blush/10 rounded-lg flex items-center justify-center">
-                  <Package className="w-12 h-12 text-lavender-dark opacity-50" />
+                  {product.image_url==null || product.image_url==""?(
+                    <div><Package className="w-12 h-12 text-lavender-dark opacity-50" /></div>
+                  ):(
+                    <div>
+                      <img src={product.image_url} className='w-40 h-40' alt="" />
+                    </div>
+                  )}
                 </div>
               </CardHeader>
 
