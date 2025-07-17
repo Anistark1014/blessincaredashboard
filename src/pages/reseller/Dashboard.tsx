@@ -90,62 +90,77 @@ export default function ResellerDashboard() {
     );
   }
 
+  console.log(requests)
+
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {/* Requests Card */}
-      <Card>
-        <CardContent className="flex flex-col p-6">
-          <div className="flex items-center space-x-4">
-            <PackageSearch className="h-6 w-6 text-primary" />
-            <h2 className="text-xl font-semibold">Your Requests</h2>
-          </div>
-          <ul className="mt-4 space-y-2">
-            {requests.length === 0 ? (
-              <li className="text-sm text-muted-foreground">No requests yet.</li>
-            ) : (
-              requests.slice(0, 5).map((req) => (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <PackageSearch className="h-6 w-6 text-primary" />
+          <h2 className="text-xl font-semibold">Your Orders</h2>
+        </div>
+
+        {requests.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No orders yet.</p>
+        ) : (
+          <ul className="space-y-3">
+            {requests.slice(0, 5).map((req) => {
+              const statusColor = {
+                pending: 'bg-yellow-100 text-yellow-800',
+                approved: 'bg-green-100 text-green-800',
+                rejected: 'bg-red-100 text-red-800',
+              }[req.status!] || 'bg-gray-100 text-gray-800';
+
+              const paymentColor =
+                req.payment_status === 'paid'
+                  ? 'text-green-600'
+                  : req.payment_status === 'pending'
+                  ? 'text-yellow-600'
+                  : 'text-red-600';
+
+              return (
                 <li
                   key={req.id}
-                  className="text-sm border p-2 rounded-lg bg-muted"
+                  className="p-4 border rounded-lg bg-muted hover:shadow-md transition"
                 >
-                  <span className="font-medium">{req.status}</span> —{' '}
-                  {format(new Date(req.request_date!), 'dd MMM yyyy')}<br />
-                  <span className="text-xs text-muted-foreground">
-                    Items: {req.product_request_items?.length || 0}
-                  </span>
-                </li>
-              ))
-            )}
-          </ul>
-        </CardContent>
-      </Card>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {format(new Date(req.request_date!), 'dd MMM yyyy')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {req.product_request_items?.length || 0} item(s) | ₹{req.total_amount}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className={`text-xs px-2 py-1 rounded ${statusColor}`}
+                      >
+                        {req.status}
+                      </span>
+                      <br />
+                      <span className={`text-xs font-semibold ${paymentColor}`}>
+                        {req.payment_status}
+                      </span>
+                    </div>
+                  </div>
 
-      {/* Notifications Card */}
-      <Card>
-        <CardContent className="flex flex-col p-6">
-          <div className="flex items-center space-x-4">
-            <Bell className="h-6 w-6 text-primary" />
-            <h2 className="text-xl font-semibold">Recent Notifications</h2>
-          </div>
-          <ul className="mt-4 space-y-2">
-            {notifications.length === 0 ? (
-              <li className="text-sm text-muted-foreground">No notifications yet.</li>
-            ) : (
-              notifications.map((n) => (
-                <li
-                  key={n.id}
-                  className="text-sm border p-2 rounded-lg bg-muted"
-                >
-                  {n.message} —{' '}
-                  <span className="text-xs text-muted-foreground">
-                    {format(new Date(n.timestamp!), 'dd MMM, hh:mm a')}
-                  </span>
+                  {req.special_instructions && (
+                    <p className="text-xs mt-2 italic text-muted-foreground">
+                      Note: {req.special_instructions}
+                    </p>
+                  )}
                 </li>
-              ))
-            )}
+              );
+            })}
           </ul>
-        </CardContent>
-      </Card>
+        )}
+      </CardContent>
+    </Card>
+
+
     </div>
   );
 }
