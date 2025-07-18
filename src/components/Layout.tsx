@@ -1,12 +1,13 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { 
-  Heart, 
-  LogOut, 
-  Bell, 
-  Home, 
-  Package, 
-  ShoppingCart, 
+import {
+  Heart,
+  LogOut,
+  Bell,
+  Home,
+  Package,
+  ShoppingCart,
   CreditCard,
   Users,
   BarChart3,
@@ -23,7 +24,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
-  
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+
   const resellerNavItems = [
     { to: '/reseller', icon: Home, label: 'Dashboard' },
     { to: '/reseller/catalog', icon: Package, label: 'Product Catalog' },
@@ -47,28 +49,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <nav className="bg-card/80 backdrop-blur-sm border-b border-lavender/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
+            {/* Logo + Hamburger */}
             <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className=""
+                onClick={() => setSidebarOpen(!isSidebarOpen)}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-6 h-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d={
+                      isSidebarOpen
+                        ? 'M6 18L18 6M6 6l12 12' // X icon
+                        : 'M4 6h16M4 12h16M4 18h16' // Hamburger
+                    }
+                  />
+                </svg>
+              </Button>
+
               <div className="w-10 h-10 bg-gradient-to-br from-lavender to-blush rounded-full flex items-center justify-center shadow-[var(--shadow-soft)]">
                 <Heart className="w-5 h-5 text-lavender-foreground" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-foreground">Women's Healthcare</h1>
+                <h1 className="text-sm md:text-lg font-semibold text-foreground">Women's Healthcare</h1>
                 <p className="text-xs text-muted-foreground capitalize">{user?.role} Portal</p>
               </div>
             </div>
 
             {/* User Actions */}
             <div className="flex items-center gap-4">
-              <span>
-                <ToggleTheme/>
-              </span>
-              <Button variant="ghost" size="sm" className="relative">
+              <ToggleTheme />
+              <Button variant="ghost" size="sm" className="relative hidden md:inline">
                 <Bell className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-blush rounded-full pulse-soft"></span>
               </Button>
-              
-              <div className="flex items-center gap-3">
+              <div className="items-center gap-3 hidden md:flex">
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium text-foreground">{user?.name}</p>
                   <p className="text-xs text-muted-foreground">{user?.email}</p>
@@ -77,10 +102,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <Flower2 className="w-4 h-4 text-mint-foreground" />
                 </div>
               </div>
-
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={logout}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -91,10 +115,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </nav>
 
+      {/* Mobile Sidebar Backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Sidebar Navigation */}
-          <aside className="lg:w-64 flex-shrink-0">
+        <div className="flex flex-col gap-6">
+          {/* Sidebar Navigation (Drawer style on all screens) */}
+          <aside
+            className={`
+              fixed top-0 left-0 bottom-0 z-50 w-64 bg-background border-r border-lavender/10 shadow-lg
+              p-4 overflow-y-auto transform transition-transform duration-300
+              ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+            `}
+          >
             <div className="healthcare-card p-4">
               <nav className="space-y-2">
                 {navItems.map((item) => {
@@ -103,6 +141,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <NavLink
                       key={item.to}
                       to={item.to}
+                      onClick={() => setSidebarOpen(false)}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                         isActive
                           ? 'bg-gradient-to-r from-lavender to-blush text-lavender-foreground shadow-[var(--shadow-soft)]'

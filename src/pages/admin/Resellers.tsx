@@ -476,8 +476,8 @@ console.log(resellers)
 
       {/* Search */}
       <div className="flex items-center space-x-2">
-        <span>
           <Search className="h-4 w-4 text-muted-foreground" />
+        <span>
           <Input
             placeholder="Search resellers..."
             value={searchTerm}
