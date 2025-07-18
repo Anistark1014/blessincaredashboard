@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import MonthYearPicker from "./MonthYearPicker";
 
 interface Sale {
   id: string;
@@ -18,6 +20,7 @@ interface Sale {
   clearance: string | null;
   balance: number;
   description: string;
+  payment_status: 'Fully Paid' | 'Partially Paid' | 'Pending';
 }
 
 const formatCurrency = (amount: number) =>
@@ -27,17 +30,10 @@ const formatCurrency = (amount: number) =>
     minimumFractionDigits: 2,
   }).format(amount);
 
-const rowColor = (type: string) => {
-  switch (type) {
-    case 'Sales':
-      return 'bg-green-100';
-    case 'Non Business Expense':
-      return 'bg-red-100';
-    case 'Stock':
-      return 'bg-yellow-100';
-    default:
-      return '';
-  }
+const statusColors = {
+  'Fully Paid': 'text-green-700 font-semibold',
+  'Partially Paid': 'text-yellow-600 font-semibold',
+  'Pending': 'text-red-600 font-semibold',
 };
 
 const SalesTable: React.FC = () => {
@@ -81,6 +77,31 @@ const SalesTable: React.FC = () => {
     const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
     const rawValue = sale[field];
     const displayValue = formatter ? formatter(rawValue) : rawValue;
+
+    if (field === 'payment_status') {
+      return (
+        <TableCell
+          onClick={() => setEditingCell({ rowId: sale.id, field })}
+          className="cursor-pointer"
+        >
+          {isEditing ? (
+            <select
+              className="w-32 px-2 py-1 border rounded"
+              value={sale.payment_status}
+              onChange={(e) => handleEditChange(sale.id, field, e.target.value)}
+              onBlur={() => setEditingCell(null)}
+              autoFocus
+            >
+              <option value="Fully Paid">Fully Paid</option>
+              <option value="Partially Paid">Partially Paid</option>
+              <option value="Pending">Pending</option>
+            </select>
+          ) : (
+            <span className={cn(statusColors[sale.payment_status])}>{sale.payment_status}</span>
+          )}
+        </TableCell>
+      );
+    }
 
     return (
       <TableCell
@@ -127,7 +148,8 @@ const SalesTable: React.FC = () => {
       newSale.paid !== undefined &&
       newSale.incoming !== undefined &&
       newSale.balance !== undefined &&
-      newSale.description
+      newSale.description &&
+      newSale.payment_status
     ) {
       const { data, error } = await supabase.from('sales').insert([newSale]).select();
 
@@ -146,8 +168,29 @@ const SalesTable: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sales Table</CardTitle>
+        <div className="flex justify-between items-center w-full">
+          <CardTitle>Sales Table</CardTitle>
+          <MonthYearPicker
+    onSelect={(month, year) => {
+      // Add filter logic here
+      console.log("Selected:", month + 1, year);
+    }}
+  />
+          {!addingNew ? (
+            <Button onClick={() => setAddingNew(true)}>+ Add New Record</Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button onClick={handleAddNew} className="bg-green-600 text-white">
+                ✅ Save Record
+              </Button>
+              <Button onClick={() => setAddingNew(false)} variant="outline">
+                ❌ Cancel
+              </Button>
+            </div>
+          )}
+        </div>
       </CardHeader>
+
       <CardContent>
         <div className="overflow-x-auto">
           <Table>
@@ -165,15 +208,16 @@ const SalesTable: React.FC = () => {
                 <TableHead>Clearance Date</TableHead>
                 <TableHead>Total Balance</TableHead>
                 <TableHead>Transaction Description</TableHead>
+                <TableHead>Payment Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sales.map((sale) => (
-                <TableRow key={sale.id} className={rowColor(sale.type)}>
-                  <TableCell>{new Date(sale.date).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-semibold italic">{sale.type}</TableCell>
-                  <TableCell>{sale.member}</TableCell>
-                  <TableCell>{sale.brand}</TableCell>
+                <TableRow key={sale.id}>
+                  {renderEditableCell(sale, 'date', undefined, false, 'date')}
+                  {renderEditableCell(sale, 'type')}
+                  {renderEditableCell(sale, 'member')}
+                  {renderEditableCell(sale, 'brand')}
                   {renderEditableCell(sale, 'qty', undefined, false, 'number')}
                   {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
                   {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
@@ -182,6 +226,7 @@ const SalesTable: React.FC = () => {
                   {renderEditableCell(sale, 'clearance', undefined, false, 'date')}
                   {renderEditableCell(sale, 'balance', formatCurrency, true, 'number')}
                   {renderEditableCell(sale, 'description')}
+                  {renderEditableCell(sale, 'payment_status')}
                 </TableRow>
               ))}
               {addingNew && (
@@ -282,26 +327,22 @@ const SalesTable: React.FC = () => {
                       onChange={(e) => handleNewChange('description', e.target.value)}
                     />
                   </TableCell>
+                  <TableCell>
+                    <select
+                      className="w-32 px-2 py-1 border rounded"
+                      value={newSale.payment_status ?? 'Pending'}
+                      onChange={(e) => handleNewChange('payment_status', e.target.value)}
+                    >
+                      <option value="Fully Paid">Fully Paid</option>
+                      <option value="Partially Paid">Partially Paid</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </div>
-
-        {!addingNew ? (
-          <div className="flex justify-end mt-4">
-            <Button onClick={() => setAddingNew(true)}>+ Add New Record</Button>
-          </div>
-        ) : (
-          <div className="flex justify-end mt-4 gap-2">
-            <Button onClick={handleAddNew} className="bg-green-600 text-white">
-              ✅ Save Record
-            </Button>
-            <Button onClick={() => setAddingNew(false)} variant="outline">
-              ❌ Cancel
-            </Button>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
