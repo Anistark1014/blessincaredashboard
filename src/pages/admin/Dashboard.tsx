@@ -6,13 +6,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  DollarSign,
   Users,
   Package,
-  TrendingUp,
   AlertTriangle,
   Calendar,
-  ShoppingCart,
   CreditCard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -23,30 +20,28 @@ const AdminDashboard = () => {
   const [resellers, setResellers] = useState<any>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-    const { toast } = useToast();
+  const { toast } = useToast();
 
-interface Reseller {
-  id: string;
-  email: string;
-  name: string;
-  contact_info: any;
-  flagged_status: boolean;
-  is_active: boolean;
-  exclusive_features: string;
-  created_at: string;
-  region:string;
-  role:string;
-  total_products_sold:number;
-  payment_status:"pending" | "clear"
-  payment_amount_remaining: number;
-
-}
+  interface Reseller {
+    id: string;
+    email: string;
+    name: string;
+    contact_info: any;
+    flagged_status: boolean;
+    is_active: boolean;
+    exclusive_features: string;
+    created_at: string;
+    region: string;
+    role: string;
+    total_products_sold: number;
+    payment_status: "pending" | "clear"
+    payment_amount_remaining: number;
+  }
 
   useEffect(() => {
-    // get Resellers 
-       const fetchResellers = async () => {
+    const fetchResellers = async () => {
       try {
-        const { data:reseller, error:resellerError } = await supabase
+        const { data: reseller, error: resellerError } = await supabase
           .from('users')
           .select('*')
           .eq('role', 'reseller')
@@ -83,12 +78,41 @@ interface Reseller {
 
       setLoading(false);
     };
-    fetchResellers()
+    fetchResellers();
     fetchData();
   }, []);
 
+  const handleStatusChange = async (requestId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('requests')
+        .update({ status: newStatus })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      setRequests(prev =>
+        prev.map(req =>
+          req.id === requestId ? { ...req, status: newStatus } : req
+        )
+      );
+
+      toast({
+        title: "Success",
+        description: "Request status updated successfully.",
+      });
+    } catch (error: any) {
+      console.error("Error updating status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update request status.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const totalRevenue = requests.reduce((sum, req) => sum + (req.totalAmount || 0), 0);
-  const totalExpenses = totalRevenue * 0.35; // Just a rough placeholder logic
+  const totalExpenses = totalRevenue * 0.35;
   const profit = totalRevenue - totalExpenses;
 
   const totalOrders = requests.length;
@@ -113,16 +137,9 @@ interface Reseller {
     }
   };
 
-  // const getPaymentStatusColor = (status: string) => {
-  //   switch (status) {
-  //     case 'pending': return 'status-error';
-  //     case 'partial': return 'status-warning';
-  //     case 'paid': return 'status-success';
-  //     default: return 'bg-muted text-muted-foreground';
-  //   }
-  // };
-console.log("Requests",requests)
-console.log("Resellers",resellers)
+  console.log("Requests", requests);
+  console.log("Resellers", resellers);
+
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
@@ -198,57 +215,6 @@ console.log("Resellers",resellers)
         </div>
       )}
 
-      {/* Key Metrics */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="healthcare-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">${totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
-          </CardContent>
-        </Card>
-
-        <Card className="healthcare-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{totalOrders}</div>
-            <p className="text-xs text-muted-foreground">+3 new this week</p>
-          </CardContent>
-        </Card>
-
-        <Card className="healthcare-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Resellers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">8</div>
-            <p className="text-xs text-muted-foreground">2 new this month</p>
-          </CardContent>
-        </Card>
-
-        <Card className="healthcare-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${profit >= 0 ? 'text-success' : 'text-error'}`}>
-              ${profit.toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {totalRevenue > 0 ? `${(profit / totalRevenue * 100).toFixed(1)}% margin` : 'N/A'}
-            </p>
-          </CardContent>
-        </Card>
-      </div> */}
-
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Requests */}
@@ -267,17 +233,33 @@ console.log("Resellers",resellers)
               <div key={request.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40">
                 <div className="flex-1">
                   <p className="font-medium text-foreground">
-                    {resellers.find((reseller:any)=>reseller.id===request.reseller_id)?.name || "hello"}
+                    {resellers.find((reseller: any) => reseller.id === request.reseller_id)?.name || "hello"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {request.products_ordered[0] || 0} items • ${request.total_amount?.toFixed(2)}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <Badge className={getStatusColor(request.status)}>
+                  <Badge
+                    className={`text-xs px-2 py-1 rounded ${
+                      request.status === 'approved'
+                        ? 'bg-green-200 text-green-800'
+                        : 'bg-yellow-200 text-yellow-800'
+                    }`}
+                  >
                     {request.status}
                   </Badge>
+
+                  <select
+                    value={request.status}
+                    onChange={(e) => handleStatusChange(request.id, e.target.value)}
+                    className="text-xs border border-border rounded px-2 py-1 mt-1 bg-background text-foreground"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                  </select>
                 </div>
+
               </div>
             ))}
           </CardContent>

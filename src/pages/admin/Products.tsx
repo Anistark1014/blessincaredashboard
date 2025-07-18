@@ -1,4 +1,4 @@
-import  { useState, useEffect, useRef } from 'react';
+import  { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Tables } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +25,6 @@ interface ProductFormData {
   production_status: string;
   image_url?: string;
   availability: 'In Stock' | 'Low Stock' | 'Out of Stock';
-
 }
 
 const AdminProducts = () => {
@@ -276,13 +275,7 @@ const AdminProducts = () => {
     ? products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length 
     : 0;
 
-const ProductForm = ({
-  onSubmit,
-  isEdit = false,
-}: {
-  onSubmit: (e: React.FormEvent) => void;
-  isEdit?: boolean;
-}) => (
+const ProductForm = ({onSubmit,isEdit = false,}: {onSubmit: (e: React.FormEvent) => void;isEdit?: boolean}) => (
   <form onSubmit={onSubmit} className="space-y-4">
     <div>
       <Label htmlFor="name">Name *</Label>

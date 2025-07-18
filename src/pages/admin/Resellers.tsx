@@ -10,17 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Eye, Flag, FlagOff, Search, Users, UserCheck, UserX } from 'lucide-react';
 
-// interface User{
-//   id: string;
-//   email: string;
-//   role: string;
-//   name: string | null;
-//   contact_info: JSON | null;
-//   created_at: string | null;
-//   exclusive_features: string | null;
-//   flagged_status: boolean | null;
-//   is_active: boolean | null;
-// }
+
+
 
 
 interface Reseller {
@@ -37,7 +28,6 @@ interface Reseller {
   total_products_sold:number;
   payment_status:"pending" | "clear"
   payment_amount_remaining: number;
-
 }
 
 interface Request {
@@ -113,9 +103,9 @@ const AdminResellers: React.FC = () => {
       .order('created_at', { ascending: false });
 
     if (resellerError) throw resellerError;
-
+    console.log(resellerList)
     const updatedResellers: Reseller[] = await Promise.all(
-      (resellerList as Reseller[]).map(async (reseller) => {
+      (resellerList as any[]).map(async (reseller) => {
         const { data: requests, error: requestError } = await supabase
           .from('requests')
           .select('total_amount, amount_paid')
@@ -221,6 +211,103 @@ const AdminResellers: React.FC = () => {
       });
     }
   };
+
+  const AddResellerForm: React.FC = () => {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    region: '',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async () => {
+    const { name, email, phone, region } = formData;
+
+    if (!name) {
+      toast({
+        title: "Missing info",
+        description: "Name and Email are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('users').insert([
+        {
+          name,
+          email:email||"",
+          role: 'reseller',
+          region,
+          contact_info: { phone },
+          is_active: true,
+          flagged_status: false,
+          exclusive_features: '',
+        }
+      ]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "New reseller added successfully!",
+      });
+
+      setFormData({ name: '', email: '', phone: '', region: '' });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Input
+        required
+        name="name"
+        placeholder="Reseller Name"
+        value={formData.name}
+        onChange={handleChange}
+      />
+      <Input
+        name="email"
+        placeholder="Email"
+        value={formData.email}
+        onChange={handleChange}
+      />
+      <Input
+        name="phone"
+        placeholder="Phone"
+        value={formData.phone}
+        onChange={handleChange}
+      />
+      <Input
+      required
+        name="region"
+        placeholder="Region"
+        value={formData.region}
+        onChange={handleChange}
+      />
+
+      <Button onClick={handleSubmit} disabled={loading} className="w-full">
+        {loading ? "Adding..." : "Add Reseller"}
+      </Button>
+    </div>
+  );
+};
+
 
   const handleRequestStatusUpdate = async (requestId: string, newStatus: string) => {
     try {
@@ -389,13 +476,29 @@ console.log(resellers)
 
       {/* Search */}
       <div className="flex items-center space-x-2">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search resellers..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
+        <span>
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search resellers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+        </span>
+        <Dialog>
+  <DialogTrigger asChild>
+    <Button variant="default">+ Add Reseller</Button>
+  </DialogTrigger>
+
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Add New Reseller</DialogTitle>
+    </DialogHeader>
+
+    <AddResellerForm />
+  </DialogContent>
+</Dialog>
+
       </div>
 
       {/* Resellers Table */}
