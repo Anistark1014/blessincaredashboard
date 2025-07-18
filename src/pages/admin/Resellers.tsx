@@ -511,17 +511,17 @@ console.log(resellers)
            {filteredResellers.map((reseller) => (
               <div
                 key={reseller.id}
-                className="flex flex-col gap-3 p-4 border rounded-lg shadow-sm bg-white"
+                className="flex flex-col gap-3 p-4 border rounded-lg shadow-sm"
               >
                 {/* Header Summary Row */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-medium text-base text-gray-800 w-1/3">
-                    {reseller.name} <span className="text-sm text-gray-500">| {reseller.region}</span>
+                  <div className="font-medium text-base  w-1/3">
+                    {reseller.name} <span className="text-sm ">| {reseller.region}</span>
                   </div>
 
-                  <div className="flex items-center gap-4 text-sm text-gray-700 w-1/3">
+                  <div className="flex items-center gap-4 text-sm  w-1/3">
                     <span className="font-medium">
-                      Sold: <span className="text-black">{reseller.total_products_sold}</span>
+                      Sold: <span className="">{reseller.total_products_sold}</span>
                     </span>
                     <span className="font-medium">
                       Payment: <span className={reseller.payment_status === 'clear' ? 'text-green-600' : 'text-red-600'}>

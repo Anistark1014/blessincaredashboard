@@ -125,6 +125,7 @@ const AdminProducts = () => {
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    resetForm();
     
     if (!formData.name || !formData.category || !formData.price) {
       toast({
@@ -143,7 +144,6 @@ const AdminProducts = () => {
       if (error) throw error;
 
       setIsAddModalOpen(false);
-      resetForm();
       toast({
         title: "Success",
         description: "Product added successfully"
@@ -247,7 +247,6 @@ const AdminProducts = () => {
       production_status: '',
       image_url: '',
       availability: 'In Stock',
-
     });
   };
 

@@ -40,3 +40,102 @@
 .read-the-docs {
   color: #888;
 }
+/* Light Mode (unchanged, feel free to customize) */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 10%;
+
+  --border: 240 5% 90%;
+  --input: 240 5% 95%;
+  --ring: 240 10% 30%;
+
+  --muted: 240 4% 95%;
+  --muted-foreground: 240 5% 50%;
+  --accent: 240 100% 96%;
+  --accent-foreground: 240 10% 30%;
+
+  --primary: 250 80% 50%;
+  --primary-dark: 250 60% 40%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 30% 90%;
+  --secondary-dark: 210 30% 70%;
+  --secondary-foreground: 210 10% 20%;
+
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 100%;
+
+  --lavender: 260 60% 80%;
+  --lavender-dark: 260 60% 60%;
+  --lavender-foreground: 260 40% 20%;
+  --blush: 340 80% 80%;
+  --blush-dark: 340 80% 60%;
+  --blush-foreground: 340 50% 20%;
+  --peach: 30 100% 85%;
+  --peach-dark: 30 100% 65%;
+  --peach-foreground: 30 60% 20%;
+  --mint: 160 60% 80%;
+  --mint-dark: 160 60% 60%;
+  --mint-foreground: 160 40% 20%;
+
+  --pending: 40 100% 60%;
+  --approved: 150 60% 45%;
+  --warning: 30 100% 55%;
+  --success: 142 70% 45%;
+  --error: 0 100% 60%;
+}
+
+/* Dark Mode - like VS Code / Windows dark */
+.dark {
+  --background: 230 15% 15%;
+  --foreground: 220 15% 85%;
+  --card: 230 18% 20%;
+  --card-foreground: 220 15% 85%;
+  --popover: 230 18% 20%;
+  --popover-foreground: 220 15% 85%;
+
+  --border: 220 10% 30%;
+  --input: 220 10% 25%;
+  --ring: 240 40% 50%;
+
+  --muted: 220 12% 20%;
+  --muted-foreground: 220 10% 60%;
+  --accent: 240 100% 70%;
+  --accent-foreground: 240 100% 95%;
+
+  --primary: 240 100% 75%;
+  --primary-dark: 240 100% 60%;
+  --primary-foreground: 240 100% 10%;
+
+  --secondary: 215 15% 30%;
+  --secondary-dark: 215 20% 40%;
+  --secondary-foreground: 210 15% 90%;
+
+  --destructive: 0 80% 60%;
+  --destructive-foreground: 0 100% 95%;
+
+  --lavender: 260 80% 70%;
+  --lavender-dark: 260 60% 50%;
+  --lavender-foreground: 260 100% 90%;
+  --blush: 340 70% 65%;
+  --blush-dark: 340 60% 45%;
+  --blush-foreground: 340 100% 90%;
+  --peach: 30 90% 70%;
+  --peach-dark: 30 90% 50%;
+  --peach-foreground: 30 100% 90%;
+  --mint: 160 60% 70%;
+  --mint-dark: 160 60% 50%;
+  --mint-foreground: 160 100% 90%;
+
+  --pending: 40 100% 60%;
+  --approved: 150 60% 45%;
+  --warning: 30 100% 55%;
+  --success: 142 70% 45%;
+  --error: 0 100% 65%;
+}
+
+

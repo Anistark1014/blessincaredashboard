@@ -14,6 +14,7 @@ import {
   Flower2
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
+import ToggleTheme from './ToggleTheme';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -59,6 +60,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             {/* User Actions */}
             <div className="flex items-center gap-4">
+              <span>
+                <ToggleTheme/>
+              </span>
               <Button variant="ghost" size="sm" className="relative">
                 <Bell className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-blush rounded-full pulse-soft"></span>
