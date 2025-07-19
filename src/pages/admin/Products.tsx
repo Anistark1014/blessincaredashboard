@@ -1,6 +1,6 @@
 import  { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Tables } from '@/lib/types';
+import { Tables } from '@/types/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,23 +9,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Trash2, Package, DollarSign, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 type Product = Tables<'products'>;
 
-interface ProductFormData {
-  name: string;
-  description: string;
-  category: string;
-  type: string;
+interface PriceRange {
+  min: number;
+  max: number;
   price: number;
-  inventory: number;
-  min_stock_alert: number;
-  production_status: string;
-  image_url?: string;
-  availability: 'In Stock' | 'Low Stock' | 'Out of Stock';
 }
+
+interface ProductFormData {
+  id?: string;
+  name: string;
+  description?: string;
+  availability?: string;
+  created_at?: string;
+  image_url?: string;
+  price_ranges?: PriceRange[]; // ✅ new field
+}
+
 
 const AdminProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,18 +42,20 @@ const AdminProducts = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [formData, setFormData] = useState<ProductFormData>({
-    name: '',
-    description: '',
-    category: '',
-    type: '',
-    price: 0,
-    inventory: 0,
-    min_stock_alert: 0,
-    production_status: '',
-    image_url: '',
-    availability: "In Stock",
-  });
+ const [formData, setFormData] = useState<ProductFormData>({
+  name: '',
+  description: '',
+  image_url: '',
+  availability: 'In Stock',
+  price_ranges: [
+    {
+      min: 1,
+      max: 100,
+      price: 100
+    }
+  ]
+});
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -111,15 +118,6 @@ const AdminProducts = () => {
         (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
-
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(product => product.category === categoryFilter);
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(product => product.production_status === statusFilter);
-    }
-
     setFilteredProducts(filtered);
   };
 
@@ -127,7 +125,7 @@ const AdminProducts = () => {
     e.preventDefault();
     resetForm();
     
-    if (!formData.name || !formData.category || !formData.price) {
+    if (!formData.name ) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -160,7 +158,7 @@ const AdminProducts = () => {
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!editingProduct || !formData.name || !formData.category || !formData.price) {
+    if (!editingProduct || !formData.name || !formData.price_ranges) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -217,245 +215,260 @@ const AdminProducts = () => {
     }
   };
 
-  const openEditModal = (product: Product) => {
-    setEditingProduct(product);
-    setFormData({
-      name: product.name,
-      description: product.description || '',
-      category: product.category || '',
-      type: product.type || '',
-      price: product.price || 0,
-      inventory: product.inventory || 0,
-      min_stock_alert: product.min_stock_alert || 0,
-      production_status: product.production_status || '',
-      image_url: product.image_url || '',
-      availability:product.availability || 'In Stock',
-      
-    });
-    setIsEditModalOpen(true);
+const openEditModal = (product: Product) => {
+  setEditingProduct(product);
+  setFormData({
+    name: product.name,
+    description: product.description || '',
+    image_url: product.image_url || '',
+    availability: product.availability || 'In Stock',
+    price_ranges: product.price_ranges?.length
+      ? product.price_ranges
+      : [],
+  });
+  setIsEditModalOpen(true);
+};
+
+const resetForm = () => {
+  setFormData({
+    name: '',
+    description: '',
+    image_url: '',
+    availability: 'In Stock',
+    price_ranges: [
+      { min: 1, max: 100, price: 100 },
+    ],
+  });
+};
+
+//Form field to add image
+
+const uploadImageToSupabase = async (file: File): Promise<string | null> => {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}.${fileExt}`;
+  const filePath = `${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('product-images') // replace with your bucket name
+    .upload(filePath, file);
+
+  if (uploadError) {
+    console.error('Image upload failed:', uploadError.message);
+    return null;
+  }
+
+  const { data } = supabase.storage
+    .from('images')
+    .getPublicUrl(filePath);
+
+  return data?.publicUrl || null;
+};
+
+
+  //Form fields to edit range of prizes
+    const handlePriceRangeChange = (
+    index: number,
+    field: "min" | "max" | "price",
+    value: number
+  ) => {
+    const updatedRanges = [...(formData.price_ranges ?? [])];
+    updatedRanges[index] = {
+      ...updatedRanges[index],
+      [field]: value
+    };
+    setFormData((prev) => ({
+      ...prev,
+      price_ranges: updatedRanges
+    }));
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      category: '',
-      type: '',
-      price: 0,
-      inventory: 0,
-      min_stock_alert: 0,
-      production_status: '',
-      image_url: '',
-      availability: 'In Stock',
-    });
+  const addPriceRange = () => {
+    setFormData((prev) => ({
+      ...prev,
+      price_ranges: [...(prev.price_ranges ?? []), { min: 0, max: 0, price: 0 }]
+    }));
   };
 
-
-
-  const getStatusBadgeVariant = (status: string | null) => {
-    switch (status) {
-      case 'Manufacturing': return 'secondary';
-      case 'Ready for Distribution': return 'default';
-      case 'Out of Stock': return 'destructive';
-      default: return 'outline';
-    }
+  const removePriceRange = (index: number) => {
+    const updatedRanges = [...(formData.price_ranges ?? [])];
+    updatedRanges.splice(index, 1);
+    setFormData((prev) => ({
+      ...prev,
+      price_ranges: updatedRanges
+    }));
   };
-
-  const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
-  const statuses = [...new Set(products.map(p => p.production_status).filter(Boolean))];
-
-  // Calculate stats
-  const totalProducts = products.length;
-  const inStockProducts = products.filter(p => (p.inventory || 0) > 0).length;
-  const lowStockProducts = products.filter(p => 
-    (p.inventory || 0) <= (p.min_stock_alert || 0) && (p.inventory || 0) > 0
-  ).length;
-  const averagePrice = products.length > 0 
-    ? products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length 
-    : 0;
 
 const ProductForm = ({onSubmit,isEdit = false,}: {onSubmit: (e: React.FormEvent) => void;isEdit?: boolean}) => (
-  <form onSubmit={onSubmit} className="space-y-4">
-    <div>
-      <Label htmlFor="name">Name *</Label>
-      <Input
-        id="name"
-        value={formData?.name ?? ""}
-        onChange={(e) =>
-          setFormData((prev) => ({ ...prev, name: e.target.value }))
-        }
-        required
-      />
-    </div>
-
-    <div>
-      <Label htmlFor="description">Description</Label>
-      <Textarea
-        id="description"
-        value={formData?.description ?? ""}
-        onChange={(e) =>
-          setFormData((prev) => ({ ...prev, description: e.target.value }))
-        }
-        rows={3}
-      />
-    </div>
-
-    <div className="grid grid-cols-2 gap-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <Label htmlFor="category">Category *</Label>
+        <Label htmlFor="name">Name *</Label>
         <Input
-          id="category"
-          value={formData?.category ?? ""}
+          id="name"
+          value={formData.name}
           onChange={(e) =>
-            setFormData((prev) => ({ ...prev, category: e.target.value }))
+            setFormData((prev) => ({ ...prev, name: e.target.value }))
           }
           required
         />
       </div>
-      <div>
-        <Label htmlFor="type">Type</Label>
-        <Input
-          id="type"
-          value={formData?.type ?? ""}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, type: e.target.value }))
-          }
-        />
-      </div>
-    </div>
 
-    <div className="grid grid-cols-2 gap-4">
       <div>
-        <Label htmlFor="price">Price *</Label>
-        <Input
-          id="price"
-          type="number"
-          step="0.01"
-          min="0"
-          value={formData?.price ?? ""}
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description ?? ""}
           onChange={(e) =>
-            setFormData((prev) => ({
-              ...prev,
-              price: parseFloat(e.target.value) || 0,
-            }))
+            setFormData((prev) => ({ ...prev, description: e.target.value }))
           }
-          required
+          rows={3}
         />
       </div>
-      <div>
-        <Label htmlFor="inventory">Inventory</Label>
-        <Input
-          id="inventory"
-          type="number"
-          min="0"
-          value={formData?.inventory ?? ""}
-          onChange={(e) =>
-            setFormData((prev) => ({
-              ...prev,
-              inventory: parseInt(e.target.value) || 0,
-            }))
-          }
-        />
-      </div>
-    </div>
+      <div className='flex justify-around items-center gap-4'>
+          <span className={cn('flex flex-col gap-4 ',formData.image_url?'':'w-full')}>
+            <div>
+              <Label htmlFor="availability">Availability</Label>
+              <Select
+                value={formData.availability ?? ""}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, availability: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="In Stock">In Stock</SelectItem>
+                  <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                  <SelectItem value="Low Stock">Low Stock</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+              <div>
+                <Label htmlFor="image">Product Image</Label>
+                <Input
+                  id="image"
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // Show preview immediately
+                      const previewUrl = URL.createObjectURL(file);
+                      setFormData((prev) => ({ ...prev, image_url: previewUrl }));
 
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <Label htmlFor="min_stock_alert">Min Stock Alert</Label>
-        <Input
-          id="min_stock_alert"
-          type="number"
-          min="0"
-          value={formData?.min_stock_alert ?? ""}
-          onChange={(e) =>
-            setFormData((prev) => ({
-              ...prev,
-              min_stock_alert: parseInt(e.target.value) || 0,
-            }))
-          }
-        />
+                      // Upload to Supabase
+                      const url = await uploadImageToSupabase(file);
+                      if (url) {
+                        setFormData((prev) => ({ ...prev, image_url: url }));
+                      }
+                    }
+                  }}
+                />
+              </div>
+          </span>
+          <span>
+            {/* 👇 Image Preview Section */}
+          <div className="mt-3">
+            {formData.image_url ? (
+              <img
+                src={formData.image_url}
+                alt="Image Preview"
+                className="w-40 h-40 object-cover rounded border"
+              />
+            ) : ("")}
+          </div>
+          </span>
       </div>
       <div>
-        <Label htmlFor="production_status">Production Status</Label>
-        <Select
-          value={formData?.production_status ?? ""}
-          onValueChange={(value) =>
-            setFormData((prev) => ({ ...prev, production_status: value }))
-          }
+        <Label>Price Ranges *</Label>
+        <div className="space-y-2">
+          {(formData.price_ranges ?? []).map((range, index) => (
+            <div key={index} className="grid grid-cols-4 gap-2 items-end">
+              <div>
+                <Label>Min Qty</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={range.min}
+                  onChange={(e) =>
+                    handlePriceRangeChange(
+                      index,
+                      "min",
+                      parseInt(e.target.value)
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <Label>Max Qty</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={range.max}
+                  onChange={(e) =>
+                    handlePriceRangeChange(
+                      index,
+                      "max",
+                      parseInt(e.target.value)
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <Label>Price (₹)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={range.price}
+                  onChange={(e) =>
+                    handlePriceRangeChange(
+                      index,
+                      "price",
+                      parseFloat(e.target.value)
+                    )
+                  }
+                />
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => removePriceRange(index)}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addPriceRange}
+            className="mt-2"
+          >
+            + Add Price Range
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            if (isEdit) {
+              setIsEditModalOpen(false);
+              setEditingProduct(null);
+            } else {
+              setIsAddModalOpen(false);
+            }
+            resetForm();
+          }}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="Select status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-            <SelectItem value="Ready for Distribution">
-              Ready for Distribution
-            </SelectItem>
-            <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-            <SelectItem value="Discontinued">Discontinued</SelectItem>
-          </SelectContent>
-        </Select>
+          Cancel
+        </Button>
+        <Button type="submit">{isEdit ? "Update Product" : "Add Product"}</Button>
       </div>
-    </div>
-
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <Label htmlFor="image_url">Image URL</Label>
-        <Input
-          id="image_url"
-          type="url"
-          value={formData?.image_url ?? ""}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, image_url: e.target.value }))
-          }
-          placeholder="https://example.com/image.jpg"
-        />
-      </div>
-      <div>
-        <Label htmlFor="availability">Availability</Label>
-        <Select
-          value={formData?.availability ?? ""}
-          onValueChange={(value) =>
-            setFormData((prev) => ({ ...prev, availability: value }))
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="In Stock">In Stock</SelectItem>
-            <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-            <SelectItem value="Low Stock">Low Stock</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-
-    <div className="flex justify-end gap-2 pt-4">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => {
-          if (isEdit) {
-            setIsEditModalOpen(false);
-            setEditingProduct(null);
-          } else {
-            setIsAddModalOpen(false);
-          }
-          resetForm();
-        }}
-      >
-        Cancel
-      </Button>
-      <Button type="submit">
-        {isEdit ? "Update Product" : "Add Product"}
-      </Button>
-    </div>
-  </form>
+    </form>
 );
-
-
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -463,7 +476,7 @@ const ProductForm = ({onSubmit,isEdit = false,}: {onSubmit: (e: React.FormEvent)
       </div>
     );
   }
-console.log(formData)
+console.log(products)
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
@@ -492,8 +505,9 @@ console.log(formData)
         </div>
       </div>
 
+      {/* Currrently on hold feature */}
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="healthcare-card">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -541,7 +555,7 @@ console.log(formData)
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       {/* Filters */}
       <Card className="healthcare-card">
@@ -556,89 +570,81 @@ console.log(formData)
                 className="pl-10"
               />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category ?? 'none'}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {statuses.map(status => (
-                  <SelectItem key={status} value={status ?? 'none'}>
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
 
       {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product) => (
-          <Card key={product.id} className="healthcare-card">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-lg">{product.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">{product.category}</p>
-                </div>
-                <Badge variant={getStatusBadgeVariant(product.production_status)}>
-                  {product.production_status || 'Unknown'}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-primary">${product.price}</span>
-                <span 
-                  className={`text-sm font-medium ${
-                    (product.inventory || 0) <= (product.min_stock_alert || 0)
-                      ? 'text-destructive'
-                      : 'text-muted-foreground'
-                  }`}
-                >
-                  Stock: {product.inventory || 0}
-                </span>
-              </div>
-              
-              {product.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {product.description}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredProducts.map((product) => (
+        <Card key={product.id} className="healthcare-card">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="text-lg">{product.name}</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {product.availability || 'Unknown'}
                 </p>
-              )}
-
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => openEditModal(product)}>
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => deleteProduct(product.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              <Badge variant="outline">
+                {product.price_ranges?.length
+                  ? `${product.price_ranges.length} Price Tier${product.price_ranges.length > 1 ? 's' : ''}`
+                  : 'No Pricing'}
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {product.image_url ? (
+              <img
+                src={product.image_url}
+                alt={product.name}
+                className="w-full h-40 object-cover rounded-md"
+              />
+            ):(
+              <div className="w-full h-40 flex items-center justify-center bg-muted rounded-md">
+                <Package className="w-10 h-10 text-muted-foreground" />
+              </div>
+            )}
+
+            {product.description && (
+              <p className="text-sm text-muted-foreground line-clamp-2">
+                {product.description}
+              </p>
+            )}
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Price Ranges:</p>
+              {product.price_ranges?.length ? (
+                product.price_ranges.map((range, index) => (
+                  <p key={index} className="text-sm">
+                    {range.min} – {range.max} units: ₹{range.price}
+                  </p>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No pricing info</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => openEditModal(product)}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-destructive hover:text-destructive"
+                onClick={() => deleteProduct(product.id)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+
 
       {filteredProducts.length === 0 && (
         <Card className="healthcare-card">
