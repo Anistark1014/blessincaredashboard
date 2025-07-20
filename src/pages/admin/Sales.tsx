@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import MonthYearPicker from './MonthYearPicker';
+import * as XLSX from 'xlsx';
+
 
 interface Sale {
   id: string;
@@ -209,6 +211,39 @@ const SalesTable: React.FC = () => {
     return { ...sale, cumulativePaid };
   });
 
+  const handleExportToExcel = () => {
+  if (!sales || sales.length === 0) {
+    alert("No sales data to export.");
+    return;
+  }
+
+  const exportData = sales.map((s) => ({
+    Date: s.date,
+    Member: s.member,
+    Brand: s.brand,
+    Quantity: s.qty,
+    'Price per Pack': s.price,
+    'Total Amount': s.total,
+    Paid: s.paid,
+    Incoming: s.incoming,
+    'Total Balance': sales
+      .slice(0, sales.findIndex((row) => row.id === s.id) + 1)
+      .reduce((sum, row) => sum + row.paid, 0),
+    Description: s.description,
+    'Payment Status': s.payment_status,
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Sales");
+
+  const month = new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'short' });
+  const fileName = `Sales_${month}_${selectedYear}.xlsx`;
+
+  XLSX.writeFile(workbook, fileName);
+};
+
+
   return (
     <Card>
       <CardHeader>
@@ -220,14 +255,16 @@ const SalesTable: React.FC = () => {
           }} />
           <div className="flex gap-2">
             {!addingNew ? (
-              <Button onClick={() => setAddingNew(true)}>+ Add New Record</Button>
+              <Button onClick={() => setAddingNew(true)}>✚ Add</Button>
             ) : (
               <>
                 <Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button>
                 <Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button>
               </>
             )}
-            <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete Selected</Button>
+            <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete</Button>
+            <Button onClick={handleExportToExcel} className="bg-green-500 text-white" variant="outline">📤 Export</Button>
+
           </div>
         </div>
       </CardHeader>
