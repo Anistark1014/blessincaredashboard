@@ -43,6 +43,7 @@ const SalesTable: React.FC = () => {
   const [newSale, setNewSale] = useState<Partial<Sale>>({});
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
   const fetchSales = async () => {
     const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
@@ -75,6 +76,24 @@ const SalesTable: React.FC = () => {
     const { error } = await supabase.from('sales').update({ [field]: value }).eq('id', id);
     if (error) {
       console.error('Update failed:', error.message);
+    }
+  };
+
+  const handleRowSelect = (id: string) => {
+    setSelectedRows((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const deleteSelectedRows = async () => {
+    if (selectedRows.length === 0) return;
+
+    const { error } = await supabase.from('sales').delete().in('id', selectedRows);
+    if (error) {
+      alert('Delete failed: ' + error.message);
+    } else {
+      setSales(sales.filter((s) => !selectedRows.includes(s.id)));
+      setSelectedRows([]);
     }
   };
 
@@ -141,7 +160,6 @@ const SalesTable: React.FC = () => {
     setNewSale((prev) => ({ ...prev, [field]: value }));
   };
 
-  // 🧠 Auto-calculation for total, incoming, balance
   useEffect(() => {
     const qty = newSale.qty || 0;
     const price = newSale.price || 0;
@@ -162,31 +180,23 @@ const SalesTable: React.FC = () => {
 
   const handleAddNew = async () => {
     const requiredFields: (keyof Sale)[] = [
-      "date",
-      "type",
-      "member",
-      "brand",
-      "qty",
-      "price",
-      "total",
-      "paid",
-      "incoming",
-      "balance",
-      "description",
-      "payment_status",
+      'date', 'type', 'member', 'brand', 'qty', 'price', 'total',
+      'paid', 'incoming', 'balance', 'description', 'payment_status',
     ];
 
-    const allFilled = requiredFields.every((field) => newSale[field] !== undefined && newSale[field] !== "");
+    const allFilled = requiredFields.every(
+      (field) => newSale[field] !== undefined && newSale[field] !== ''
+    );
 
     if (!allFilled) {
-      alert("Please fill all required fields before saving.");
+      alert('Please fill all required fields before saving.');
       return;
     }
 
-    const { data, error } = await supabase.from("sales").insert([newSale]).select();
+    const { data, error } = await supabase.from('sales').insert([newSale]).select();
 
     if (error) {
-      alert("Insert failed: " + error.message);
+      alert('Insert failed: ' + error.message);
     } else if (data && data.length > 0) {
       setSales([data[0], ...sales]);
       setNewSale({});
@@ -194,13 +204,9 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  // Compute cumulative paid total (running total)
   const computedSales = sales.map((sale, index) => {
     const cumulativePaid = sales.slice(0, index + 1).reduce((sum, s) => sum + (s.paid || 0), 0);
-    return {
-      ...sale,
-      cumulativePaid,
-    };
+    return { ...sale, cumulativePaid };
   });
 
   return (
@@ -212,18 +218,17 @@ const SalesTable: React.FC = () => {
             setSelectedMonth(month);
             setSelectedYear(year);
           }} />
-          {!addingNew ? (
-            <Button onClick={() => setAddingNew(true)}>+ Add New Record</Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button onClick={handleAddNew} className="bg-green-600 text-white">
-                ✅ Save Record
-              </Button>
-              <Button onClick={() => setAddingNew(false)} variant="outline">
-                ❌ Cancel
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            {!addingNew ? (
+              <Button onClick={() => setAddingNew(true)}>+ Add New Record</Button>
+            ) : (
+              <>
+                <Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button>
+                <Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button>
+              </>
+            )}
+            <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete Selected</Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -231,6 +236,7 @@ const SalesTable: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead></TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Members</TableHead>
                 <TableHead>Brand</TableHead>
@@ -247,36 +253,17 @@ const SalesTable: React.FC = () => {
             <TableBody>
               {addingNew && (
                 <TableRow className="bg-blue-100">
-                  <TableCell>
-                    <input type="date" className="w-32 px-2 py-1 border rounded" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} />
-                  </TableCell>
-                  <TableCell>
-                    <input type="text" className="w-24 px-2 py-1 border rounded" value={newSale.member ?? ''} onChange={(e) => handleNewChange('member', e.target.value)} />
-                  </TableCell>
-                  <TableCell>
-                    <input type="text" className="w-24 px-2 py-1 border rounded" value={newSale.brand ?? ''} onChange={(e) => handleNewChange('brand', e.target.value)} />
-                  </TableCell>
-                  <TableCell>
-                    <input type="number" className="w-16 px-2 py-1 border rounded" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} />
-                  </TableCell>
-                  <TableCell>
-                    <input type="number" className="w-20 px-2 py-1 border rounded" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} />
-                  </TableCell>
-                  <TableCell>
-                    <input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.total ?? ''} readOnly />
-                  </TableCell>
-                  <TableCell>
-                    <input type="number" className="w-20 px-2 py-1 border rounded" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid', Number(e.target.value))} />
-                  </TableCell>
-                  <TableCell>
-                    <input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.incoming ?? ''} readOnly />
-                  </TableCell>
-                  <TableCell>
-                    <input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.balance ?? ''} readOnly />
-                  </TableCell>
-                  <TableCell>
-                    <input type="text" className="w-32 px-2 py-1 border rounded" value={newSale.description ?? ''} onChange={(e) => handleNewChange('description', e.target.value)} />
-                  </TableCell>
+                  <TableCell></TableCell>
+                  <TableCell><input type="date" className="w-32 px-2 py-1 border rounded" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} /></TableCell>
+                  <TableCell><input type="text" className="w-24 px-2 py-1 border rounded" value={newSale.member ?? ''} onChange={(e) => handleNewChange('member', e.target.value)} /></TableCell>
+                  <TableCell><input type="text" className="w-24 px-2 py-1 border rounded" value={newSale.brand ?? ''} onChange={(e) => handleNewChange('brand', e.target.value)} /></TableCell>
+                  <TableCell><input type="number" className="w-16 px-2 py-1 border rounded" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.total ?? ''} readOnly /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid', Number(e.target.value))} /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.incoming ?? ''} readOnly /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.balance ?? ''} readOnly /></TableCell>
+                  <TableCell><input type="text" className="w-32 px-2 py-1 border rounded" value={newSale.description ?? ''} onChange={(e) => handleNewChange('description', e.target.value)} /></TableCell>
                   <TableCell>
                     <select className="w-32 px-2 py-1 border rounded" value={newSale.payment_status ?? 'Pending'} onChange={(e) => handleNewChange('payment_status', e.target.value)}>
                       <option value="Fully Paid">Fully Paid</option>
@@ -288,6 +275,13 @@ const SalesTable: React.FC = () => {
               )}
               {computedSales.map((sale) => (
                 <TableRow key={sale.id}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.includes(sale.id)}
+                      onChange={() => handleRowSelect(sale.id)}
+                    />
+                  </TableCell>
                   {renderEditableCell(sale, 'date', undefined, false, 'date')}
                   {renderEditableCell(sale, 'member')}
                   {renderEditableCell(sale, 'brand')}

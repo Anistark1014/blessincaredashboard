@@ -149,12 +149,14 @@ const SalesTable: React.FC = () => {
     const total = qty * price;
     const incoming = total - paid;
     const balance = incoming;
+    const payment_status = paid === total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
 
     setNewSale((prev) => ({
       ...prev,
       total,
       incoming,
       balance,
+      payment_status,
     }));
   }, [newSale.qty, newSale.price, newSale.paid]);
 
@@ -186,11 +188,20 @@ const SalesTable: React.FC = () => {
     if (error) {
       alert("Insert failed: " + error.message);
     } else if (data && data.length > 0) {
-      setSales([data[0], ...sales]); // Add to top
+      setSales([data[0], ...sales]);
       setNewSale({});
       setAddingNew(false);
     }
   };
+
+  // Compute cumulative paid total (running total)
+  const computedSales = sales.map((sale, index) => {
+    const cumulativePaid = sales.slice(0, index + 1).reduce((sum, s) => sum + (s.paid || 0), 0);
+    return {
+      ...sale,
+      cumulativePaid,
+    };
+  });
 
   return (
     <Card>
@@ -275,7 +286,7 @@ const SalesTable: React.FC = () => {
                   </TableCell>
                 </TableRow>
               )}
-              {sales.map((sale) => (
+              {computedSales.map((sale) => (
                 <TableRow key={sale.id}>
                   {renderEditableCell(sale, 'date', undefined, false, 'date')}
                   {renderEditableCell(sale, 'member')}
@@ -285,7 +296,9 @@ const SalesTable: React.FC = () => {
                   {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
                   {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
                   {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'balance', formatCurrency, true, 'number')}
+                  <TableCell className="text-right font-semibold text-green-700">
+                    {formatCurrency(sale.cumulativePaid)}
+                  </TableCell>
                   {renderEditableCell(sale, 'description')}
                   {renderEditableCell(sale, 'payment_status')}
                 </TableRow>
