@@ -27,7 +27,7 @@ export default function MonthYearPicker({
       {/* Trigger Button */}
       <button
         onClick={() => setShow(!show)}
-        className="bg-muted px-4 py-2 rounded text-white font-semibold"
+        className="bg-blue-500 px-4 py-2 rounded text-white font-semibold"
       >
         📅 {months[selectedMonth]} {selectedYear}
       </button>
