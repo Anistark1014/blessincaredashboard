@@ -9,11 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Eye, Flag, FlagOff, Search, Users, UserCheck, UserX } from 'lucide-react';
-
-
-
-
-
 interface Reseller {
   id: string;
   email: string;
@@ -69,6 +64,68 @@ const AdminResellers: React.FC = () => {
   const [exclusiveFeatures, setExclusiveFeatures] = useState('');
   const { toast } = useToast();
 
+// Define the return type for getTierInfo
+type TierInfo = {
+  tier: string;
+  svg: string | null;
+};
+
+// Function to convert number to Roman numeral
+const toRomanNumeral = (num: number): string => {
+  const romanNumerals: { [key: number]: string } = {
+    1: "I",
+    2: "II", 
+    3: "III"
+  };
+  return romanNumerals[num] || "";
+};
+
+// Function to get tier info based on total sold
+const getTierInfo = (totalSold: number): TierInfo => {
+  if (totalSold < 1000) return { tier: "Base", svg: "Base" };
+  if (totalSold < 2000) return { tier: "Bronze", svg: "Bronze" };
+  if (totalSold < 4000) return { tier: "Silver 1", svg: "Silver" };
+  if (totalSold < 6000) return { tier: "Silver 2", svg: "Silver" };
+  if (totalSold < 10000) return { tier: "Silver 3", svg: "Silver" };
+  if (totalSold < 15000) return { tier: "Gold 1", svg: "Gold" };
+  if (totalSold < 20000) return { tier: "Gold 2", svg: "Gold" };
+  if (totalSold < 26000) return { tier: "Gold 3", svg: "Gold" };
+  if (totalSold < 32000) return { tier: "Platinum 1", svg: "Platinum" };
+  if (totalSold < 38000) return { tier: "Platinum 2", svg: "Platinum" };
+  if (totalSold < 45000) return { tier: "Platinum 3", svg: "Platinum" };
+  return { tier: "Diamond", svg: "Diamond" };
+};
+
+// Props type for TierIcon component
+type TierIconProps = {
+  svgName: string | null;
+  tier: string;
+};
+
+// Component to render tier icon
+const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
+  if (!svgName) return null;
+  
+  // Extract the tier number if it exists
+  const tierMatch = tier.match(/(\d+)$/);
+  const tierNumber = tierMatch ? parseInt(tierMatch[1]) : null;
+  const romanNumeral = tierNumber ? toRomanNumeral(tierNumber) : null;
+  
+  return (
+    <div className="flex flex-col items-center gap-1 relative" title={tier}>
+      <img 
+        src={`../../../public/tier/${svgName}.svg`} 
+        alt={`${tier} tier`}
+        className="w-9 h-9"
+      />
+      {romanNumeral && (
+        <span className="text-xs absolute -bottom-1 -right-0 font-medium bg-secondary p-[1px] rounded-full">
+          {romanNumeral}
+        </span>
+      )}
+    </div>
+  );
+};
 
 
   // Fetch resellers
@@ -272,6 +329,7 @@ const AdminResellers: React.FC = () => {
     }
   };
 
+
   return (
     <div className="space-y-4">
       <Input
@@ -421,8 +479,8 @@ const AdminResellers: React.FC = () => {
 
 const InfoItem: React.FC<InfoItemProps> = ({ label, value }) => (
   <div>
-    <label className="text-sm font-medium text-gray-600">{label}</label>
-    <p className="text-sm text-gray-900">{value ?? 'Not provided'}</p>
+    <label className="text-sm font-medium ">{label}</label>
+    <p className="text-sm ">{value ?? 'Not provided'}</p>
   </div>
 );
 
@@ -508,168 +566,244 @@ console.log(resellers)
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-           {filteredResellers.map((reseller) => (
-              <div
-                key={reseller.id}
-                className="flex flex-col gap-3 p-4 border rounded-lg shadow-sm"
-              >
-                {/* Header Summary Row */}
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-medium text-base  w-1/3">
-                    {reseller.name} <span className="text-sm ">| {reseller.region}</span>
-                  </div>
+            {filteredResellers.map((reseller) => {
+              const tierInfo = getTierInfo(reseller.total_products_sold);
+              const isOpen = detailsOpen && selectedReseller?.id === reseller.id;
 
-                  <div className="flex items-center gap-4 text-sm  w-1/3">
-                    <span className="font-medium">
-                      Sold: <span className="">{reseller.total_products_sold}</span>
-                    </span>
-                    <span className="font-medium">
-                      Payment: <span className={reseller.payment_status === 'clear' ? 'text-green-600' : 'text-red-600'}>
-                        {reseller.payment_status}
+              return (
+                <div
+                  key={reseller.id}
+                  className="flex flex-col gap-3 p-4 border rounded-lg shadow-sm"
+                >
+                  {/* Header Summary Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-base w-1/3 flex items-center gap-2">
+                      <TierIcon svgName={tierInfo.svg} tier={tierInfo.tier} />
+                      <span>{reseller.name}</span>
+                      <span className="text-sm">| {reseller.region}</span>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm w-1/3">
+                      <span className="font-medium">
+                        Sold: <span>{reseller.total_products_sold}</span>
                       </span>
-                    </span>
-                  </div>
+                      <span className="font-medium">
+                        Payment:{" "}
+                        <span
+                          className={
+                            reseller.payment_status === "clear"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }
+                        >
+                          {reseller.payment_status}
+                        </span>
+                      </span>
+                    </div>
 
-                  <Dialog
-                    open={detailsOpen && selectedReseller?.id === reseller.id}
-                    onOpenChange={setDetailsOpen}
-                  >
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedReseller(reseller)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View Details
-                      </Button>
-                    </DialogTrigger>
+                    <Dialog open={isOpen} onOpenChange={setDetailsOpen}>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedReseller(reseller)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View Details
+                        </Button>
+                      </DialogTrigger>
 
-                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Reseller Details - {reseller.name}</DialogTitle>
-                      </DialogHeader>
+                      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            Reseller Details - {reseller.name}
+                            {selectedReseller && (
+                              (() => {
+                                const selectedTierInfo = getTierInfo(
+                                  selectedReseller.total_products_sold
+                                );
+                                return (
+                                  <>
+                                    <TierIcon
+                                      svgName={selectedTierInfo.svg}
+                                      tier={selectedTierInfo.tier}
+                                    />
+                                    <span className="text-sm font-normal">
+                                      ({selectedTierInfo.tier})
+                                    </span>
+                                  </>
+                                );
+                              })()
+                            )}
+                          </DialogTitle>
+                        </DialogHeader>
 
-                      {selectedReseller && (
-                        <div className="space-y-6">
+                        {selectedReseller && (
+                          <div className="space-y-6">
+                            {/* Basic Info */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <InfoItem label="Email" value={selectedReseller.email} />
+                              <InfoItem
+                                label="Company"
+                                value={selectedReseller.name || "Not provided"}
+                              />
+                              <InfoItem
+                                label="Phone"
+                                value={
+                                  selectedReseller.contact_info?.phone || "Not provided"
+                                }
+                              />
+                              <InfoItem
+                                label="Joined"
+                                value={new Date(
+                                  selectedReseller.created_at
+                                ).toLocaleDateString()}
+                              />
+                            </div>
 
-                          {/* Basic Info */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <InfoItem label="Email" value={selectedReseller.email} />
-                            <InfoItem label="Company" value={selectedReseller.name || 'Not provided'} />
-                            <InfoItem label="Phone" value={selectedReseller.contact_info?.phone || 'Not provided'} />
-                            <InfoItem label="Joined" value={new Date(selectedReseller.created_at).toLocaleDateString()} />
-                          </div>
-
-                          {/* Flag Action */}
-                          <div className="flex space-x-2">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant={selectedReseller.flagged_status ? "destructive" : "outline"}
-                                  size="sm"
-                                >
-                                  {selectedReseller.flagged_status ? (
-                                    <FlagOff className="h-4 w-4 mr-1" />
-                                  ) : (
-                                    <Flag className="h-4 w-4 mr-1" />
-                                  )}
-                                  {selectedReseller.flagged_status ? 'Unflag' : 'Flag'} Reseller
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    {selectedReseller.flagged_status ? 'Unflag' : 'Flag'} Reseller
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to {selectedReseller.flagged_status ? 'unflag' : 'flag'} this reseller?
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleToggleFlag(selectedReseller.id, selectedReseller.flagged_status)}
+                            {/* Flag Action */}
+                            <div className="flex space-x-2">
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant={
+                                      selectedReseller.flagged_status
+                                        ? "destructive"
+                                        : "outline"
+                                    }
+                                    size="sm"
                                   >
-                                    Confirm
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-
-                          {/* Exclusive Features */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Exclusive Features</label>
-                            <Textarea
-                              value={exclusiveFeatures}
-                              onChange={(e) => setExclusiveFeatures(e.target.value)}
-                              placeholder="Enter exclusive features for this reseller..."
-                            />
-                            <Button onClick={handleUpdateExclusiveFeatures} size="sm">
-                              Save Features
-                            </Button>
-                          </div>
-
-                          {/* Requests */}
-                          <div>
-                            <h3 className="text-lg font-semibold mb-3">
-                              Requests ({resellerRequests.length})
-                            </h3>
-                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                              {resellerRequests.length > 0 ? (
-                                resellerRequests.map((request) => (
-                                  <div key={request.id} className="flex items-center justify-between p-3 border rounded">
-                                    <div className="flex-1">
-                                      <div className="flex items-center space-x-2">
-                                        <span className="font-medium">#{request.id.slice(0, 8)}</span>
-                                        <Badge className={getStatusBadge(request.status)}>
-                                          {request.status}
-                                        </Badge>
-                                      </div>
-                                      <p className="text-sm text-muted-foreground">
-                                        Amount: ${request.total_amount} | Date: {new Date(request.request_date).toLocaleDateString()}
-                                      </p>
-                                    </div>
-                                    {request.status === 'Pending' && (
-                                      <div className="flex space-x-2">
-                                        <Button
-                                          size="sm"
-                                          onClick={() => handleRequestStatusUpdate(request.id, 'Approved')}
-                                        >
-                                          Approve
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="destructive"
-                                          onClick={() => handleRequestStatusUpdate(request.id, 'Rejected')}
-                                        >
-                                          Reject
-                                        </Button>
-                                      </div>
+                                    {selectedReseller.flagged_status ? (
+                                      <FlagOff className="h-4 w-4 mr-1" />
+                                    ) : (
+                                      <Flag className="h-4 w-4 mr-1" />
                                     )}
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="text-sm text-muted-foreground text-center py-4">
-                                  No requests found
-                                </p>
-                              )}
+                                    {selectedReseller.flagged_status
+                                      ? "Unflag"
+                                      : "Flag"}{" "}
+                                    Reseller
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      {selectedReseller.flagged_status
+                                        ? "Unflag"
+                                        : "Flag"}{" "}
+                                      Reseller
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to{" "}
+                                      {selectedReseller.flagged_status
+                                        ? "unflag"
+                                        : "flag"}{" "}
+                                      this reseller?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        handleToggleFlag(
+                                          selectedReseller.id,
+                                          selectedReseller.flagged_status
+                                        )
+                                      }
+                                    >
+                                      Confirm
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+
+                            {/* Exclusive Features */}
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                Exclusive Features
+                              </label>
+                              <Textarea
+                                value={exclusiveFeatures}
+                                onChange={(e) => setExclusiveFeatures(e.target.value)}
+                                placeholder="Enter exclusive features for this reseller..."
+                              />
+                              <Button onClick={handleUpdateExclusiveFeatures} size="sm">
+                                Save Features
+                              </Button>
+                            </div>
+
+                            {/* Requests */}
+                            <div>
+                              <h3 className="text-lg font-semibold mb-3">
+                                Requests ({resellerRequests.length})
+                              </h3>
+                              <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {resellerRequests.length > 0 ? (
+                                  resellerRequests.map((request) => (
+                                    <div
+                                      key={request.id}
+                                      className="flex items-center justify-between p-3 border rounded"
+                                    >
+                                      <div className="flex-1">
+                                        <div className="flex items-center space-x-2">
+                                          <span className="font-medium">
+                                            #{request.id.slice(0, 8)}
+                                          </span>
+                                          <Badge className={getStatusBadge(request.status)}>
+                                            {request.status}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">
+                                          Amount: ${request.total_amount} | Date:{" "}
+                                          {new Date(
+                                            request.request_date
+                                          ).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                      {request.status === "Pending" && (
+                                        <div className="flex space-x-2">
+                                          <Button
+                                            size="sm"
+                                            onClick={() =>
+                                              handleRequestStatusUpdate(
+                                                request.id,
+                                                "Approved"
+                                              )
+                                            }
+                                          >
+                                            Approve
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() =>
+                                              handleRequestStatusUpdate(
+                                                request.id,
+                                                "Rejected"
+                                              )
+                                            }
+                                          >
+                                            Reject
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-sm text-muted-foreground text-center py-4">
+                                    No requests found
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-
-                          {/* Payments Section (optional future use) */}
-                          {/* Uncomment if needed later */}
-
-                        </div>
-                      )}
-                    </DialogContent>
-                  </Dialog>
+                        )}
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
-              </div>
-            ))}
-
-
+              );
+            })}
 
             {filteredResellers.length === 0 && (
               <div className="text-center py-8">
