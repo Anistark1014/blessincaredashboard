@@ -81,7 +81,7 @@ const ResellerRequests: React.FC = () => {
   const getFilteredRequests = () => {
     return requests.filter(request => {
       const matchesSearch = request.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (request.products_ordered && JSON.stringify(request.products_ordered).toLowerCase().includes(searchTerm.toLowerCase()));
+       (request.products_ordered && JSON.stringify(request.products_ordered).toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchesStatus = statusFilter === 'all' || request.status === statusFilter;
       const matchesPayment = paymentFilter === 'all' || request.payment_status === paymentFilter;
@@ -272,8 +272,12 @@ console.log(requests)
                           <span className="font-medium">Amount Paid:</span> ${Number(request.amount_paid).toFixed(2)}
                         </div>
                         <div>
-                          <span className="font-medium">Products Ordered:</span> {Number(request.products_ordered).toFixed(2)}
+                          <span className="font-medium">Products Ordered:</span>
+                          {Array.isArray(request.products_ordered)
+                            ? `${request.products_ordered.length} items`
+                            : '—'}
                         </div>
+
                         <div>
                           <span className="font-medium">Request Date:</span> {new Date(request.request_date).toLocaleDateString()}
                         </div>
