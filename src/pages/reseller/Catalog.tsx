@@ -6,23 +6,26 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
-} from '@/components/ui/select';
-import {
-  Package, Search, Filter, ShoppingCart, Heart, Star, ArrowRight,
+  Package, Search, ShoppingCart, Heart, ArrowRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabaseClient';
 
-type Product = {
-  id: string;
-  name: string;
-  description: string;
+interface PriceRange {
+  min: number;
+  max: number;
   price: number;
-  image_url:string;
-  category: string;
-  availability: 'in-stock' | 'low-stock' | 'out-of-stock';
-};
+}
+
+interface Product {
+  id?: string;
+  name: string;
+  description?: string;
+  availability?: string;
+  created_at?: string;
+  image_url?: string;
+  price_ranges?: PriceRange[];
+}
 
 const ProductCatalog = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -49,17 +52,11 @@ const ProductCatalog = () => {
   }, []);
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     const matchesAvailability = availabilityFilter === 'all' || product.availability === availabilityFilter;
 
-    return matchesSearch && matchesCategory && matchesAvailability;
+    return matchesAvailability;
   });
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
 
   const getAvailabilityColor = (availability: string) => {
     switch (availability) {
@@ -135,19 +132,31 @@ const ProductCatalog = () => {
       if (requestError) throw requestError;
 
       const itemsToInsert = products
-        .filter((p) => selectedProducts.has(p.id))
-        .map((p) => ({
-          request_id: request.id,
-          product_id: p.id,
-          product_name: p.name,
-          quantity: selectedProductQuantities.get(p.id) || 1,
-          price: selectedProductQuantities.get(p.id)*p.price,
-        }));
-        console.log("ItemstoInsert",itemsToInsert)
+  .filter((p) => selectedProducts.has(p.id))
+  .map((p) => {
+    const quantity = selectedProductQuantities.get(p.id) || 1;
 
-      const { error: itemsError } = await supabase
-        .from('product_request_items')
-        .insert(itemsToInsert);
+    // Determine the correct price based on quantity
+    const matchingRange = p.price_ranges?.find(
+      (range) => quantity >= range.min && quantity <= range.max
+    );
+
+    const price = matchingRange ? matchingRange.price : 0;
+
+    return {
+      request_id: request.id,
+      product_id: p.id,
+      product_name: p.name,
+      quantity,
+      price: quantity * price, // total price for this item
+    };
+  });
+
+console.log("ItemsToInsert", itemsToInsert);
+
+const { error: itemsError } = await supabase
+  .from('product_request_items')
+  .insert(itemsToInsert);
 
       if (itemsError) throw itemsError;
 
@@ -214,127 +223,118 @@ const ProductCatalog = () => {
                 className="pl-10 border-lavender/30 focus:border-lavender"
               />
             </div>
-
-            <div className="flex gap-4">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-40 border-lavender/30">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category === 'all' ? 'All Categories' : category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product) => {
-          const isSelected = selectedProducts.has(product.id);
-          const isOutOfStock = product.availability === 'out-of-stock';
+        {/* Products Grid */} 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProducts.map((product) => {
+            const isSelected = selectedProducts.has(product.id!);
+            const isOutOfStock = product.availability === 'out-of-stock';
 
-          return (
-            <Card
-              key={product.id}
-              className={`healthcare-card cursor-pointer transition-all duration-300 ${
-                isSelected ? 'ring-2 ring-lavender shadow-[var(--shadow-floating)]' : ''
-              } ${isOutOfStock ? 'opacity-60' : ''}`}
-              onClick={() => !isOutOfStock && toggleProductSelection(product.id)}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <Badge className={getAvailabilityColor(product.availability)}>
-                    {product.availability.replace('-', ' ')}
-                  </Badge>
-                  <div className="flex gap-1">
-                    <Heart className="w-4 h-4 text-muted-foreground hover:text-blush-dark cursor-pointer float-gentle" />
-                    {isSelected && (
-                      <div className="w-5 h-5 bg-gradient-to-br from-lavender to-blush rounded-full flex items-center justify-center">
-                        <ArrowRight className="w-3 h-3 text-lavender-foreground" />
+            return (
+              <Card
+                key={product.id}
+                className={`healthcare-card cursor-pointer transition-all duration-300 ${
+                  isSelected ? 'ring-2 ring-lavender shadow-[var(--shadow-floating)]' : ''
+                } ${isOutOfStock ? 'opacity-60' : ''}`}
+                onClick={() => !isOutOfStock && toggleProductSelection(product.id!)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <Badge className={getAvailabilityColor(product.availability!)}>
+                      {product.availability!.replace('-', ' ')}
+                    </Badge>
+                    <div className="flex gap-1">
+                      <Heart className="w-4 h-4 text-muted-foreground hover:text-blush-dark cursor-pointer float-gentle" />
+                      {isSelected && (
+                        <div className="w-5 h-5 bg-gradient-to-br from-lavender to-blush rounded-full flex items-center justify-center">
+                          <ArrowRight className="w-3 h-3 text-lavender-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="aspect-video bg-gradient-to-br from-lavender/10 to-blush/10 rounded-lg flex items-center justify-center">
+                    {product.image_url == null || product.image_url == '' ? (
+                      <div>
+                        <Package className="w-12 h-12 text-lavender-dark opacity-50" />
+                      </div>
+                    ) : (
+                      <div>
+                        <img src={product.image_url} className="w-40 h-40" alt="" />
                       </div>
                     )}
                   </div>
-                </div>
+                </CardHeader>
 
-                <div className="aspect-video bg-gradient-to-br from-lavender/10 to-blush/10 rounded-lg flex items-center justify-center">
-                  {product.image_url==null || product.image_url==""?(
-                    <div><Package className="w-12 h-12 text-lavender-dark opacity-50" /></div>
-                  ):(
-                    <div>
-                      <img src={product.image_url} className='w-40 h-40' alt="" />
+                <CardContent className="space-y-3">
+                  <div>
+                    <CardTitle className="text-lg text-foreground">{product.name}</CardTitle>
+                    <CardDescription className="text-sm text-muted-foreground">
+                      {product.description}
+                    </CardDescription>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/40 space-y-1">
+                    {product.price_ranges?.length! > 0 ? (
+                      product.price_ranges!.map((range, idx) => (
+                        <div
+                          key={idx}
+                          className="flex justify-between items-center text-sm text-muted-foreground"
+                        >
+                          <span className="font-semibold text-foreground">₹{range.price}</span>
+                          <span className="text-xs">(Qty: {range.min} - {range.max})</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-foreground">No Price Info</div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      size="sm"
+                      variant={isSelected ? 'default' : 'outline'}
+                      className={
+                        isSelected
+                          ? 'btn-healthcare'
+                          : 'border-lavender text-lavender hover:bg-lavender hover:text-lavender-foreground'
+                      }
+                      disabled={isOutOfStock}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleProductSelection(product.id!);
+                      }}
+                    >
+                      {isOutOfStock ? 'Out of Stock' : isSelected ? 'Selected' : 'Select'}
+                    </Button>
+                  </div>
+
+                  {isSelected && (
+                    <div className="pt-2 flex items-center gap-2">
+                      <label htmlFor={`qty-${product.id}`} className="text-sm text-muted-foreground">
+                        Qty:
+                      </label>
+                      <Input
+                        id={`qty-${product.id}`}
+                        type="number"
+                        min={5}
+                        value={selectedProductQuantities.get(product.id!) || 1}
+                        onChange={(e) =>
+                          handleQuantityChange(product.id!, parseInt(e.target.value) || 1)
+                        }
+                        className="w-28 text-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </div>
                   )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                <div>
-                  <CardTitle className="text-lg text-foreground">{product.name}</CardTitle>
-                  <CardDescription className="text-sm text-muted-foreground">
-                    {product.description}
-                  </CardDescription>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-xs">
-                    {product.category}
-                  </Badge>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-3 h-3 text-warning fill-current" />
-                    <span className="text-xs text-muted-foreground">4.8</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-border/40">
-                  <div className="text-2xl font-bold text-foreground">${product.price}</div>
-                  <Button
-                    size="sm"
-                    variant={isSelected ? 'default' : 'outline'}
-                    className={
-                      isSelected
-                        ? 'btn-healthcare'
-                        : 'border-lavender text-lavender hover:bg-lavender hover:text-lavender-foreground'
-                    }
-                    disabled={isOutOfStock}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleProductSelection(product.id);
-                    }}
-                  >
-                    {isOutOfStock ? 'Out of Stock' : isSelected ? 'Selected' : 'Select'}
-                  </Button>
-                </div>
-
-                {isSelected && (
-                  <div className="pt-2 flex items-center gap-2">
-                    <label htmlFor={`qty-${product.id}`} className="text-sm text-muted-foreground">
-                      Qty:
-                    </label>
-                    <Input
-                      id={`qty-${product.id}`}
-                      type="number"
-                      min={5}
-                      value={selectedProductQuantities.get(product.id) || 1}
-                      onChange={(e) =>
-                        handleQuantityChange(product.id, parseInt(e.target.value) || 1)
-                      }
-                      className="w-28 text-sm"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
       {filteredProducts.length === 0 && !loading && (
         <Card className="healthcare-card">

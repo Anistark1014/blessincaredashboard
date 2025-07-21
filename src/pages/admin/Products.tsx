@@ -28,6 +28,8 @@ interface ProductFormData {
   availability?: string;
   created_at?: string;
   image_url?: string;
+  gross_profit: number | null; // ✅ Add this line
+  mrp: number | null; // ✅ Add this line
   price_ranges?: PriceRange[];
 }
 
@@ -84,7 +86,7 @@ const ProductForm = ({
   }, [setFormData]);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4 h-full">
       <div>
         <Label htmlFor="name">Name *</Label>
         <Input
@@ -108,9 +110,44 @@ const ProductForm = ({
           rows={3}
         />
       </div>
+
+      <div className='flex justify-around items-center gap-4'>
+        <div>
+            <Label htmlFor="gross_profit">Gross Profit (₹)</Label>
+            <Input
+              id="gross_profit"
+              type="number"
+              step="1"
+              value={formData.gross_profit ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  gross_profit: parseFloat(e.target.value) || 0,
+                }))
+              }
+            />
+        </div>
+        <div>
+            <Label htmlFor="mrp">MRP (₹)</Label>
+            <Input
+              id="mrp"
+              type="number"
+              step="1"
+              value={formData.mrp ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  mrp: parseFloat(e.target.value) || 0,
+                }))
+              }
+            />
+        </div>
+
+      </div>
       
       <div className='flex justify-around items-center gap-4'>
         <span className={cn('flex flex-col gap-4 ',formData.image_url?'':'w-full')}>
+
           <div>
             <Label htmlFor="availability">Availability</Label>
             <Select
@@ -264,6 +301,8 @@ const AdminProducts = () => {
     description: '',
     image_url: '',
     availability: 'In Stock',
+    gross_profit: 0,
+    mrp:0,
     price_ranges: [
       {
         min: 1,
@@ -439,19 +478,23 @@ const AdminProducts = () => {
       description: product.description || '',
       image_url: product.image_url || '',
       availability: product.availability || 'In Stock',
+      gross_profit:0,
+      mrp:0,
       price_ranges: product.price_ranges?.length
-        ? product.price_ranges
-        : [],
+      ? product.price_ranges
+      : [],
     });
     setIsEditModalOpen(true);
   };
-
+  
   const resetForm = useCallback(() => {
     setFormData({
       name: '',
       description: '',
       image_url: '',
       availability: 'In Stock',
+      gross_profit:0,
+      mrp:0,
       price_ranges: [
         { min: 1, max: 100, price: 100 },
       ],
@@ -473,7 +516,7 @@ const AdminProducts = () => {
     }
 
     const { data } = supabase.storage
-      .from('images')
+      .from('product-images')
       .getPublicUrl(filePath);
 
     return data?.publicUrl || null;
@@ -549,6 +592,7 @@ const AdminProducts = () => {
           </div>
         </CardContent>
       </Card>
+
 
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
