@@ -92,7 +92,7 @@ const Auth = () => {
             </div>
             <Flower className="w-8 h-8 text-blush-dark float-gentle" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Women's Healthcare</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Blessin Care</h1>
           <p className="text-muted-foreground">Empowering health through care and connection</p>
         </div>
 
@@ -160,7 +160,7 @@ const Auth = () => {
                   </Button>
                 </form>
                 <div className="text-center text-sm text-muted-foreground">
-                  Demo: reseller@test.com / admin@test.com
+                  Demo: ajinkyareseller@gmail.com / admin@test.com
                 </div>
               </TabsContent>
 
