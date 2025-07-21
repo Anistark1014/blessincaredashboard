@@ -39,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/resellers', icon: Users, label: 'Reseller Management' },
     { to: '/admin/sales', icon: BarChart3, label: 'Sales Tracking' },
     { to: '/admin/expenses', icon: Settings, label: 'Expense Tracker' },
+    { to: '/admin/inventory', icon: Users, label: 'Inventory Management' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
