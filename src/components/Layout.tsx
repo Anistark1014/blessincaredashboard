@@ -82,7 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <Heart className="w-5 h-5 text-lavender-foreground" />
               </div>
               <div>
-                <h1 className="text-sm md:text-lg font-semibold text-foreground">Women's Healthcare</h1>
+                <h1 className="text-sm md:text-lg font-semibold text-foreground">Blessin Care</h1>
                 <p className="text-xs text-muted-foreground capitalize">{user?.role} Portal</p>
               </div>
             </div>

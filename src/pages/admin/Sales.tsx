@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +7,10 @@ import { cn } from '@/lib/utils';
 import MonthYearPicker from './MonthYearPicker';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
+import EnhancedSalesDashboard from './EnhancedSalesDashboard';
+import ExcelImport from './ExcelImport';
 
+// Interface for a single sale record
 interface Sale {
   id: string;
   date: string;
@@ -21,11 +24,11 @@ interface Sale {
   incoming: number;
   clearance: string | null;
   balance: number;
-  description: string;
   payment_status: 'Fully Paid' | 'Partially Paid' | 'Pending';
+  cumulativePaid?: number;
 }
 
-// Enhanced Product interface to include pricing information
+// Enhanced Product interface
 interface Product {
   id: string;
   name?: string;
@@ -37,16 +40,14 @@ interface Product {
   selling_price?: number;
 }
 
-// Undo operation types
+// Undo operation types with new 'import' type
 interface UndoOperation {
-  type: 'delete' | 'add' | 'edit';
+  type: 'delete' | 'add' | 'edit' | 'import';
   timestamp: number;
   data: {
-    // For delete operations
     deletedRecords?: Sale[];
-    // For add operations
     addedRecord?: Sale;
-    // For edit operations
+    importedRecords?: Sale[]; // For undoing imports
     recordId?: string;
     field?: keyof Sale;
     oldValue?: any;
@@ -68,7 +69,6 @@ const statusColors = {
   'Pending': 'text-red-600 dark:text-red-400 font-semibold',
 };
 
-// Custom styles for react-select to support dark mode
 const getSelectStyles = (isDark: boolean) => ({
   control: (provided: any, state: any) => ({
     ...provided,
@@ -127,59 +127,43 @@ const SalesTable: React.FC = () => {
   const [filterProduct, setFilterProduct] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  
-  // Undo functionality state
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Sale | null; direction: 'ascending' | 'descending' }>({
+    key: 'date',
+    direction: 'descending',
+  });
 
-  // Add operation to undo stack
   const addToUndoStack = (operation: UndoOperation) => {
-    if (isUndoing) return; // Don't add undo operations to stack
-    
+    if (isUndoing) return;
     setUndoStack(prev => {
       const newStack = [...prev, operation];
-      // Keep only last 10 operations to prevent memory issues
       return newStack.slice(-10);
     });
   };
 
-  // Check for dark mode
   useEffect(() => {
     const checkDarkMode = () => {
-      const isDark = document.documentElement.classList.contains('dark') ||
-                     window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = document.documentElement.classList.contains('dark');
       setIsDarkMode(isDark);
     };
-
     checkDarkMode();
-    
-    // Listen for theme changes
     const observer = new MutationObserver(checkDarkMode);
-    observer.observe(document.documentElement, { 
-      attributes: true, 
-      attributeFilter: ['class'] 
-    });
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    mediaQuery.addListener(checkDarkMode);
-
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => {
       observer.disconnect();
-      mediaQuery.removeListener(checkDarkMode);
     };
   }, []);
 
   const fetchSales = async () => {
     const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
     const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999).toISOString();
-
     const { data, error } = await supabase
       .from('sales')
       .select('*')
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false });
-
     if (error) {
       console.error('Error fetching sales:', error.message);
     } else {
@@ -187,57 +171,29 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  // Enhanced function to fetch products with pricing information
   const fetchProducts = async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*"); // Select all fields to get pricing information
-
+    const { data, error } = await supabase.from("products").select("*");
     if (!error && data) {
       setProducts(data as Product[]);
-      
-      // Create options for dropdowns
-      const uniqueProducts = Array.from(new Set(
-        data.map((item) => 
-          item.product || item.name || item.product_name
-        ).filter(Boolean)
-      ));
-      
-      const options = uniqueProducts.map((product) => ({
-        label: product,
-        value: product,
-      }));
+      const uniqueProducts = Array.from(new Set(data.map((item) => item.product || item.name || item.product_name).filter(Boolean)));
+      const options = uniqueProducts.map((product) => ({ label: product, value: product }));
       setProductOptions(options);
     } else {
       console.error("Error fetching products:", error);
     }
   };
 
-  // Function to get product price based on product name
   const getProductPrice = (productName: string): number => {
-    const product = products.find(p => 
-      p.product === productName || 
-      p.name === productName || 
-      p.product_name === productName
-    );
-    
+    const product = products.find(p => p.product === productName || p.name === productName || p.product_name === productName);
     if (product) {
-      // Try different price fields in order of preference
-      return product.selling_price || 
-             product.price || 
-             product.unit_price || 
-             product.cost_price || 
-             0;
+      return product.selling_price || product.price || product.unit_price || product.cost_price || 0;
     }
-    
     return 0;
   };
 
   const fetchDropdownData = async () => {
     const { data: resellerData } = await supabase.from('users').select('id, name').eq('role', 'reseller');
     setResellers(resellerData || []);
-
-    // Use the enhanced fetchProducts function
     await fetchProducts();
   };
 
@@ -248,56 +204,76 @@ const SalesTable: React.FC = () => {
   useEffect(() => {
     fetchDropdownData();
   }, []);
-
-  const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
-    // Store old value for undo
-    const oldRecord = sales.find(sale => sale.id === id);
-    const oldValue = oldRecord ? oldRecord[field] : undefined;
-    
-    // Add to undo stack
-    addToUndoStack({
-      type: 'edit',
-      timestamp: Date.now(),
-      data: {
-        recordId: id,
-        field,
-        oldValue,
-        newValue: value,
-        record: oldRecord
-      }
+  
+  const handleImportedData = async (importedRows: Partial<Sale>[]) => {
+    if (!importedRows || importedRows.length === 0) {
+      alert("No data found or parsed from the imported file.");
+      return;
+    }
+    const processedData = importedRows.map(row => {
+        const qty = Number(row.qty || 0);
+        const price = Number(row.price || 0);
+        const paid = Number(row.paid || 0);
+        const total = qty * price;
+        const incoming = total - paid;
+        const balance = incoming;
+        const payment_status = paid >= total ? 'Fully Paid' : (paid === 0 ? 'Pending' : 'Partially Paid');
+        return { ...row, total, incoming, balance, payment_status, type: 'sale' };
     });
+    
+    const { data: newRecords, error } = await supabase.from('sales').insert(processedData).select();
 
-    const updatedSales = sales.map((sale) =>
-      sale.id === id ? { ...sale, [field]: value } : sale
-    );
-    setSales(updatedSales);
-
-    const { error } = await supabase.from('sales').update({ [field]: value }).eq('id', id);
     if (error) {
-      console.error('Update failed:', error.message);
+        alert(`Import failed: ${error.message}`);
+    } else if (newRecords) {
+        alert(`${newRecords.length} rows imported successfully!`);
+        addToUndoStack({ type: 'import', timestamp: Date.now(), data: { importedRecords: newRecords } });
+        fetchSales();
     }
   };
 
-  const handleRowSelect = (id: string) => {
-    setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+  const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
+    const originalSale = sales.find(sale => sale.id === id);
+    if (!originalSale) return;
+
+    let updatedRecord = { ...originalSale, [field]: value };
+    let updatePayload: Partial<Sale> = { [field]: value };
+
+    if (['qty', 'price', 'paid'].includes(field)) {
+        const qty = Number(updatedRecord.qty || 0);
+        const price = Number(updatedRecord.price || 0);
+        const paid = Number(updatedRecord.paid || 0);
+        const total = qty * price;
+        const incoming = total - paid;
+        const balance = incoming;
+        const payment_status = paid >= total ? 'Fully Paid' : (paid === 0 ? 'Pending' : 'Partially Paid');
+        const calculatedFields = { total, incoming, balance, payment_status };
+        updatePayload = { ...updatePayload, ...calculatedFields };
+        updatedRecord = { ...updatedRecord, ...calculatedFields };
+    }
+    
+    addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue: originalSale[field], newValue: value, record: originalSale } });
+
+    const updatedSales = sales.map((sale) =>
+        sale.id === id ? updatedRecord : sale
     );
+    setSales(updatedSales);
+
+    const { error } = await supabase.from('sales').update(updatePayload).eq('id', id);
+    if (error) {
+        console.error('Update failed:', error.message);
+        setSales(sales); 
+    }
+  };
+  
+  const handleRowSelect = (id: string) => {
+    setSelectedRows((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   };
 
   const deleteSelectedRows = async () => {
     if (selectedRows.length === 0) return;
-
-    // Store deleted records for undo
     const deletedRecords = sales.filter((s) => selectedRows.includes(s.id));
-    
-    addToUndoStack({
-      type: 'delete',
-      timestamp: Date.now(),
-      data: {
-        deletedRecords
-      }
-    });
-
+    addToUndoStack({ type: 'delete', timestamp: Date.now(), data: { deletedRecords } });
     const { error } = await supabase.from('sales').delete().in('id', selectedRows);
     if (error) {
       alert('Delete failed: ' + error.message);
@@ -307,31 +283,34 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  // Undo functionality
   const handleUndo = async () => {
     if (undoStack.length === 0) {
       alert('No operations to undo');
       return;
     }
-
     setIsUndoing(true);
     const lastOperation = undoStack[undoStack.length - 1];
-
     try {
       switch (lastOperation.type) {
+        case 'import':
+          if (lastOperation.data.importedRecords) {
+            const idsToDelete = lastOperation.data.importedRecords.map(rec => rec.id);
+            const { error } = await supabase.from('sales').delete().in('id', idsToDelete);
+            if (error) {
+              alert('Undo import failed: ' + error.message);
+            } else {
+              setSales(prev => prev.filter(s => !idsToDelete.includes(s.id)));
+              alert(`Reverted the import of ${idsToDelete.length} record(s)`);
+            }
+          }
+          break;
         case 'delete':
-          // Restore deleted records
           if (lastOperation.data.deletedRecords) {
             const recordsToInsert = lastOperation.data.deletedRecords.map(record => {
               const { id, ...recordWithoutId } = record;
               return recordWithoutId;
             });
-            
-            const { data, error } = await supabase
-              .from('sales')
-              .insert(recordsToInsert)
-              .select();
-              
+            const { data, error } = await supabase.from('sales').insert(recordsToInsert).select();
             if (error) {
               alert('Undo delete failed: ' + error.message);
             } else if (data) {
@@ -340,15 +319,9 @@ const SalesTable: React.FC = () => {
             }
           }
           break;
-
         case 'add':
-          // Remove the added record
           if (lastOperation.data.addedRecord) {
-            const { error } = await supabase
-              .from('sales')
-              .delete()
-              .eq('id', lastOperation.data.addedRecord.id);
-              
+            const { error } = await supabase.from('sales').delete().eq('id', lastOperation.data.addedRecord.id);
             if (error) {
               alert('Undo add failed: ' + error.message);
             } else {
@@ -357,30 +330,21 @@ const SalesTable: React.FC = () => {
             }
           }
           break;
-
         case 'edit':
-          // Revert the edit
           if (lastOperation.data.recordId && lastOperation.data.field && lastOperation.data.record) {
-            const { error } = await supabase
-              .from('sales')
-              .update({ [lastOperation.data.field]: lastOperation.data.oldValue })
-              .eq('id', lastOperation.data.recordId);
-              
+            // This simple undo for 'edit' might not fully revert auto-calculations.
+            // A more complex implementation would store all changed fields.
+            const { error } = await supabase.from('sales').update({ [lastOperation.data.field]: lastOperation.data.oldValue }).eq('id', lastOperation.data.recordId);
             if (error) {
               alert('Undo edit failed: ' + error.message);
             } else {
-              setSales(prev => prev.map(sale => 
-                sale.id === lastOperation.data.recordId 
-                  ? { ...sale, [lastOperation.data.field!]: lastOperation.data.oldValue }
-                  : sale
-              ));
+              // Re-fetch to ensure data consistency after undoing an auto-calculated edit
+              fetchSales();
               alert(`Reverted ${lastOperation.data.field} change`);
             }
           }
           break;
       }
-
-      // Remove the undone operation from stack
       setUndoStack(prev => prev.slice(0, -1));
     } catch (error) {
       console.error('Undo operation failed:', error);
@@ -389,118 +353,37 @@ const SalesTable: React.FC = () => {
       setIsUndoing(false);
     }
   };
-
-  const renderEditableCell = (
-    sale: Sale,
-    field: keyof Sale,
-    formatter?: (value: any) => string,
-    isCurrency = false,
-    type = 'text'
-  ) => {
-    const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
+  
+  const renderEditableCell = (sale: Sale, field: keyof Sale, formatter?: (value: any) => string, isCurrency = false, type = 'text') => {
+    const isCalculatedField = ['total', 'incoming', 'balance'].includes(field);
+    const isEditing = !isCalculatedField && editingCell?.rowId === sale.id && editingCell.field === field;
     const rawValue = sale[field];
-    const displayValue = formatter ? formatter(rawValue) : rawValue;
-
     const resellerOptions = resellers.map((r: any) => ({ label: r.name, value: r.name }));
-    const productOptionsForCell = products.map((p: any) => ({ 
-      label: p.name || p.product_name || p.product || 'Unnamed Product', 
-      value: p.name || p.product_name || p.product || 'Unnamed Product' 
-    }));
+    const productOptionsForCell = products.map((p: any) => ({ label: p.name || p.product_name || p.product || 'Unnamed Product', value: p.name || p.product_name || p.product || 'Unnamed Product' }));
+    const clickHandler = isCalculatedField ? undefined : () => setEditingCell({ rowId: sale.id, field });
+    const cursorClass = isCalculatedField ? 'cursor-default' : 'cursor-pointer';
 
     if (field === 'member' || field === 'product') {
       const options = field === 'member' ? resellerOptions : productOptionsForCell;
-      return (
-        <TableCell>
-          {isEditing ? (
-            <Select
-              options={options}
-              value={options.find((o) => o.value === rawValue) || null}
-              onChange={(selected) => {
-                handleEditChange(sale.id, field, selected?.value);
-                // If product is changed, update price automatically
-                if (field === 'product' && selected?.value) {
-                  const productPrice = getProductPrice(selected.value);
-                  if (productPrice > 0) {
-                    handleEditChange(sale.id, 'price', productPrice);
-                  }
-                }
-              }}
-              onBlur={() => setEditingCell(null)}
-              isClearable
-              isSearchable
-              autoFocus
-              styles={getSelectStyles(isDarkMode)}
-            />
-          ) : (
-            <div onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
-              {String(rawValue ?? '')}
-            </div>
-          )}
-        </TableCell>
-      );
+      return (<TableCell className={`py-3 px-4`} onClick={clickHandler}>{isEditing ? (<Select options={options} value={options.find((o) => o.value === rawValue) || null} onChange={(selected) => { handleEditChange(sale.id, field, selected?.value); if (field === 'product' && selected?.value) { const productPrice = getProductPrice(selected.value); if (productPrice > 0) { handleEditChange(sale.id, 'price', productPrice); } } }} onBlur={() => setEditingCell(null)} isClearable isSearchable autoFocus styles={getSelectStyles(isDarkMode)} />) : (<div className={cursorClass}>{String(rawValue ?? '')}</div>)}</TableCell>);
     }
 
     if (field === 'payment_status') {
-      return (
-        <TableCell onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
-          {isEditing ? (
-            <select
-              className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              value={sale.payment_status}
-              onChange={(e) => handleEditChange(sale.id, field, e.target.value)}
-              onBlur={() => setEditingCell(null)}
-              autoFocus
-            >
-              <option value="Fully Paid">Fully Paid</option>
-              <option value="Partially Paid">Partially Paid</option>
-              <option value="Pending">Pending</option>
-            </select>
-          ) : (
-            <span className={cn(statusColors[sale.payment_status])}>{sale.payment_status}</span>
-          )}
-        </TableCell>
-      );
+      return (<TableCell className={`py-3 px-4`} onClick={clickHandler}>{isEditing ? (<select className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" value={sale.payment_status} onChange={(e) => handleEditChange(sale.id, field, e.target.value)} onBlur={() => setEditingCell(null)} autoFocus><option value="Fully Paid">Fully Paid</option><option value="Partially Paid">Partially Paid</option><option value="Pending">Pending</option></select>) : (<div className={cursorClass}><span className={cn(statusColors[sale.payment_status])}>{sale.payment_status}</span></div>)}</TableCell>);
     }
 
-    return (
-      <TableCell onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
-        {isEditing ? (
-          <input
-            type={type}
-            className="w-24 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-            value={rawValue ?? ''}
-            onChange={(e) =>
-              handleEditChange(
-                sale.id,
-                field,
-                type === 'number' ? Number(e.target.value) : e.target.value
-              )
-            }
-            onBlur={() => setEditingCell(null)}
-            autoFocus
-          />
-        ) : isCurrency ? (
-          formatCurrency(Number(rawValue))
-        ) : (
-          String(rawValue ?? '')
-        )}
-      </TableCell>
-    );
+    return (<TableCell className={`py-3 px-4`} onClick={clickHandler}>{isEditing ? (<input type={type} className="w-24 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={rawValue ?? ''} onChange={(e) => handleEditChange(sale.id, field, type === 'number' ? Number(e.target.value) : e.target.value)} onBlur={() => setEditingCell(null)} autoFocus />) : <div className={cursorClass}>{isCurrency ? (formatCurrency(Number(rawValue))) : (String(rawValue ?? ''))}</div>}</TableCell>);
   };
 
-  // Enhanced handleNewChange to auto-populate price when product is selected
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale((prev) => {
       const updated = { ...prev, [field]: value };
-      
-      // Auto-populate price when product is selected
       if (field === 'product' && value) {
         const productPrice = getProductPrice(value);
         if (productPrice > 0) {
           updated.price = productPrice;
         }
       }
-      
       return updated;
     });
   };
@@ -512,344 +395,182 @@ const SalesTable: React.FC = () => {
     const total = qty * price;
     const incoming = total - paid;
     const balance = incoming;
-    const payment_status = paid === total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
-
-    setNewSale((prev) => ({
-      ...prev,
-      total,
-      incoming,
-      balance,
-      payment_status,
-    }));
+    const payment_status = paid >= total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
+    setNewSale((prev) => ({ ...prev, total, incoming, balance, payment_status }));
   }, [newSale.qty, newSale.price, newSale.paid]);
-
+  
   const handleAddNew = async () => {
-    // Only check the fields that user actually needs to fill
-    const requiredFields: (keyof Sale)[] = [
-      'date', 'member', 'product', 'qty', 'price', 'description'
-    ];
-
-    const allFilled = requiredFields.every(
-      (field) => newSale[field] !== undefined && newSale[field] !== '' && newSale[field] !== 0
-    );
-
+    const requiredFields: (keyof Sale)[] = ['date', 'member', 'product', 'qty', 'price'];
+    const allFilled = requiredFields.every((field) => newSale[field] !== undefined && newSale[field] !== '' && newSale[field] !== 0);
     if (!allFilled) {
-      const missingFields = requiredFields.filter(
-        (field) => !newSale[field] || newSale[field] === '' || newSale[field] === 0
-      );
+      const missingFields = requiredFields.filter((field) => !newSale[field] || newSale[field] === '' || newSale[field] === 0);
       alert(`Please fill all required fields: ${missingFields.join(', ')}`);
       return;
     }
-
-    // Prepare the complete record with calculated values
-    const completeRecord = {
-      ...newSale,
-      type: newSale.type || 'sale', // Default type if not specified
-      total: newSale.total || 0,
-      paid: newSale.paid || 0,
-      incoming: newSale.incoming || 0,
-      balance: newSale.balance || 0,
-      payment_status: newSale.payment_status || 'Pending'
-    };
-
+    const completeRecord = { ...newSale, type: newSale.type || 'sale', total: newSale.total || 0, paid: newSale.paid || 0, incoming: newSale.incoming || 0, balance: newSale.balance || 0, payment_status: newSale.payment_status || 'Pending' };
     const { data, error } = await supabase.from('sales').insert([completeRecord]).select();
-
     if (error) {
       alert('Insert failed: ' + error.message);
     } else if (data && data.length > 0) {
       const addedRecord = data[0] as Sale;
-      
-      // Add to undo stack
-      addToUndoStack({
-        type: 'add',
-        timestamp: Date.now(),
-        data: {
-          addedRecord
-        }
-      });
-      
+      addToUndoStack({ type: 'add', timestamp: Date.now(), data: { addedRecord } });
       setSales([addedRecord, ...sales]);
       setNewSale({});
       setAddingNew(false);
     }
   };
 
-  const filteredSales = sales.filter((s) => {
-    const matchMember = !filterMember || s.member === filterMember;
-    const matchProduct = !filterProduct || s.product === filterProduct;
-    return matchMember && matchProduct;
-  });
-
-  const computedSales = filteredSales.map((sale, index) => {
-    const cumulativePaid = filteredSales
-      .slice(0, index + 1)
-      .reduce((sum, s) => sum + (s.paid || 0), 0);
-    return { ...sale, cumulativePaid };
-  });
-
   const handleExportToExcel = () => {
     if (!sales || sales.length === 0) {
       alert("No sales data to export.");
       return;
     }
-
-    const exportData = sales.map((s) => ({
-      Date: s.date,
-      Member: s.member,
-      Product: s.product,
-      Quantity: s.qty,
-      'Price per Pack': s.price,
-      'Total Amount': s.total,
-      Paid: s.paid,
-      Incoming: s.incoming,
-      'Total Balance': sales
-        .slice(0, sales.findIndex((row) => row.id === s.id) + 1)
-        .reduce((sum, row) => sum + row.paid, 0),
-      Description: s.description,
-      'Payment Status': s.payment_status,
-    }));
-
+    const exportData = sales.map((s) => ({ Date: s.date, Member: s.member, Product: s.product, Quantity: s.qty, 'Price per Pack': s.price, 'Total Amount': s.total, Paid: s.paid, Incoming: s.incoming, 'Total Balance': sales.slice(0, sales.findIndex((row) => row.id === s.id) + 1).reduce((sum, row) => sum + row.paid, 0), 'Payment Status': s.payment_status }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Sales");
-
     const month = new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'short' });
     const fileName = `Sales_${month}_${selectedYear}.xlsx`;
-
     XLSX.writeFile(workbook, fileName);
   };
 
   const resellerOptions = resellers.map((r: any) => ({ label: r.name, value: r.name }));
-  const productOptionsForFilter = products.map((p: any) => ({
-    label: p.name || p.product_name || p.product || 'Unnamed Product',
-    value: p.name || p.product_name || p.product || 'Unnamed Product',
-  }));
+  const productOptionsForFilter = products.map((p: any) => ({ label: p.name || p.product_name || p.product || 'Unnamed Product', value: p.name || p.product_name || p.product || 'Unnamed Product' }));
 
+  const filteredSales = useMemo(() => {
+    return sales.filter((s) => {
+      const matchMember = !filterMember || s.member === filterMember;
+      const matchProduct = !filterProduct || s.product === filterProduct;
+      return matchMember && matchProduct;
+    });
+  }, [sales, filterMember, filterProduct]);
+
+  const computedSales = useMemo(() => {
+    const chronoSorted = [...filteredSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return chronoSorted.map((sale, index) => {
+      const cumulativePaid = chronoSorted
+        .slice(0, index + 1)
+        .reduce((sum, s) => sum + (s.paid || 0), 0);
+      return { ...sale, cumulativePaid };
+    });
+  }, [filteredSales]);
+
+  const displayItems = useMemo(() => {
+    let sortableItems = [...computedSales];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key!] < b[sortConfig.key!]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key!] > b[sortConfig.key!]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [computedSales, sortConfig]);
+
+  const requestSort = (key: keyof Sale) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    } else if (sortConfig.key === key && sortConfig.direction === 'descending') {
+      setSortConfig({ key: 'date', direction: 'descending' });
+      return;
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (name: keyof Sale) => {
+    if (sortConfig.key !== name) return null;
+    return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+  };
+  
   return (
-    <Card>
-      <CardHeader>
-        <div className="space-y-4">
-          {/* 🔹 Top Bar: Title + Buttons */}
-          <div className="flex justify-between items-center w-full flex-wrap gap-4">
-            <CardTitle>Sales Table</CardTitle>
+    <>
+      <div className="mb-6">
+        <EnhancedSalesDashboard data={filteredSales} />
+      </div>
 
-            <div className="flex gap-2">
-              {/* Undo Button */}
-              <Button 
-                onClick={handleUndo} 
-                variant="outline" 
-                disabled={undoStack.length === 0 || isUndoing}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white"
-                title={undoStack.length > 0 ? `Undo ${undoStack[undoStack.length - 1]?.type} operation` : 'No operations to undo'}
-              >
-                ↶ Undo {undoStack.length > 0 && `(${undoStack.length})`}
-              </Button>
-              
-              {!addingNew ? (
-                <Button onClick={() => setAddingNew(true)}>✚ Add</Button>
-              ) : (
-                <>
-                  <Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button>
-                  <Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button>
-                </>
-              )}
-              <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete</Button>
-              <Button onClick={handleExportToExcel} className="bg-green-500 text-white" variant="outline">📤 Export</Button>
+      <Card>
+        <CardHeader>
+            <div className="space-y-4">
+            <div className="flex justify-between items-center w-full flex-wrap gap-4">
+                <CardTitle>Sales Table</CardTitle>
+                <div className="flex gap-2 flex-wrap">
+                  <Button onClick={handleUndo} variant="outline" disabled={undoStack.length === 0 || isUndoing} className="bg-yellow-500 hover:bg-yellow-600 text-white" title={undoStack.length > 0 ? `Undo ${undoStack[undoStack.length - 1]?.type} operation` : 'No operations to undo'}>↶ Undo {undoStack.length > 0 && `(${undoStack.length})`}</Button>
+                  {!addingNew ? (<Button onClick={() => setAddingNew(true)}>✚ Add</Button>) : (<><Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button><Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button></>)}
+                  <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete</Button>
+                  <ExcelImport onDataParsed={handleImportedData} Sale={{} as Sale} />
+                  <Button onClick={handleExportToExcel} className="bg-green-500 text-white" variant="outline">📤 Export</Button>
+                </div>
             </div>
-          </div>
-
-          {/* 🔹 Filter Bar: Month + Smart Filters */}
-          <div className="flex flex-wrap justify-between items-center w-full gap-4">
-            {/* Month-Year Picker */}
-            <MonthYearPicker
-              onSelect={(month, year) => {
-                setSelectedMonth(month);
-                setSelectedYear(year);
-              }}
-            />
-
-            {/* Member + Product Filters */}
-            <div className="flex gap-4">
-              <div className="w-48">
-                <Select
-                  options={resellerOptions}
-                  value={filterMember ? { label: filterMember, value: filterMember } : null}
-                  onChange={(selected) => setFilterMember(selected?.value || null)}
-                  isClearable
-                  isSearchable
-                  placeholder="Filter by Member"
-                  styles={getSelectStyles(isDarkMode)}
-                />
-              </div>
-              <div className="w-48">
-                <Select
-                  options={productOptionsForFilter}
-                  value={filterProduct ? { label: filterProduct, value: filterProduct } : null}
-                  onChange={(selected) => setFilterProduct(selected?.value || null)}
-                  isClearable
-                  isSearchable
-                  placeholder="Filter by Product"
-                  styles={getSelectStyles(isDarkMode)}
-                />
-              </div>
+            <div className="flex flex-wrap justify-between items-center w-full gap-4">
+                <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
+                <div className="flex gap-4">
+                <div className="w-48"><Select options={resellerOptions} value={filterMember ? { label: filterMember, value: filterMember } : null} onChange={(selected) => setFilterMember(selected?.value || null)} isClearable isSearchable placeholder="Filter by Member" styles={getSelectStyles(isDarkMode)} /></div>
+                <div className="w-48"><Select options={productOptionsForFilter} value={filterProduct ? { label: filterProduct, value: filterProduct } : null} onChange={(selected) => setFilterProduct(selected?.value || null)} isClearable isSearchable placeholder="Filter by Product" styles={getSelectStyles(isDarkMode)} /></div>
+                </div>
             </div>
+            </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="py-3 px-4"></TableHead>
+                  <TableHead className="py-3 px-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('date')}>Date{getSortIndicator('date')}</TableHead>
+                  <TableHead className="py-3 px-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('member')}>Members{getSortIndicator('member')}</TableHead>
+                  <TableHead className="py-3 px-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('product')}>Product{getSortIndicator('product')}</TableHead>
+                  <TableHead className="py-3 px-4">Qty</TableHead>
+                  <TableHead className="py-3 px-4">Price Per Pack</TableHead>
+                  <TableHead className="py-3 px-4">Total Amount</TableHead>
+                  <TableHead className="py-3 px-4">Paid</TableHead>
+                  <TableHead className="py-3 px-4">Incoming</TableHead>
+                  <TableHead className="py-3 px-4">Total Balance</TableHead>
+                  <TableHead className="py-3 px-4">Payment Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {addingNew && (
+                  <TableRow className="bg-blue-100 dark:bg-blue-900/30">
+                    <TableCell className="py-3 px-4"></TableCell>
+                    <TableCell className="py-3 px-4"><input type="date" className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} /></TableCell>
+                    <TableCell className="py-3 px-4 min-w-[140px]"><Select options={resellerOptions} onChange={(selected) => handleNewChange('member', selected?.value)} value={newSale.member ? { label: newSale.member, value: newSale.member } : null} placeholder="Select Member" isClearable isSearchable styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="py-3 px-4 min-w-[140px]"><Select options={productOptionsForFilter} value={productOptionsForFilter.find((option) => option.value === newSale.product) || null} onChange={(selected) => handleNewChange("product", selected?.value || "")} isClearable isSearchable placeholder="Select Product" styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-16 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} title="Price auto-fills when product is selected" /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" value={newSale.total ?? ''} readOnly /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid', Number(e.target.value))} /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" value={newSale.incoming ?? ''} readOnly /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" value={newSale.balance ?? ''} readOnly /></TableCell>
+                    <TableCell className="py-3 px-4"><select className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" value={newSale.payment_status ?? 'Pending'} onChange={(e) => handleNewChange('payment_status', e.target.value as any)}><option value="Fully Paid">Fully Paid</option><option value="Partially Paid">Partially Paid</option><option value="Pending">Pending</option></select></TableCell>
+                  </TableRow>
+                )}
+                {displayItems.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell className="py-3 px-4"><input type="checkbox" checked={selectedRows.includes(sale.id)} onChange={() => handleRowSelect(sale.id)} className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400 dark:focus:ring-offset-gray-800" /></TableCell>
+                    {renderEditableCell(sale, 'date', undefined, false, 'date')}
+                    {renderEditableCell(sale, 'member')}
+                    {renderEditableCell(sale, 'product')}
+                    {renderEditableCell(sale, 'qty', undefined, false, 'number')}
+                    {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
+                    {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
+                    {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
+                    {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
+                    <TableCell className="py-3 px-4 text-right font-semibold text-green-700 dark:text-green-400">{formatCurrency(sale.cumulativePaid || 0)}</TableCell>
+                    {renderEditableCell(sale, 'payment_status')}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead></TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Members</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Qty</TableHead>
-                <TableHead>Price Per Pack</TableHead>
-                <TableHead>Total Amount</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Incoming</TableHead>
-                <TableHead>Total Balance</TableHead>
-                <TableHead>Transaction Description</TableHead>
-                <TableHead>Payment Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {addingNew && (
-                <TableRow className="bg-blue-100 dark:bg-blue-900/30">
-                  <TableCell></TableCell>
-                  <TableCell>
-                    <input 
-                      type="date" 
-                      className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                      value={newSale.date ?? ''} 
-                      onChange={(e) => handleNewChange('date', e.target.value)} 
-                    />
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <Select
-                      options={resellerOptions}
-                      onChange={(selected) => handleNewChange('member', selected?.value)}
-                      value={newSale.member ? { label: newSale.member, value: newSale.member } : null}
-                      placeholder="Select Member"
-                      isClearable
-                      isSearchable
-                      styles={getSelectStyles(isDarkMode)}
-                    />
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <Select
-                      options={productOptionsForFilter}
-                      value={productOptionsForFilter.find((option) => option.value === newSale.product) || null}
-                      onChange={(selected) => handleNewChange("product", selected?.value || "")}
-                      isClearable
-                      isSearchable
-                      placeholder="Select Product"
-                      styles={getSelectStyles(isDarkMode)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-16 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                      value={newSale.qty ?? ''} 
-                      onChange={(e) => handleNewChange('qty', Number(e.target.value))} 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" 
-                      value={newSale.price ?? ''} 
-                      onChange={(e) => handleNewChange('price', Number(e.target.value))}
-                      title="Price auto-fills when product is selected"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" 
-                      value={newSale.total ?? ''} 
-                      readOnly 
-                    />
-                  </TableCell>
-                   <TableCell>
-                                      <input 
-                                        type="number" 
-                                        className="w-20 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                                        value={newSale.paid ?? ''} 
-                                        onChange={(e) => handleNewChange('paid', Number(e.target.value))} 
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <input 
-                                        type="number" 
-                                        className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" 
-                                        value={newSale.incoming ?? ''} 
-                                        readOnly 
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <input 
-                                        type="number" 
-                                        className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" 
-                                        value={newSale.balance ?? ''} 
-                                        readOnly 
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <input 
-                                        type="text" 
-                                        className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                                        value={newSale.description ?? ''} 
-                                        onChange={(e) => handleNewChange('description', e.target.value)} 
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <select 
-                                        className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" 
-                                        value={newSale.payment_status ?? 'Pending'} 
-                                        onChange={(e) => handleNewChange('payment_status', e.target.value)}
-                                      >
-                                        <option value="Fully Paid">Fully Paid</option>
-                                        <option value="Partially Paid">Partially Paid</option>
-                                        <option value="Pending">Pending</option>
-                                      </select>
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                                {computedSales.map((sale) => (
-                                  <TableRow key={sale.id}>
-                                    <TableCell>
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedRows.includes(sale.id)}
-                                        onChange={() => handleRowSelect(sale.id)}
-                                        className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400 dark:focus:ring-offset-gray-800"
-                                      />
-                                    </TableCell>
-                                    {renderEditableCell(sale, 'date', undefined, false, 'date')}
-                                    {renderEditableCell(sale, 'member')}
-                                    {renderEditableCell(sale, 'product')}
-                                    {renderEditableCell(sale, 'qty', undefined, false, 'number')}
-                                    {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
-                                    {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
-                                    {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
-                                    {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
-                                    <TableCell className="text-right font-semibold text-green-700 dark:text-green-400">
-                                      {formatCurrency(sale.cumulativePaid)}
-                                    </TableCell>
-                                    {renderEditableCell(sale, 'description')}
-                                    {renderEditableCell(sale, 'payment_status')}
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  };
-                  
-                  export default SalesTable;
+        </CardContent>
+      </Card>
+    </>
+  );
+};
+
+export default SalesTable;

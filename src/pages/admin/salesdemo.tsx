@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils';
 import MonthYearPicker from './MonthYearPicker';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
+import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 
+// Interface for a single sale record
 interface Sale {
   id: string;
   date: string;
@@ -21,7 +23,6 @@ interface Sale {
   incoming: number;
   clearance: string | null;
   balance: number;
-  description: string;
   payment_status: 'Fully Paid' | 'Partially Paid' | 'Pending';
 }
 
@@ -37,6 +38,22 @@ interface Product {
   selling_price?: number;
 }
 
+// Undo operation types
+interface UndoOperation {
+  type: 'delete' | 'add' | 'edit';
+  timestamp: number;
+  data: {
+    deletedRecords?: Sale[];
+    addedRecord?: Sale;
+    recordId?: string;
+    field?: keyof Sale;
+    oldValue?: any;
+    newValue?: any;
+    record?: Sale;
+  };
+}
+
+// Helper to format numbers as Indian Rupees
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -44,6 +61,7 @@ const formatCurrency = (amount: number) =>
     minimumFractionDigits: 2,
   }).format(amount);
 
+// Color mapping for payment status
 const statusColors = {
   'Fully Paid': 'text-green-700 dark:text-green-400 font-semibold',
   'Partially Paid': 'text-yellow-600 dark:text-yellow-400 font-semibold',
@@ -109,44 +127,42 @@ const SalesTable: React.FC = () => {
   const [filterProduct, setFilterProduct] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
+  const [isUndoing, setIsUndoing] = useState(false);
 
-  // Check for dark mode
+  const addToUndoStack = (operation: UndoOperation) => {
+    if (isUndoing) return;
+    setUndoStack(prev => {
+      const newStack = [...prev, operation];
+      return newStack.slice(-10);
+    });
+  };
+
+  // UPDATED: More reliable dark mode detection
   useEffect(() => {
     const checkDarkMode = () => {
-      const isDark = document.documentElement.classList.contains('dark') ||
-                     window.matchMedia('(prefers-color-scheme: dark)').matches;
+      // This now ONLY checks for the 'dark' class on the html element,
+      // which is more reliable for theme toggles.
+      const isDark = document.documentElement.classList.contains('dark');
       setIsDarkMode(isDark);
     };
-
     checkDarkMode();
-    
-    // Listen for theme changes
     const observer = new MutationObserver(checkDarkMode);
-    observer.observe(document.documentElement, { 
-      attributes: true, 
-      attributeFilter: ['class'] 
-    });
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    mediaQuery.addListener(checkDarkMode);
-
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => {
       observer.disconnect();
-      mediaQuery.removeListener(checkDarkMode);
     };
   }, []);
 
   const fetchSales = async () => {
     const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
     const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999).toISOString();
-
     const { data, error } = await supabase
       .from('sales')
       .select('*')
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false });
-
     if (error) {
       console.error('Error fetching sales:', error.message);
     } else {
@@ -154,57 +170,29 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  // Enhanced function to fetch products with pricing information
   const fetchProducts = async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*"); // Select all fields to get pricing information
-
+    const { data, error } = await supabase.from("products").select("*");
     if (!error && data) {
       setProducts(data as Product[]);
-      
-      // Create options for dropdowns
-      const uniqueProducts = Array.from(new Set(
-        data.map((item) => 
-          item.product || item.name || item.product_name
-        ).filter(Boolean)
-      ));
-      
-      const options = uniqueProducts.map((product) => ({
-        label: product,
-        value: product,
-      }));
+      const uniqueProducts = Array.from(new Set(data.map((item) => item.product || item.name || item.product_name).filter(Boolean)));
+      const options = uniqueProducts.map((product) => ({ label: product, value: product }));
       setProductOptions(options);
     } else {
       console.error("Error fetching products:", error);
     }
   };
 
-  // Function to get product price based on product name
   const getProductPrice = (productName: string): number => {
-    const product = products.find(p => 
-      p.product === productName || 
-      p.name === productName || 
-      p.product_name === productName
-    );
-    
+    const product = products.find(p => p.product === productName || p.name === productName || p.product_name === productName);
     if (product) {
-      // Try different price fields in order of preference
-      return product.selling_price || 
-             product.price || 
-             product.unit_price || 
-             product.cost_price || 
-             0;
+      return product.selling_price || product.price || product.unit_price || product.cost_price || 0;
     }
-    
     return 0;
   };
 
   const fetchDropdownData = async () => {
     const { data: resellerData } = await supabase.from('users').select('id, name').eq('role', 'reseller');
     setResellers(resellerData || []);
-
-    // Use the enhanced fetchProducts function
     await fetchProducts();
   };
 
@@ -217,11 +205,11 @@ const SalesTable: React.FC = () => {
   }, []);
 
   const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
-    const updatedSales = sales.map((sale) =>
-      sale.id === id ? { ...sale, [field]: value } : sale
-    );
+    const oldRecord = sales.find(sale => sale.id === id);
+    const oldValue = oldRecord ? oldRecord[field] : undefined;
+    addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue, newValue: value, record: oldRecord } });
+    const updatedSales = sales.map((sale) => sale.id === id ? { ...sale, [field]: value } : sale);
     setSales(updatedSales);
-
     const { error } = await supabase.from('sales').update({ [field]: value }).eq('id', id);
     if (error) {
       console.error('Update failed:', error.message);
@@ -229,14 +217,13 @@ const SalesTable: React.FC = () => {
   };
 
   const handleRowSelect = (id: string) => {
-    setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+    setSelectedRows((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   };
 
   const deleteSelectedRows = async () => {
     if (selectedRows.length === 0) return;
-
+    const deletedRecords = sales.filter((s) => selectedRows.includes(s.id));
+    addToUndoStack({ type: 'delete', timestamp: Date.now(), data: { deletedRecords } });
     const { error } = await supabase.from('sales').delete().in('id', selectedRows);
     if (error) {
       alert('Delete failed: ' + error.message);
@@ -246,117 +233,87 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  const renderEditableCell = (
-    sale: Sale,
-    field: keyof Sale,
-    formatter?: (value: any) => string,
-    isCurrency = false,
-    type = 'text'
-  ) => {
-    const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
-    const rawValue = sale[field];
-    const displayValue = formatter ? formatter(rawValue) : rawValue;
-
-    const resellerOptions = resellers.map((r: any) => ({ label: r.name, value: r.name }));
-    const productOptionsForCell = products.map((p: any) => ({ 
-      label: p.name || p.product_name || p.product || 'Unnamed Product', 
-      value: p.name || p.product_name || p.product || 'Unnamed Product' 
-    }));
-
-    if (field === 'member' || field === 'product') {
-      const options = field === 'member' ? resellerOptions : productOptionsForCell;
-      return (
-        <TableCell>
-          {isEditing ? (
-            <Select
-              options={options}
-              value={options.find((o) => o.value === rawValue) || null}
-              onChange={(selected) => {
-                handleEditChange(sale.id, field, selected?.value);
-                // If product is changed, update price automatically
-                if (field === 'product' && selected?.value) {
-                  const productPrice = getProductPrice(selected.value);
-                  if (productPrice > 0) {
-                    handleEditChange(sale.id, 'price', productPrice);
-                  }
-                }
-              }}
-              onBlur={() => setEditingCell(null)}
-              isClearable
-              isSearchable
-              autoFocus
-              styles={getSelectStyles(isDarkMode)}
-            />
-          ) : (
-            <div onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
-              {String(rawValue ?? '')}
-            </div>
-          )}
-        </TableCell>
-      );
+  const handleUndo = async () => {
+    if (undoStack.length === 0) {
+      alert('No operations to undo');
+      return;
     }
-
-    if (field === 'payment_status') {
-      return (
-        <TableCell onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
-          {isEditing ? (
-            <select
-              className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              value={sale.payment_status}
-              onChange={(e) => handleEditChange(sale.id, field, e.target.value)}
-              onBlur={() => setEditingCell(null)}
-              autoFocus
-            >
-              <option value="Fully Paid">Fully Paid</option>
-              <option value="Partially Paid">Partially Paid</option>
-              <option value="Pending">Pending</option>
-            </select>
-          ) : (
-            <span className={cn(statusColors[sale.payment_status])}>{sale.payment_status}</span>
-          )}
-        </TableCell>
-      );
-    }
-
-    return (
-      <TableCell onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
-        {isEditing ? (
-          <input
-            type={type}
-            className="w-24 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-            value={rawValue ?? ''}
-            onChange={(e) =>
-              handleEditChange(
-                sale.id,
-                field,
-                type === 'number' ? Number(e.target.value) : e.target.value
-              )
+    setIsUndoing(true);
+    const lastOperation = undoStack[undoStack.length - 1];
+    try {
+      switch (lastOperation.type) {
+        case 'delete':
+          if (lastOperation.data.deletedRecords) {
+            const recordsToInsert = lastOperation.data.deletedRecords.map(record => {
+              const { id, ...recordWithoutId } = record;
+              return recordWithoutId;
+            });
+            const { data, error } = await supabase.from('sales').insert(recordsToInsert).select();
+            if (error) {
+              alert('Undo delete failed: ' + error.message);
+            } else if (data) {
+              setSales(prev => [...data, ...prev]);
+              alert(`Restored ${data.length} deleted record(s)`);
             }
-            onBlur={() => setEditingCell(null)}
-            autoFocus
-          />
-        ) : isCurrency ? (
-          formatCurrency(Number(rawValue))
-        ) : (
-          String(rawValue ?? '')
-        )}
-      </TableCell>
-    );
+          }
+          break;
+        case 'add':
+          if (lastOperation.data.addedRecord) {
+            const { error } = await supabase.from('sales').delete().eq('id', lastOperation.data.addedRecord.id);
+            if (error) {
+              alert('Undo add failed: ' + error.message);
+            } else {
+              setSales(prev => prev.filter(s => s.id !== lastOperation.data.addedRecord!.id));
+              alert('Removed the last added record');
+            }
+          }
+          break;
+        case 'edit':
+          if (lastOperation.data.recordId && lastOperation.data.field && lastOperation.data.record) {
+            const { error } = await supabase.from('sales').update({ [lastOperation.data.field]: lastOperation.data.oldValue }).eq('id', lastOperation.data.recordId);
+            if (error) {
+              alert('Undo edit failed: ' + error.message);
+            } else {
+              setSales(prev => prev.map(sale => sale.id === lastOperation.data.recordId ? { ...sale, [lastOperation.data.field!]: lastOperation.data.oldValue } : sale));
+              alert(`Reverted ${lastOperation.data.field} change`);
+            }
+          }
+          break;
+      }
+      setUndoStack(prev => prev.slice(0, -1));
+    } catch (error) {
+      console.error('Undo operation failed:', error);
+      alert('Undo operation failed');
+    } finally {
+      setIsUndoing(false);
+    }
   };
 
-  // Enhanced handleNewChange to auto-populate price when product is selected
+  // UPDATED: Added spacing class `py-3 px-4` to all returned TableCells for consistency.
+  const renderEditableCell = (sale: Sale, field: keyof Sale, formatter?: (value: any) => string, isCurrency = false, type = 'text') => {
+    const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
+    const rawValue = sale[field];
+    const resellerOptions = resellers.map((r: any) => ({ label: r.name, value: r.name }));
+    const productOptionsForCell = products.map((p: any) => ({ label: p.name || p.product_name || p.product || 'Unnamed Product', value: p.name || p.product_name || p.product || 'Unnamed Product' }));
+    if (field === 'member' || field === 'product') {
+      const options = field === 'member' ? resellerOptions : productOptionsForCell;
+      return (<TableCell className="py-3 px-4">{isEditing ? (<Select options={options} value={options.find((o) => o.value === rawValue) || null} onChange={(selected) => { handleEditChange(sale.id, field, selected?.value); if (field === 'product' && selected?.value) { const productPrice = getProductPrice(selected.value); if (productPrice > 0) { handleEditChange(sale.id, 'price', productPrice); } } }} onBlur={() => setEditingCell(null)} isClearable isSearchable autoFocus styles={getSelectStyles(isDarkMode)} />) : (<div onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">{String(rawValue ?? '')}</div>)}</TableCell>);
+    }
+    if (field === 'payment_status') {
+      return (<TableCell className="py-3 px-4" onClick={() => setEditingCell({ rowId: sale.id, field })}>{isEditing ? (<select className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" value={sale.payment_status} onChange={(e) => handleEditChange(sale.id, field, e.target.value)} onBlur={() => setEditingCell(null)} autoFocus><option value="Fully Paid">Fully Paid</option><option value="Partially Paid">Partially Paid</option><option value="Pending">Pending</option></select>) : (<span className={cn(statusColors[sale.payment_status])}>{sale.payment_status}</span>)}</TableCell>);
+    }
+    return (<TableCell className="py-3 px-4" onClick={() => setEditingCell({ rowId: sale.id, field })}>{isEditing ? (<input type={type} className="w-24 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={rawValue ?? ''} onChange={(e) => handleEditChange(sale.id, field, type === 'number' ? Number(e.target.value) : e.target.value)} onBlur={() => setEditingCell(null)} autoFocus />) : isCurrency ? (formatCurrency(Number(rawValue))) : (String(rawValue ?? ''))}</TableCell>);
+  };
+
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale((prev) => {
       const updated = { ...prev, [field]: value };
-      
-      // Auto-populate price when product is selected
       if (field === 'product' && value) {
         const productPrice = getProductPrice(value);
         if (productPrice > 0) {
           updated.price = productPrice;
         }
       }
-      
       return updated;
     });
   };
@@ -368,52 +325,26 @@ const SalesTable: React.FC = () => {
     const total = qty * price;
     const incoming = total - paid;
     const balance = incoming;
-    const payment_status = paid === total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
-
-    setNewSale((prev) => ({
-      ...prev,
-      total,
-      incoming,
-      balance,
-      payment_status,
-    }));
+    const payment_status = paid >= total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
+    setNewSale((prev) => ({ ...prev, total, incoming, balance, payment_status }));
   }, [newSale.qty, newSale.price, newSale.paid]);
 
   const handleAddNew = async () => {
-    // Only check the fields that user actually needs to fill
-    const requiredFields: (keyof Sale)[] = [
-      'date', 'member', 'product', 'qty', 'price', 'description'
-    ];
-
-    const allFilled = requiredFields.every(
-      (field) => newSale[field] !== undefined && newSale[field] !== '' && newSale[field] !== 0
-    );
-
+    const requiredFields: (keyof Sale)[] = ['date', 'member', 'product', 'qty', 'price'];
+    const allFilled = requiredFields.every((field) => newSale[field] !== undefined && newSale[field] !== '' && newSale[field] !== 0);
     if (!allFilled) {
-      const missingFields = requiredFields.filter(
-        (field) => !newSale[field] || newSale[field] === '' || newSale[field] === 0
-      );
+      const missingFields = requiredFields.filter((field) => !newSale[field] || newSale[field] === '' || newSale[field] === 0);
       alert(`Please fill all required fields: ${missingFields.join(', ')}`);
       return;
     }
-
-    // Prepare the complete record with calculated values
-    const completeRecord = {
-      ...newSale,
-      type: newSale.type || 'sale', // Default type if not specified
-      total: newSale.total || 0,
-      paid: newSale.paid || 0,
-      incoming: newSale.incoming || 0,
-      balance: newSale.balance || 0,
-      payment_status: newSale.payment_status || 'Pending'
-    };
-
+    const completeRecord = { ...newSale, type: newSale.type || 'sale', total: newSale.total || 0, paid: newSale.paid || 0, incoming: newSale.incoming || 0, balance: newSale.balance || 0, payment_status: newSale.payment_status || 'Pending' };
     const { data, error } = await supabase.from('sales').insert([completeRecord]).select();
-
     if (error) {
       alert('Insert failed: ' + error.message);
     } else if (data && data.length > 0) {
-      setSales([data[0], ...sales]);
+      const addedRecord = data[0] as Sale;
+      addToUndoStack({ type: 'add', timestamp: Date.now(), data: { addedRecord } });
+      setSales([addedRecord, ...sales]);
       setNewSale({});
       setAddingNew(false);
     }
@@ -426,9 +357,7 @@ const SalesTable: React.FC = () => {
   });
 
   const computedSales = filteredSales.map((sale, index) => {
-    const cumulativePaid = filteredSales
-      .slice(0, index + 1)
-      .reduce((sum, s) => sum + (s.paid || 0), 0);
+    const cumulativePaid = filteredSales.slice(0, index + 1).reduce((sum, s) => sum + (s.paid || 0), 0);
     return { ...sale, cumulativePaid };
   });
 
@@ -437,252 +366,103 @@ const SalesTable: React.FC = () => {
       alert("No sales data to export.");
       return;
     }
-
-    const exportData = sales.map((s) => ({
-      Date: s.date,
-      Member: s.member,
-      Product: s.product,
-      Quantity: s.qty,
-      'Price per Pack': s.price,
-      'Total Amount': s.total,
-      Paid: s.paid,
-      Incoming: s.incoming,
-      'Total Balance': sales
-        .slice(0, sales.findIndex((row) => row.id === s.id) + 1)
-        .reduce((sum, row) => sum + row.paid, 0),
-      Description: s.description,
-      'Payment Status': s.payment_status,
-    }));
-
+    const exportData = sales.map((s) => ({ Date: s.date, Member: s.member, Product: s.product, Quantity: s.qty, 'Price per Pack': s.price, 'Total Amount': s.total, Paid: s.paid, Incoming: s.incoming, 'Total Balance': sales.slice(0, sales.findIndex((row) => row.id === s.id) + 1).reduce((sum, row) => sum + row.paid, 0), 'Payment Status': s.payment_status }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Sales");
-
     const month = new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'short' });
     const fileName = `Sales_${month}_${selectedYear}.xlsx`;
-
     XLSX.writeFile(workbook, fileName);
   };
 
   const resellerOptions = resellers.map((r: any) => ({ label: r.name, value: r.name }));
-  const productOptionsForFilter = products.map((p: any) => ({
-    label: p.name || p.product_name || p.product || 'Unnamed Product',
-    value: p.name || p.product_name || p.product || 'Unnamed Product',
-  }));
+  const productOptionsForFilter = products.map((p: any) => ({ label: p.name || p.product_name || p.product || 'Unnamed Product', value: p.name || p.product_name || p.product || 'Unnamed Product' }));
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="space-y-4">
-          {/* 🔹 Top Bar: Title + Buttons */}
-          <div className="flex justify-between items-center w-full flex-wrap gap-4">
-            <CardTitle>Sales Table</CardTitle>
+    <>
+      <div className="mb-6">
+        <EnhancedSalesDashboard data={filteredSales} />
+      </div>
 
-            <div className="flex gap-2">
-              {!addingNew ? (
-                <Button onClick={() => setAddingNew(true)}>✚ Add</Button>
-              ) : (
-                <>
-                  <Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button>
-                  <Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button>
-                </>
-              )}
-              <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete</Button>
-              <Button onClick={handleExportToExcel} className="bg-green-500 text-white" variant="outline">📤 Export</Button>
-            </div>
-          </div>
-
-          {/* 🔹 Filter Bar: Month + Smart Filters */}
-          <div className="flex flex-wrap justify-between items-center w-full gap-4">
-            {/* Month-Year Picker */}
-            <MonthYearPicker
-              onSelect={(month, year) => {
-                setSelectedMonth(month);
-                setSelectedYear(year);
-              }}
-            />
-
-            {/* Member + Product Filters */}
-            <div className="flex gap-4">
-              <div className="w-48">
-                <Select
-                  options={resellerOptions}
-                  value={filterMember ? { label: filterMember, value: filterMember } : null}
-                  onChange={(selected) => setFilterMember(selected?.value || null)}
-                  isClearable
-                  isSearchable
-                  placeholder="Filter by Member"
-                  styles={getSelectStyles(isDarkMode)}
-                />
+      <Card>
+        <CardHeader>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center w-full flex-wrap gap-4">
+              <CardTitle>Sales Table</CardTitle>
+              <div className="flex gap-2">
+                <Button onClick={handleUndo} variant="outline" disabled={undoStack.length === 0 || isUndoing} className="bg-yellow-500 hover:bg-yellow-600 text-white" title={undoStack.length > 0 ? `Undo ${undoStack[undoStack.length - 1]?.type} operation` : 'No operations to undo'}>↶ Undo {undoStack.length > 0 && `(${undoStack.length})`}</Button>
+                {!addingNew ? (<Button onClick={() => setAddingNew(true)}>✚ Add</Button>) : (<><Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button><Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button></>)}
+                <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete</Button>
+                <Button onClick={handleExportToExcel} className="bg-green-500 text-white" variant="outline">📤 Export</Button>
               </div>
-              <div className="w-48">
-                <Select
-                  options={productOptionsForFilter}
-                  value={filterProduct ? { label: filterProduct, value: filterProduct } : null}
-                  onChange={(selected) => setFilterProduct(selected?.value || null)}
-                  isClearable
-                  isSearchable
-                  placeholder="Filter by Product"
-                  styles={getSelectStyles(isDarkMode)}
-                />
+            </div>
+            <div className="flex flex-wrap justify-between items-center w-full gap-4">
+              <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
+              <div className="flex gap-4">
+                <div className="w-48"><Select options={resellerOptions} value={filterMember ? { label: filterMember, value: filterMember } : null} onChange={(selected) => setFilterMember(selected?.value || null)} isClearable isSearchable placeholder="Filter by Member" styles={getSelectStyles(isDarkMode)} /></div>
+                <div className="w-48"><Select options={productOptionsForFilter} value={filterProduct ? { label: filterProduct, value: filterProduct } : null} onChange={(selected) => setFilterProduct(selected?.value || null)} isClearable isSearchable placeholder="Filter by Product" styles={getSelectStyles(isDarkMode)} /></div>
               </div>
             </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead></TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Members</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Qty</TableHead>
-                <TableHead>Price Per Pack</TableHead>
-                <TableHead>Total Amount</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Incoming</TableHead>
-                <TableHead>Total Balance</TableHead>
-                <TableHead>Transaction Description</TableHead>
-                <TableHead>Payment Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {addingNew && (
-                <TableRow className="bg-blue-100 dark:bg-blue-900/30">
-                  <TableCell></TableCell>
-                  <TableCell>
-                    <input 
-                      type="date" 
-                      className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                      value={newSale.date ?? ''} 
-                      onChange={(e) => handleNewChange('date', e.target.value)} 
-                    />
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <Select
-                      options={resellerOptions}
-                      onChange={(selected) => handleNewChange('member', selected?.value)}
-                      value={newSale.member ? { label: newSale.member, value: newSale.member } : null}
-                      placeholder="Select Member"
-                      isClearable
-                      isSearchable
-                      styles={getSelectStyles(isDarkMode)}
-                    />
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <Select
-                      options={productOptionsForFilter}
-                      value={productOptionsForFilter.find((option) => option.value === newSale.product) || null}
-                      onChange={(selected) => handleNewChange("product", selected?.value || "")}
-                      isClearable
-                      isSearchable
-                      placeholder="Select Product"
-                      styles={getSelectStyles(isDarkMode)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-16 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                      value={newSale.qty ?? ''} 
-                      onChange={(e) => handleNewChange('qty', Number(e.target.value))} 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" 
-                      value={newSale.price ?? ''} 
-                      onChange={(e) => handleNewChange('price', Number(e.target.value))}
-                      title="Price auto-fills when product is selected"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" 
-                      value={newSale.total ?? ''} 
-                      readOnly 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                      value={newSale.paid ?? ''} 
-                      onChange={(e) => handleNewChange('paid', Number(e.target.value))} 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" 
-                      value={newSale.incoming ?? ''} 
-                      readOnly 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="number" 
-                      className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" 
-                      value={newSale.balance ?? ''} 
-                      readOnly 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input 
-                      type="text" 
-                      className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" 
-                      value={newSale.description ?? ''} 
-                      onChange={(e) => handleNewChange('description', e.target.value)} 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <select 
-                      className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" 
-                      value={newSale.payment_status ?? 'Pending'} 
-                      onChange={(e) => handleNewChange('payment_status', e.target.value)}
-                    >
-                      <option value="Fully Paid">Fully Paid</option>
-                      <option value="Partially Paid">Partially Paid</option>
-                      <option value="Pending">Pending</option>
-                    </select>
-                  </TableCell>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {/* UPDATED: Added spacing class */}
+                  <TableHead className="py-3 px-4"></TableHead>
+                  <TableHead className="py-3 px-4">Date</TableHead>
+                  <TableHead className="py-3 px-4">Members</TableHead>
+                  <TableHead className="py-3 px-4">Product</TableHead>
+                  <TableHead className="py-3 px-4">Qty</TableHead>
+                  <TableHead className="py-3 px-4">Price Per Pack</TableHead>
+                  <TableHead className="py-3 px-4">Total Amount</TableHead>
+                  <TableHead className="py-3 px-4">Paid</TableHead>
+                  <TableHead className="py-3 px-4">Incoming</TableHead>
+                  <TableHead className="py-3 px-4">Total Balance</TableHead>
+                  <TableHead className="py-3 px-4">Payment Status</TableHead>
                 </TableRow>
-              )}
-              {computedSales.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.includes(sale.id)}
-                      onChange={() => handleRowSelect(sale.id)}
-                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400 dark:focus:ring-offset-gray-800"
-                    />
-                  </TableCell>
-                  {renderEditableCell(sale, 'date', undefined, false, 'date')}
-                  {renderEditableCell(sale, 'member')}
-                  {renderEditableCell(sale, 'product')}
-                  {renderEditableCell(sale, 'qty', undefined, false, 'number')}
-                  {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
-                  <TableCell className="text-right font-semibold text-green-700 dark:text-green-400">
-                    {formatCurrency(sale.cumulativePaid)}
-                  </TableCell>
-                  {renderEditableCell(sale, 'description')}
-                  {renderEditableCell(sale, 'payment_status')}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {addingNew && (
+                  <TableRow className="bg-blue-100 dark:bg-blue-900/30">
+                    {/* UPDATED: Added spacing class */}
+                    <TableCell className="py-3 px-4"></TableCell>
+                    <TableCell className="py-3 px-4"><input type="date" className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} /></TableCell>
+                    <TableCell className="py-3 px-4 min-w-[140px]"><Select options={resellerOptions} onChange={(selected) => handleNewChange('member', selected?.value)} value={newSale.member ? { label: newSale.member, value: newSale.member } : null} placeholder="Select Member" isClearable isSearchable styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="py-3 px-4 min-w-[140px]"><Select options={productOptionsForFilter} value={productOptionsForFilter.find((option) => option.value === newSale.product) || null} onChange={(selected) => handleNewChange("product", selected?.value || "")} isClearable isSearchable placeholder="Select Product" styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-16 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} title="Price auto-fills when product is selected" /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" value={newSale.total ?? ''} readOnly /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid', Number(e.target.value))} /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" value={newSale.incoming ?? ''} readOnly /></TableCell>
+                    <TableCell className="py-3 px-4"><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100" value={newSale.balance ?? ''} readOnly /></TableCell>
+                    <TableCell className="py-3 px-4"><select className="w-32 px-2 py-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400" value={newSale.payment_status ?? 'Pending'} onChange={(e) => handleNewChange('payment_status', e.target.value as any)}><option value="Fully Paid">Fully Paid</option><option value="Partially Paid">Partially Paid</option><option value="Pending">Pending</option></select></TableCell>
+                  </TableRow>
+                )}
+                {computedSales.map((sale) => (
+                  <TableRow key={sale.id}>
+                    {/* UPDATED: Added spacing class */}
+                    <TableCell className="py-3 px-4"><input type="checkbox" checked={selectedRows.includes(sale.id)} onChange={() => handleRowSelect(sale.id)} className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400 dark:focus:ring-offset-gray-800" /></TableCell>
+                    {renderEditableCell(sale, 'date', undefined, false, 'date')}
+                    {renderEditableCell(sale, 'member')}
+                    {renderEditableCell(sale, 'product')}
+                    {renderEditableCell(sale, 'qty', undefined, false, 'number')}
+                    {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
+                    {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
+                    {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
+                    {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
+                    <TableCell className="py-3 px-4 text-right font-semibold text-green-700 dark:text-green-400">{formatCurrency(sale.cumulativePaid)}</TableCell>
+                    {renderEditableCell(sale, 'payment_status')}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
   );
 };
 
