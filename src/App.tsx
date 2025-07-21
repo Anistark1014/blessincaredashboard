@@ -15,6 +15,7 @@ import AdminResellers from "./pages/admin/Resellers";
 import AdminSales from "./pages/admin/Sales";
 import AdminExpenses from "./pages/admin/Expenses";
 import ResellerRequests from "./pages/reseller/Requests";
+import AdminInventory from "./pages/admin/Inventory";
 
 const queryClient = new QueryClient();
 
@@ -128,6 +129,11 @@ const App = () => (
             <Route path="/admin/expenses" element={
               <ProtectedRoute allowedRole="admin">
                 <AdminExpenses/>
+              </ProtectedRoute>
+            } />
+             <Route path="/admin/inventory" element={
+              <ProtectedRoute allowedRole="admin">
+                <AdminInventory />
               </ProtectedRoute>
             } />
             

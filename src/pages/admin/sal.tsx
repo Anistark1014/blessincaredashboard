@@ -4,7 +4,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import MonthYearPicker from "./MonthYearPicker";
+import MonthYearPicker from './MonthYearPicker';
+import * as XLSX from 'xlsx';
+
 
 interface Sale {
   id: string;
@@ -41,11 +43,23 @@ const SalesTable: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: keyof Sale } | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [newSale, setNewSale] = useState<Partial<Sale>>({});
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
   const fetchSales = async () => {
-    const { data, error } = await supabase.from("sales").select("*").order("date", { ascending: false });
+    const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
+    const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999).toISOString();
+
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: false });
+
     if (error) {
-      console.error("Error fetching sales:", error.message);
+      console.error('Error fetching sales:', error.message);
     } else {
       setSales(data as Sale[]);
     }
@@ -53,7 +67,7 @@ const SalesTable: React.FC = () => {
 
   useEffect(() => {
     fetchSales();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
     const updatedSales = sales.map((sale) =>
@@ -63,7 +77,25 @@ const SalesTable: React.FC = () => {
 
     const { error } = await supabase.from('sales').update({ [field]: value }).eq('id', id);
     if (error) {
-      console.error("Update failed:", error.message);
+      console.error('Update failed:', error.message);
+    }
+  };
+
+  const handleRowSelect = (id: string) => {
+    setSelectedRows((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const deleteSelectedRows = async () => {
+    if (selectedRows.length === 0) return;
+
+    const { error } = await supabase.from('sales').delete().in('id', selectedRows);
+    if (error) {
+      alert('Delete failed: ' + error.message);
+    } else {
+      setSales(sales.filter((s) => !selectedRows.includes(s.id)));
+      setSelectedRows([]);
     }
   };
 
@@ -80,10 +112,7 @@ const SalesTable: React.FC = () => {
 
     if (field === 'payment_status') {
       return (
-        <TableCell
-          onClick={() => setEditingCell({ rowId: sale.id, field })}
-          className="cursor-pointer"
-        >
+        <TableCell onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
           {isEditing ? (
             <select
               className="w-32 px-2 py-1 border rounded"
@@ -104,10 +133,7 @@ const SalesTable: React.FC = () => {
     }
 
     return (
-      <TableCell
-        onClick={() => setEditingCell({ rowId: sale.id, field })}
-        className="cursor-pointer"
-      >
+      <TableCell onClick={() => setEditingCell({ rowId: sale.id, field })} className="cursor-pointer">
         {isEditing ? (
           <input
             type={type}
@@ -136,68 +162,119 @@ const SalesTable: React.FC = () => {
     setNewSale((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAddNew = async () => {
-    if (
-      newSale.date &&
-      newSale.type &&
-      newSale.member &&
-      newSale.brand &&
-      newSale.qty !== undefined &&
-      newSale.price !== undefined &&
-      newSale.total !== undefined &&
-      newSale.paid !== undefined &&
-      newSale.incoming !== undefined &&
-      newSale.balance !== undefined &&
-      newSale.description &&
-      newSale.payment_status
-    ) {
-      const { data, error } = await supabase.from('sales').insert([newSale]).select();
+  useEffect(() => {
+    const qty = newSale.qty || 0;
+    const price = newSale.price || 0;
+    const paid = newSale.paid || 0;
+    const total = qty * price;
+    const incoming = total - paid;
+    const balance = incoming;
+    const payment_status = paid === total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
 
-      if (error) {
-        alert("Insert failed: " + error.message);
-      } else if (data) {
-        setSales((prev) => [...prev, data[0] as Sale]);
-        setNewSale({});
-        setAddingNew(false);
-      }
-    } else {
-      alert("Please fill all required fields before saving.");
+    setNewSale((prev) => ({
+      ...prev,
+      total,
+      incoming,
+      balance,
+      payment_status,
+    }));
+  }, [newSale.qty, newSale.price, newSale.paid]);
+
+  const handleAddNew = async () => {
+    const requiredFields: (keyof Sale)[] = [
+      'date', 'type', 'member', 'brand', 'qty', 'price', 'total',
+      'paid', 'incoming', 'balance', 'description', 'payment_status',
+    ];
+
+    const allFilled = requiredFields.every(
+      (field) => newSale[field] !== undefined && newSale[field] !== ''
+    );
+
+    if (!allFilled) {
+      alert('Please fill all required fields before saving.');
+      return;
+    }
+
+    const { data, error } = await supabase.from('sales').insert([newSale]).select();
+
+    if (error) {
+      alert('Insert failed: ' + error.message);
+    } else if (data && data.length > 0) {
+      setSales([data[0], ...sales]);
+      setNewSale({});
+      setAddingNew(false);
     }
   };
+
+  const computedSales = sales.map((sale, index) => {
+    const cumulativePaid = sales.slice(0, index + 1).reduce((sum, s) => sum + (s.paid || 0), 0);
+    return { ...sale, cumulativePaid };
+  });
+
+  const handleExportToExcel = () => {
+  if (!sales || sales.length === 0) {
+    alert("No sales data to export.");
+    return;
+  }
+
+  const exportData = sales.map((s) => ({
+    Date: s.date,
+    Member: s.member,
+    Brand: s.brand,
+    Quantity: s.qty,
+    'Price per Pack': s.price,
+    'Total Amount': s.total,
+    Paid: s.paid,
+    Incoming: s.incoming,
+    'Total Balance': sales
+      .slice(0, sales.findIndex((row) => row.id === s.id) + 1)
+      .reduce((sum, row) => sum + row.paid, 0),
+    Description: s.description,
+    'Payment Status': s.payment_status,
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Sales");
+
+  const month = new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'short' });
+  const fileName = `Sales_${month}_${selectedYear}.xlsx`;
+
+  XLSX.writeFile(workbook, fileName);
+};
+
 
   return (
     <Card>
       <CardHeader>
         <div className="flex justify-between items-center w-full">
           <CardTitle>Sales Table</CardTitle>
-          <MonthYearPicker
-    onSelect={(month, year) => {
-      // Add filter logic here
-      console.log("Selected:", month + 1, year);
-    }}
-  />
-          {!addingNew ? (
-            <Button onClick={() => setAddingNew(true)}>+ Add New Record</Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button onClick={handleAddNew} className="bg-green-600 text-white">
-                ✅ Save Record
-              </Button>
-              <Button onClick={() => setAddingNew(false)} variant="outline">
-                ❌ Cancel
-              </Button>
-            </div>
-          )}
+          <MonthYearPicker onSelect={(month, year) => {
+            setSelectedMonth(month);
+            setSelectedYear(year);
+          }} />
+          <div className="flex gap-2">
+            {!addingNew ? (
+              <Button onClick={() => setAddingNew(true)}>✚ Add</Button>
+            ) : (
+              <>
+                <Button onClick={handleAddNew} className="bg-green-600 text-white">✅ Save Record</Button>
+                <Button onClick={() => setAddingNew(false)} variant="outline">❌ Cancel</Button>
+              </>
+            )}
+            <Button onClick={deleteSelectedRows} className="bg-red-500 text-white">🗑 Delete</Button>
+            <Button onClick={handleExportToExcel} className="bg-green-500 text-white" variant="outline">📤 Export</Button>
+
+          </div>
         </div>
       </CardHeader>
-
       <CardContent>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead></TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
                 <TableHead>Members</TableHead>
                 <TableHead>Brand</TableHead>
                 <TableHead>Qty</TableHead>
@@ -205,134 +282,55 @@ const SalesTable: React.FC = () => {
                 <TableHead>Total Amount</TableHead>
                 <TableHead>Paid</TableHead>
                 <TableHead>Incoming</TableHead>
-                <TableHead>Clearance Date</TableHead>
                 <TableHead>Total Balance</TableHead>
                 <TableHead>Transaction Description</TableHead>
                 <TableHead>Payment Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sales.map((sale) => (
-                <TableRow key={sale.id}>
-                  {renderEditableCell(sale, 'date', undefined, false, 'date')}
-                  {renderEditableCell(sale, 'type')}
-                  {renderEditableCell(sale, 'member')}
-                  {renderEditableCell(sale, 'brand')}
-                  {renderEditableCell(sale, 'qty', undefined, false, 'number')}
-                  {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'clearance', undefined, false, 'date')}
-                  {renderEditableCell(sale, 'balance', formatCurrency, true, 'number')}
-                  {renderEditableCell(sale, 'description')}
-                  {renderEditableCell(sale, 'payment_status')}
-                </TableRow>
-              ))}
               {addingNew && (
                 <TableRow className="bg-blue-100">
+                  <TableCell></TableCell>
+                  <TableCell><input type="date" className="w-32 px-2 py-1 border rounded" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} /></TableCell>
                   <TableCell>
-                    <input
-                      type="date"
-                      className="w-32 px-2 py-1 border rounded"
-                      value={newSale.date ?? ''}
-                      onChange={(e) => handleNewChange('date', e.target.value)}
-                    />
-                  </TableCell>
+  <input
+    type="text"
+    list="member-options"
+    className="w-24 px-2 py-1 border rounded"
+    value={newSale.member ?? ''}
+    onChange={(e) => handleNewChange('member', e.target.value)}
+  />
+  <datalist id="member-options">
+    {[...new Set(sales.map((s) => s.member))].map((m) => (
+      <option key={m} value={m} />
+    ))}
+  </datalist>
+</TableCell>
+
+<TableCell>
+  <input
+    type="text"
+    list="brand-options"
+    className="w-24 px-2 py-1 border rounded"
+    value={newSale.brand ?? ''}
+    onChange={(e) => handleNewChange('brand', e.target.value)}
+  />
+  <datalist id="brand-options">
+    {[...new Set(sales.map((s) => s.brand))].map((b) => (
+      <option key={b} value={b} />
+    ))}
+  </datalist>
+</TableCell>
+
+                  <TableCell><input type="number" className="w-16 px-2 py-1 border rounded" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.total ?? ''} readOnly /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid', Number(e.target.value))} /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.incoming ?? ''} readOnly /></TableCell>
+                  <TableCell><input type="number" className="w-20 px-2 py-1 border rounded bg-gray-100" value={newSale.balance ?? ''} readOnly /></TableCell>
+                  <TableCell><input type="text" className="w-32 px-2 py-1 border rounded" value={newSale.description ?? ''} onChange={(e) => handleNewChange('description', e.target.value)} /></TableCell>
                   <TableCell>
-                    <input
-                      type="text"
-                      className="w-24 px-2 py-1 border rounded"
-                      value={newSale.type ?? ''}
-                      onChange={(e) => handleNewChange('type', e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="text"
-                      className="w-24 px-2 py-1 border rounded"
-                      value={newSale.member ?? ''}
-                      onChange={(e) => handleNewChange('member', e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="text"
-                      className="w-24 px-2 py-1 border rounded"
-                      value={newSale.brand ?? ''}
-                      onChange={(e) => handleNewChange('brand', e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="number"
-                      className="w-16 px-2 py-1 border rounded"
-                      value={newSale.qty ?? ''}
-                      onChange={(e) => handleNewChange('qty', Number(e.target.value))}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border rounded"
-                      value={newSale.price ?? ''}
-                      onChange={(e) => handleNewChange('price', Number(e.target.value))}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border rounded"
-                      value={newSale.total ?? ''}
-                      onChange={(e) => handleNewChange('total', Number(e.target.value))}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border rounded"
-                      value={newSale.paid ?? ''}
-                      onChange={(e) => handleNewChange('paid', Number(e.target.value))}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border rounded"
-                      value={newSale.incoming ?? ''}
-                      onChange={(e) => handleNewChange('incoming', Number(e.target.value))}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="date"
-                      className="w-32 px-2 py-1 border rounded"
-                      value={newSale.clearance ?? ''}
-                      onChange={(e) => handleNewChange('clearance', e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border rounded"
-                      value={newSale.balance ?? ''}
-                      onChange={(e) => handleNewChange('balance', Number(e.target.value))}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="text"
-                      className="w-32 px-2 py-1 border rounded"
-                      value={newSale.description ?? ''}
-                      onChange={(e) => handleNewChange('description', e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      className="w-32 px-2 py-1 border rounded"
-                      value={newSale.payment_status ?? 'Pending'}
-                      onChange={(e) => handleNewChange('payment_status', e.target.value)}
-                    >
+                    <select className="w-32 px-2 py-1 border rounded" value={newSale.payment_status ?? 'Pending'} onChange={(e) => handleNewChange('payment_status', e.target.value)}>
                       <option value="Fully Paid">Fully Paid</option>
                       <option value="Partially Paid">Partially Paid</option>
                       <option value="Pending">Pending</option>
@@ -340,6 +338,30 @@ const SalesTable: React.FC = () => {
                   </TableCell>
                 </TableRow>
               )}
+              {computedSales.map((sale) => (
+                <TableRow key={sale.id}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.includes(sale.id)}
+                      onChange={() => handleRowSelect(sale.id)}
+                    />
+                  </TableCell>
+                  {renderEditableCell(sale, 'date', undefined, false, 'date')}
+                  {renderEditableCell(sale, 'member')}
+                  {renderEditableCell(sale, 'brand')}
+                  {renderEditableCell(sale, 'qty', undefined, false, 'number')}
+                  {renderEditableCell(sale, 'price', formatCurrency, true, 'number')}
+                  {renderEditableCell(sale, 'total', formatCurrency, true, 'number')}
+                  {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
+                  {renderEditableCell(sale, 'incoming', formatCurrency, true, 'number')}
+                  <TableCell className="text-right font-semibold text-green-700">
+                    {formatCurrency(sale.cumulativePaid)}
+                  </TableCell>
+                  {renderEditableCell(sale, 'description')}
+                  {renderEditableCell(sale, 'payment_status')}
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>

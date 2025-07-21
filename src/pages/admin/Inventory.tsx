@@ -1,0 +1,947 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabaseClient';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, Filter, SortAsc, SortDesc } from 'lucide-react';
+import { set } from 'date-fns';
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  inventory: number;
+  min_stock_alert: number;
+  image_url: string;
+}
+
+interface InventoryTransaction {
+  id: string;
+  product_id: string;
+  product_name: string;
+  type: string;
+  quantity: number;
+  cost_per_unit: number;
+  transaction_date: string;
+  notes: string;
+}
+
+interface Request {
+  id: string;
+  products_ordered: any;
+  status: string;
+  request_date: string;
+}
+
+interface ProductSummary extends Product {
+  purchased_this_month: number;
+  sold_this_month: number;
+}
+
+const Inventory: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productSummaries, setProductSummaries] = useState<ProductSummary[]>([]);
+  const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // KPI states
+  const [totalStockNumber, setTotalStockNumber] = useState(0);
+  const [totalStockValue, setTotalStockValue] = useState(0);
+  const [totalStockPurchased, setTotalStockPurchased] = useState(0);
+  const [totalStockSold, setTotalStockSold] = useState(0);
+
+  // Form states
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [costPerUnit, setCostPerUnit] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState('');
+  
+  // Filter and sort states
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [sortField, setSortField] = useState<keyof ProductSummary>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Time range filter states
+  const [timeRange, setTimeRange] = useState('30'); // Default to 30 days
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+
+  // Check if user is admin
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to access this page.",
+        variant: "destructive",
+      });
+      navigate('/reseller');
+    }
+  }, [user, navigate, toast]);
+
+  // Fetch data and set up real-time listeners
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+
+    fetchAllData();
+    setupRealtimeListeners();
+  }, [user]);
+
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch products
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('*');
+      
+      if (productsError) throw productsError;
+      setProducts(productsData || []);
+      
+      // Fetch transactions
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('inventory_transactions')
+        .select('*')
+        .order('transaction_date', { ascending: false });
+      
+      if (transactionsError) throw transactionsError;
+      setTransactions(transactionsData || []);
+      
+      // Fetch requests
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('requests')
+        .select('*');
+      
+      if (requestsError) throw requestsError;
+      setRequests(requestsData || []);
+      
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch inventory data.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setupRealtimeListeners = () => {
+    // Listen to products changes
+    const productsChannel = supabase
+      .channel('products-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        fetchAllData();
+      })
+      .subscribe();
+
+    // Listen to inventory transactions changes
+    const transactionsChannel = supabase
+      .channel('transactions-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_transactions' }, () => {
+        fetchAllData();
+      })
+      .subscribe();
+
+    // Listen to requests changes
+    const requestsChannel = supabase
+      .channel('requests-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
+        fetchAllData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(transactionsChannel);
+      supabase.removeChannel(requestsChannel);
+    };
+  };
+
+  // Calculate date range based on selected filter
+  const getDateRange = () => {
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date = now;
+
+    switch (timeRange) {
+      case '1':
+        startDate = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+        break;
+      case '2':
+        startDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+        break;
+      case '7':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          startDate = new Date(customStartDate);
+          // Set end date to end of day for more accurate filtering
+          endDate = new Date(customEndDate);
+          endDate.setHours(23, 59, 59, 999);
+        } else {
+          // Fallback to 30 days if custom dates not set
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        }
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    return { startDate, endDate };
+  };
+
+  // Calculate KPIs and product summaries
+  useEffect(() => {
+    if (products.length > 0) {
+      // Calculate total stock number and value
+      const stockNumber = products.reduce((sum, product) => sum + product.inventory, 0);
+      const stockValue = products.reduce((sum, product) => sum + (product.inventory * product.price), 0);
+      
+      setTotalStockNumber(stockNumber);
+      setTotalStockValue(stockValue);
+
+      const { startDate, endDate } = getDateRange();
+
+      const totalStockPurchased = transactions
+        .filter(t => t.type === 'purchase' && new Date(t.transaction_date) >= startDate && new Date(t.transaction_date) <= endDate)
+        .reduce((sum, t) => sum + t.quantity, 0);
+
+      // Calculate total sold units - improved logic
+      const totalStockSold = requests
+        .filter(r =>
+          (r.status === 'Shipped' || r.status === 'Delivered') &&
+          new Date(r.request_date) >= startDate &&
+          new Date(r.request_date) <= endDate
+        )
+        .reduce((sum, request) => {
+          if (!Array.isArray(request.products_ordered)) return sum;
+
+          const requestTotal = request.products_ordered.reduce((subtotal: number, p: any) => {
+            return subtotal + (p.quantity || 0);
+          }, 0);
+
+          return sum + requestTotal;
+        }, 0);
+
+      setTotalStockPurchased(totalStockPurchased);
+      setTotalStockSold(totalStockSold);
+
+      // Calculate monthly data using the selected date range
+      const summaries = products.map(product => {
+        // Calculate purchased in selected time range
+        const purchasedInRange = transactions
+          .filter(t => {
+            const transactionDate = new Date(t.transaction_date);
+            return t.product_id === product.id &&
+                   t.type === 'purchase' &&
+                   transactionDate >= startDate &&
+                   transactionDate <= endDate;
+          })
+          .reduce((sum, t) => sum + t.quantity, 0);
+
+        // Calculate sold in selected time range
+        const soldInRange = requests
+          .filter(r => {
+            const requestDate = new Date(r.request_date);
+            return (r.status === 'Shipped' || r.status === 'Delivered') &&
+                   requestDate >= startDate &&
+                   requestDate <= endDate;
+          })
+          .reduce((sum, request) => {
+            if (!request.products_ordered || !Array.isArray(request.products_ordered)) return sum;
+            
+            // Try multiple ways to match the product
+            const productInOrder = request.products_ordered.find((p: any) => {
+              // Check for productId first (if it exists)
+              if (p.productId && p.productId === product.id) return true;
+              // Check for product_name as fallback
+              if (p.product_name && p.product_name.toLowerCase() === product.name.toLowerCase()) return true;
+              // Check for name field as another fallback
+              if (p.name && p.name.toLowerCase() === product.name.toLowerCase()) return true;
+              return false;
+            });
+            
+            return sum + (productInOrder?.quantity || 0);
+          }, 0);
+
+        return {
+          ...product,
+          purchased_this_month: purchasedInRange,
+          sold_this_month: soldInRange,
+        };
+      });
+      
+      setProductSummaries(summaries);
+    }
+  }, [products, transactions, requests, timeRange, customStartDate, customEndDate]);
+
+  const handleStockPurchase = async () => {
+    if (!selectedProductId || !quantity) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a product and enter quantity.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const selectedProduct = products.find(p => p.id === selectedProductId);
+      if (!selectedProduct) return;
+
+      // Create inventory transaction
+      const { error: transactionError } = await supabase
+        .from('inventory_transactions')
+        .insert({
+          product_id: selectedProductId,
+          product_name: selectedProduct.name,
+          type: 'purchase',
+          quantity: parseInt(quantity),
+          cost_per_unit: costPerUnit ? parseFloat(costPerUnit) : null,
+          transaction_date: purchaseDate,
+          notes: notes || null,
+        });
+
+      if (transactionError) throw transactionError;
+
+      // Update product inventory
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ 
+          inventory: selectedProduct.inventory + parseInt(quantity) 
+        })
+        .eq('id', selectedProductId);
+
+      if (updateError) throw updateError;
+
+      // Create notification
+      await supabase.from('notifications').insert({
+        user_id: user?.id,
+        type: 'stock_received',
+        message: `New stock received for ${selectedProduct.name}: +${quantity} units. Inventory updated.`,
+        related_entity_id: selectedProductId,
+        role: 'admin',
+      });
+
+      toast({
+        title: "Stock Updated",
+        description: `Successfully added ${quantity} units to ${selectedProduct.name}`,
+      });
+
+      // Reset form
+      setSelectedProductId('');
+      setQuantity('');
+      setCostPerUnit('');
+      setNotes('');
+      setIsModalOpen(false);
+
+    } catch (error) {
+      console.error('Error recording stock purchase:', error);
+      toast({
+        title: "Error",
+        description: "Failed to record stock purchase.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getFilteredAndSortedProducts = () => {
+    let filtered = productSummaries;
+    
+    // Apply filters
+    if (categoryFilter && categoryFilter !== 'all') {
+      filtered = filtered.filter(p => p.category === categoryFilter);
+    }
+    
+    if (lowStockOnly) {
+      filtered = filtered.filter(p => p.inventory <= p.min_stock_alert);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue as string).toLowerCase();
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+    
+    return filtered;
+  };
+
+  const categories = [...new Set(products.map(p => p.category).filter(category => category && category.trim() !== ''))];
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex items-center space-x-3">
+          <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">Inventory Management</h1>
+        </div>
+        
+        {/* Loading KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          {Array.from({ length: 4 }, (_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                <div className="h-4 w-4 bg-gray-200 rounded"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-16 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 w-32 bg-gray-200 rounded"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        
+        {/* Loading Table */}
+        <Card>
+          <div className="p-6">
+            <div className="h-6 w-48 bg-gray-200 rounded mb-4"></div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }, (_, i) => (
+                <div key={i} className="h-12 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">Inventory Management</h1>
+        </div>
+        
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center space-x-2 w-full sm:w-auto">
+              <Package className="h-4 w-4" />
+              <span>Record Stock Purchase</span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Record Stock Purchase</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="product">Product</Label>
+                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a product" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map(product => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="Enter quantity"
+                  min="1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="cost">Cost Per Unit (Optional)</Label>
+                <Input
+                  id="cost"
+                  type="number"
+                  step="0.01"
+                  value={costPerUnit}
+                  onChange={(e) => setCostPerUnit(e.target.value)}
+                  placeholder="Enter cost per unit"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="date">Purchase Date</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Enter any notes about this purchase"
+                />
+              </div>
+              
+              <Button onClick={handleStockPurchase} className="w-full">
+                Record Purchase
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+        <Card className="bg-gradient-to-r from-lavender/20 to-blush/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Stock Units</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">{totalStockNumber.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              Total units within all products
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-mint/20 to-sage/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Stock Value</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">₹{totalStockValue.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              Total monetary value of inventory
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-r from-lavender/20 to-blush/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Purchased Units</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">{totalStockPurchased.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              {timeRange === '1' && 'Total units purchased in last 1 day'}
+              {timeRange === '2' && 'Total units purchased in last 2 days'}
+              {timeRange === '7' && 'Total units purchased in last 7 days'}
+              {timeRange === '30' && 'Total units purchased in last 30 days'}
+              {timeRange === '90' && 'Total units purchased in last 90 days'}
+              {timeRange === 'custom' && 'Total units purchased in custom range'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-mint/20 to-sage/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Sold Units</CardTitle>
+             <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">{totalStockSold.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              {timeRange === '1' && 'Total units sold in last 1 day'}
+              {timeRange === '2' && 'Total units sold in last 2 days'}
+              {timeRange === '7' && 'Total units sold in last 7 days'}
+              {timeRange === '30' && 'Total units sold in last 30 days'}
+              {timeRange === '90' && 'Total units sold in last 90 days'}
+              {timeRange === 'custom' && 'Total units sold in custom range'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Product Overview Grid */}
+      {/* <div>
+        <h2 className="text-xl font-semibold mb-4">Product Overview</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {products.map(product => {
+            const isLowStock = product.inventory <= product.min_stock_alert;
+            return (
+              <Card key={product.id} className={`${isLowStock ? 'border-destructive bg-destructive/5' : ''}`}>
+                <CardContent className="p-4">
+                  <div className="space-y-2">
+                    <h3 className="font-medium text-sm">{product.name}</h3>
+                    <p className="text-xs text-muted-foreground">{product.category}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Stock: {product.inventory}</span>
+                      {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${isLowStock ? 'bg-destructive' : 'bg-primary'}`}
+                        style={{ 
+                          width: `${Math.min(100, (product.inventory / (product.min_stock_alert * 2)) * 100)}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div> */}
+
+      {/* Inventory Details Table */}
+      <div>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+          <h2 className="text-xl font-semibold">Inventory Details</h2>
+          
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* Time Range Filter */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+              <Select value={timeRange} onValueChange={(value) => {
+                setTimeRange(value);
+                if (value !== 'custom') {
+                  setShowCustomDatePicker(false);
+                }
+              }}>
+                <SelectTrigger className="w-full sm:w-32">
+                  <SelectValue placeholder="Time Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Last 1 Day</SelectItem>
+                  <SelectItem value="2">Last 2 Days</SelectItem>
+                  <SelectItem value="7">Last 7 Days</SelectItem>
+                  <SelectItem value="30">Last 30 Days</SelectItem>
+                  <SelectItem value="90">Last 90 Days</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Custom Range Button */}
+              {timeRange === 'custom' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCustomDatePicker(true)}
+                  className="w-full sm:w-auto"
+                >
+                  Set Dates
+                </Button>
+              )}
+            </div>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant={lowStockOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setLowStockOnly(!lowStockOnly)}
+              className="w-full sm:w-auto"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Low Stock Only
+            </Button>
+          </div>
+        </div>
+
+        {/* Custom Date Range Dialog */}
+        <Dialog open={showCustomDatePicker} onOpenChange={setShowCustomDatePicker}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Select Custom Date Range</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCustomDatePicker(false);
+                    setTimeRange('30'); // Reset to default
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (customStartDate && customEndDate) {
+                      const startDate = new Date(customStartDate);
+                      const endDate = new Date(customEndDate);
+                      
+                      if (endDate < startDate) {
+                        toast({
+                          title: "Invalid Date Range",
+                          description: "End date must be after start date.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      
+                      setShowCustomDatePicker(false);
+                    } else {
+                      toast({
+                        title: "Missing Dates",
+                        description: "Please select both start and end dates.",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  Apply
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Card>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (sortField === 'name') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('name');
+                        setSortDirection('asc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center">
+                      Product
+                      {sortField === 'name' && (
+                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (sortField === 'category') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('category');
+                        setSortDirection('asc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center">
+                      Category
+                      {sortField === 'category' && (
+                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (sortField === 'purchased_this_month') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('purchased_this_month');
+                        setSortDirection('desc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center">
+                      {timeRange === '1' && 'Purchased (1 Day)'}
+                      {timeRange === '2' && 'Purchased (2 Days)'}
+                      {timeRange === '7' && 'Purchased (7 Days)'}
+                      {timeRange === '30' && 'Purchased (30 Days)'}
+                      {timeRange === '90' && 'Purchased (90 Days)'}
+                      {timeRange === 'custom' && 'Purchased (Custom)'}
+                      {sortField === 'purchased_this_month' && (
+                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (sortField === 'inventory') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('inventory');
+                        setSortDirection('desc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center">
+                      Current Stock
+                      {sortField === 'inventory' && (
+                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (sortField === 'sold_this_month') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('sold_this_month');
+                        setSortDirection('desc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center">
+                      {timeRange === '1' && 'Sold (1 Day)'}
+                      {timeRange === '2' && 'Sold (2 Days)'}
+                      {timeRange === '7' && 'Sold (7 Days)'}
+                      {timeRange === '30' && 'Sold (30 Days)'}
+                      {timeRange === '90' && 'Sold (90 Days)'}
+                      {timeRange === 'custom' && 'Sold (Custom)'}
+                      {sortField === 'sold_this_month' && (
+                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (sortField === 'min_stock_alert') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('min_stock_alert');
+                        setSortDirection('asc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center">
+                      Min Stock Alert
+                      {sortField === 'min_stock_alert' && (
+                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {getFilteredAndSortedProducts().length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      {products.length === 0 ? 'No products found' : 'No products match the current filters'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  getFilteredAndSortedProducts().map((product) => {
+                    const isLowStock = product.inventory <= product.min_stock_alert;
+                    return (
+                      <TableRow 
+                        key={product.id} 
+                        className={`cursor-pointer hover:bg-muted/50 ${isLowStock ? 'bg-destructive/5' : ''}`}
+                        onClick={() => navigate('/admin/products')}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center space-x-2">
+                            {product.name}
+                            {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                          </div>
+                        </TableCell>
+                        <TableCell>{product.category}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                            {product.purchased_this_month}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={isLowStock ? "destructive" : "secondary"}>
+                            {product.inventory} units
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <TrendingDown className="h-4 w-4 text-orange-500 mr-1" />
+                            {product.sold_this_month}
+                          </div>
+                        </TableCell>
+                        <TableCell>{product.min_stock_alert}</TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Inventory;
