@@ -102,7 +102,7 @@ const EnhancedSalesDashboard: React.FC<DashboardProps> = ({ data }) => {
         </div>
 
         {/* Pie Chart Section (Right Side) */}
-        <Card className="lg:col-span-3 flex flex-col">
+        {/* <Card className="lg:col-span-3 flex flex-col">
           <CardHeader>
             <CardTitle>Payment Status Breakdown</CardTitle>
           </CardHeader>
@@ -128,7 +128,7 @@ const EnhancedSalesDashboard: React.FC<DashboardProps> = ({ data }) => {
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
     </CardContent>
   );
