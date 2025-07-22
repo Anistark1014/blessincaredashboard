@@ -29,6 +29,7 @@ interface ProductFormData {
   created_at?: string;
   image_url?: string;
   gross_profit: number | null; // ✅ Add this line
+  cost_price: number | null; // ✅ Add this line
   mrp: number | null; // ✅ Add this line
   price_ranges?: PriceRange[];
 }
@@ -123,6 +124,21 @@ const ProductForm = ({
                 setFormData((prev) => ({
                   ...prev,
                   gross_profit: parseFloat(e.target.value) || 0,
+                }))
+              }
+            />
+        </div>
+        <div>
+            <Label htmlFor="cost_price">Cost Price (₹)</Label>
+            <Input
+              id="cost_price"
+              type="number"
+              step="1"
+              value={formData.cost_price ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  cost_price: parseFloat(e.target.value) || 0,
                 }))
               }
             />
@@ -302,6 +318,7 @@ const AdminProducts = () => {
     image_url: '',
     availability: 'In Stock',
     gross_profit: 0,
+    cost_price: 0,
     mrp:0,
     price_ranges: [
       {
@@ -479,6 +496,7 @@ const AdminProducts = () => {
       image_url: product.image_url || '',
       availability: product.availability || 'In Stock',
       gross_profit:0,
+      cost_price:0,
       mrp:0,
       price_ranges: product.price_ranges?.length
       ? product.price_ranges
@@ -494,6 +512,7 @@ const AdminProducts = () => {
       image_url: '',
       availability: 'In Stock',
       gross_profit:0,
+      cost_price:0,
       mrp:0,
       price_ranges: [
         { min: 1, max: 100, price: 100 },

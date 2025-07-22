@@ -12,8 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, Filter, SortAsc, SortDesc } from 'lucide-react';
-import { set } from 'date-fns';
+import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, SortDesc } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -116,7 +115,7 @@ const Inventory: React.FC = () => {
         .select('*');
       
       if (productsError) throw productsError;
-      setProducts(productsData || []);
+      setProducts(productsData as any[]);
       
       // Fetch transactions
       const { data: transactionsData, error: transactionsError } = await supabase
@@ -125,7 +124,7 @@ const Inventory: React.FC = () => {
         .order('transaction_date', { ascending: false });
       
       if (transactionsError) throw transactionsError;
-      setTransactions(transactionsData || []);
+      setTransactions(transactionsData as any[]);
       
       // Fetch requests
       const { data: requestsData, error: requestsError } = await supabase
@@ -133,7 +132,7 @@ const Inventory: React.FC = () => {
         .select('*');
       
       if (requestsError) throw requestsError;
-      setRequests(requestsData || []);
+      setRequests(requestsData as any[]);
       
     } catch (error) {
       console.error('Error fetching data:', error);
