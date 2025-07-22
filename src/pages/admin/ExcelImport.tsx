@@ -82,8 +82,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
         style={{ display: 'none' }}
         accept=".xlsx, .xls, .csv"
       />
-      <Button onClick={handleButtonClick} variant="outline" className="bg-blue-500 hover:bg-blue-600 text-white">
-        📥 Import
+      <Button onClick={handleButtonClick} variant="outline" size="sm" className="  hover:bg-accent hover:text-accent-foregrounde">
+        📥
       </Button>
     </>
   );

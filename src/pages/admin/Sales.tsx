@@ -4,14 +4,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import MonthYearPicker from './MonthYearPicker';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Filter, Calendar, Upload, Trash2, Plus, Undo } from 'lucide-react';
+import { Search, Upload, Trash2, Plus, Undo } from 'lucide-react';
 
 // Interface for a single sale record
 interface Sale {
@@ -75,8 +74,8 @@ const statusColors = {
 const getSelectStyles = (isDark: boolean) => ({
   control: (provided: any, state: any) => ({
     ...provided,
-    backgroundColor: isDark ? '#1F2937' : '#FFFFFF', // dark:bg-gray-800, bg-white
-    borderColor: isDark ? '#4B5563' : '#D1D5DB', // dark:border-gray-600, border-gray-300
+    backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+    borderColor: isDark ? '#4B5563' : '#D1D5DB',
     color: isDark ? '#F9FAFB' : '#111827',
     minHeight: '38px',
     boxShadow: 'none',
@@ -92,13 +91,13 @@ const getSelectStyles = (isDark: boolean) => ({
   option: (provided: any, state: any) => ({
     ...provided,
     backgroundColor: state.isSelected
-      ? '#3B82F6' // bg-blue-500
+      ? '#3B82F6'
       : state.isFocused
-      ? (isDark ? '#374151' : '#F3F4F6') // dark:bg-gray-700, bg-gray-100
+      ? (isDark ? '#374151' : '#F3F4F6')
       : 'transparent',
     color: state.isSelected ? '#FFFFFF' : (isDark ? '#F9FAFB' : '#111827'),
     '&:active': {
-        backgroundColor: '#2563EB', // bg-blue-600
+        backgroundColor: '#2563EB',
     },
   }),
   singleValue: (provided: any) => ({
@@ -124,11 +123,9 @@ const SalesTable: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
-  const [resellers, setResellers] = useState([]);
+  const [resellers, setResellers] = useState<{ label: string; value: string }[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [filterMember, setFilterMember] = useState<{ label: string; value: string } | null>(null);
-  const [filterProduct, setFilterProduct] = useState<{ label: string; value: string } | null>(null);
-  const [productOptions, setProductOptions] = useState([]);
+  const [productOptions, setProductOptions] = useState<{ label: string; value: string }[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -197,8 +194,12 @@ const SalesTable: React.FC = () => {
   };
 
   const fetchDropdownData = async () => {
-    const { data: resellerData } = await supabase.from('users').select('id, company_name').eq('role', 'reseller');
-    setResellers(resellerData?.map(r => ({ label: r.company_name, value: r.company_name })) || []);
+    const { data: resellerData, error } = await supabase.from('users').select('id, company_name').eq('role', 'reseller');
+    if (error) {
+        console.error("Error fetching resellers:", error);
+    } else {
+        setResellers(resellerData?.filter(r => r.company_name).map(r => ({ label: r.company_name, value: r.company_name })) || []);
+    }
     await fetchProducts();
   };
 
@@ -328,7 +329,7 @@ const SalesTable: React.FC = () => {
               alert('Undo delete failed: ' + error.message);
             } else if (data) {
               setSales(prev => [...data, ...prev]);
-              alert(`Restored ${data.length} deleted record(s)`);
+              // alert(`Restored ${data.length} deleted record(s)`);
             }
           }
           break;
@@ -351,7 +352,7 @@ const SalesTable: React.FC = () => {
               alert('Undo edit failed: ' + error.message);
             } else {
               fetchSales();
-              alert(`Reverted edit for record`);
+              // alert(`Reverted edit for record`);
             }
           }
           break;
@@ -369,7 +370,7 @@ const SalesTable: React.FC = () => {
     const isCalculatedField = ['total', 'incoming', 'balance'].includes(field);
     const isEditing = !isCalculatedField && editingCell?.rowId === sale.id && editingCell.field === field;
     const rawValue = sale[field];
-    const resellerOptions = resellers;
+    const resellerOptionsForCell = resellers;
     const productOptionsForCell = productOptions;
     const clickHandler = isCalculatedField ? undefined : () => setEditingCell({ rowId: sale.id, field });
     const cursorClass = isCalculatedField ? 'cursor-not-allowed' : 'cursor-pointer';
@@ -377,7 +378,7 @@ const SalesTable: React.FC = () => {
     const handleBlur = () => setEditingCell(null);
 
     if (field === 'member' || field === 'product') {
-      const options = field === 'member' ? resellerOptions : productOptionsForCell;
+      const options = field === 'member' ? resellerOptionsForCell : productOptionsForCell;
       return (
         <TableCell className="px-2 py-1" onClick={clickHandler}>
           {isEditing ? (
@@ -392,7 +393,7 @@ const SalesTable: React.FC = () => {
                     handleEditChange(sale.id, 'price', productPrice);
                   }
                 }
-                handleBlur(); // Close editor on change
+                handleBlur();
               }}
               onBlur={handleBlur}
               isClearable
@@ -524,20 +525,15 @@ const SalesTable: React.FC = () => {
     XLSX.writeFile(workbook, fileName);
   };
 
-  const resellerOptions = resellers;
-  const productOptionsForFilter = productOptions;
-
   const filteredSales = useMemo(() => {
     return sales.filter((s) => {
-      const memberMatch = !filterMember || s.member === filterMember.value;
-      const productMatch = !filterProduct || s.product === filterProduct.value;
       const searchMatch = !searchTerm ||
         s.member.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.type.toLowerCase().includes(searchTerm.toLowerCase());
-      return memberMatch && productMatch && searchMatch;
+        (s.type && s.type.toLowerCase().includes(searchTerm.toLowerCase()));
+      return searchMatch;
     });
-  }, [sales, filterMember, filterProduct, searchTerm]);
+  }, [sales, searchTerm]);
 
   const computedSales = useMemo(() => {
     const chronoSorted = [...filteredSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -596,50 +592,40 @@ const SalesTable: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <CardTitle className="text-2xl">Sales Records</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Manage and review all company sales for the selected month.
-                    </p>
+                         <span className="w-full sm:w-auto">
+                                        <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
+                                    </span>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+              
+            </div>
+            <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
+                           <div className="w-full md:w-auto md:flex-grow">
+                               <div className="relative">
+                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                   <Input
+                                       placeholder="Search by member, product, type..."
+                                       className="pl-10"
+                                       value={searchTerm}
+                                       onChange={(e) => setSearchTerm(e.target.value)}
+                                   />
+                               </div>
+                           </div>
+                           <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
                     <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
-                        <Undo className="h-4 w-4 mr-2" />
-                        Undo ({undoStack.length})
+                        <Undo className="h-4 w-4 " />
+                        {/* Undo */}
                     </Button>
                     <ExcelImport onDataParsed={handleImportedData} Sale={{} as Sale} />
                     <Button onClick={handleExportToExcel} variant="outline" size="sm">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Export
+                        <Upload className="h-4 w-4 " />
+                        {/* Export */}
                     </Button>
                     <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Sale
+                        <Plus className="h-4 w-4 " />
+                        {/* Add Sale */}
                     </Button>
-                </div>
-            </div>
-            <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
-                <div className="w-full md:w-auto md:flex-grow">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search by member, product, type..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-                <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
-                    <div className="w-full sm:w-48">
-                        <Select options={resellerOptions} value={filterMember} onChange={(selected) => setFilterMember(selected)} isClearable isSearchable placeholder="Filter by Member" styles={getSelectStyles(isDarkMode)} />
-                    </div>
-                    <div className="w-full sm:w-48">
-                        <Select options={productOptionsForFilter} value={filterProduct} onChange={(selected) => setFilterProduct(selected)} isClearable isSearchable placeholder="Filter by Product" styles={getSelectStyles(isDarkMode)} />
-                    </div>
-                    <div className="w-full sm:w-auto">
-                        <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
-                    </div>
-                </div>
-            </div>
+                           </div>
+                       </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -647,10 +633,17 @@ const SalesTable: React.FC = () => {
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead className="w-[50px] px-4">
-                    <Checkbox
-                        checked={selectedRows.length > 0 && selectedRows.length === displayItems.length}
-                        onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                    />
+                    <div
+                        onClick={() => handleSelectAll(!(displayItems.length > 0 && selectedRows.length === displayItems.length))}
+                        className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all",
+                            (displayItems.length > 0 && selectedRows.length === displayItems.length)
+                                ? "bg-indigo-600 border-2 border-indigo-600"
+                                : "border-2 border-gray-400 dark:border-gray-500 hover:border-indigo-500"
+                        )}
+                    >
+                        {(selectedRows.length === displayItems.length && displayItems.length > 0) && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                    </div>
                   </TableHead>
                   <TableHead className="cursor-pointer" onClick={() => requestSort('date')}>Date{getSortIndicator('date')}</TableHead>
                   <TableHead className="cursor-pointer" onClick={() => requestSort('member')}>Member{getSortIndicator('member')}</TableHead>
@@ -661,7 +654,7 @@ const SalesTable: React.FC = () => {
                   <TableHead className="text-right cursor-pointer" onClick={() => requestSort('paid')}>Paid{getSortIndicator('paid')}</TableHead>
                   <TableHead className="text-right cursor-pointer" onClick={() => requestSort('balance')}>Balance{getSortIndicator('balance')}</TableHead>
                   <TableHead className="cursor-pointer" onClick={() => requestSort('payment_status')}>Status{getSortIndicator('payment_status')}</TableHead>
-                  <TableHead className="text-right">
+                  <TableHead className="text-right pr-4">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={deleteSelectedRows} disabled={selectedRows.length === 0}>
                         <Trash2 className="h-4 w-4" />
                     </Button>
@@ -673,8 +666,8 @@ const SalesTable: React.FC = () => {
                   <TableRow className="bg-secondary">
                     <TableCell></TableCell>
                     <TableCell className="p-1"><Input type="date" className="h-8" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} /></TableCell>
-                    <TableCell className="p-1 min-w-[150px]"><Select options={resellerOptions} onChange={(selected: any) => handleNewChange('member', selected?.value)} value={newSale.member ? { label: newSale.member, value: newSale.member } : null} placeholder="Select Member" styles={getSelectStyles(isDarkMode)} /></TableCell>
-                    <TableCell className="p-1 min-w-[150px]"><Select options={productOptionsForFilter} onChange={(selected: any) => handleNewChange("product", selected?.value || "")} value={newSale.product ? { label: newSale.product, value: newSale.product } : null} placeholder="Select Product" styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="p-1 min-w-[150px]"><Select options={resellers} onChange={(selected: any) => handleNewChange('member', selected?.value)} value={newSale.member ? { label: newSale.member, value: newSale.member } : null} placeholder="Select Member" styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="p-1 min-w-[150px]"><Select options={productOptions} onChange={(selected: any) => handleNewChange("product", selected?.value || "")} value={newSale.product ? { label: newSale.product, value: newSale.product } : null} placeholder="Select Product" styles={getSelectStyles(isDarkMode)} /></TableCell>
                     <TableCell className="p-1"><Input type="number" className="h-8 w-16 text-right" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} /></TableCell>
                     <TableCell className="p-1"><Input type="number" className="h-8 w-24 text-right" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} /></TableCell>
                     <TableCell className="p-1 text-right">{formatCurrency(newSale.total ?? 0)}</TableCell>
@@ -696,10 +689,17 @@ const SalesTable: React.FC = () => {
                 {displayItems.map((sale) => (
                   <TableRow key={sale.id} data-state={selectedRows.includes(sale.id) && "selected"}>
                     <TableCell className="px-4">
-                        <Checkbox
-                            checked={selectedRows.includes(sale.id)}
-                            onCheckedChange={() => handleRowSelect(sale.id)}
-                        />
+                        <div
+                            onClick={() => handleRowSelect(sale.id)}
+                            className={cn(
+                                "w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all",
+                                selectedRows.includes(sale.id)
+                                    ? "bg-indigo-600 border-2 border-indigo-600"
+                                    : "border-2 border-gray-400 dark:border-gray-500 hover:border-indigo-500"
+                            )}
+                        >
+                            {selectedRows.includes(sale.id) && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        </div>
                     </TableCell>
                     {renderEditableCell(sale, 'date', undefined, false, 'date')}
                     {renderEditableCell(sale, 'member')}
