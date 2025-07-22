@@ -90,9 +90,9 @@ const getTierInfo = (totalSold: number): TierInfo => {
   if (totalSold < 15000) return { tier: "Gold 1", svg: "Gold" };
   if (totalSold < 20000) return { tier: "Gold 2", svg: "Gold" };
   if (totalSold < 26000) return { tier: "Gold 3", svg: "Gold" };
-  if (totalSold < 32000) return { tier: "Platinum 1", svg: "Platinum" };
-  if (totalSold < 38000) return { tier: "Platinum 2", svg: "Platinum" };
-  if (totalSold < 45000) return { tier: "Platinum 3", svg: "Platinum" };
+  if (totalSold < 32000) return { tier: "Crystal 1", svg: "Platinum" };
+  if (totalSold < 38000) return { tier: "Crystal 2", svg: "Platinum" };
+  if (totalSold < 45000) return { tier: "Crystal 3", svg: "Platinum" };
   return { tier: "Diamond", svg: "Diamond" };
 };
 
@@ -113,8 +113,9 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
   
   return (
     <div className="flex flex-col items-center gap-1 relative" title={tier}>
+      <div className='relative'>
       <img 
-        src={`../../../public/tier/${svgName}.svg`} 
+        src={`/tier/${svgName}.svg`} 
         alt={`${tier} tier`}
         className="w-9 h-9"
       />
@@ -123,6 +124,10 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
           {romanNumeral}
         </span>
       )}
+      </div>
+      <span className="text-xs font-normal">
+        {tier}
+      </span>
     </div>
   );
 };
