@@ -28,6 +28,9 @@ interface ProductFormData {
   availability?: string;
   created_at?: string;
   image_url?: string;
+  category?: string;
+  info_link?: string;
+  sku_id?: string | null;
   gross_profit: number | null; // ✅ Add this line
   cost_price: number | null; // ✅ Add this line
   mrp: number | null; // ✅ Add this line
@@ -87,7 +90,9 @@ const ProductForm = ({
   }, [setFormData]);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 h-full">
+    <div className="h-[85vh] overflow-auto px-4 py-6">
+
+    <form onSubmit={onSubmit} className="space-y-4 min-h-full">
       <div>
         <Label htmlFor="name">Name *</Label>
         <Input
@@ -113,21 +118,7 @@ const ProductForm = ({
       </div>
 
       <div className='flex justify-around items-center gap-4'>
-        <div>
-            <Label htmlFor="gross_profit">Gross Profit (₹)</Label>
-            <Input
-              id="gross_profit"
-              type="number"
-              step="1"
-              value={formData.gross_profit ?? ""}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  gross_profit: parseFloat(e.target.value) || 0,
-                }))
-              }
-            />
-        </div>
+
         <div>
             <Label htmlFor="cost_price">Cost Price (₹)</Label>
             <Input
@@ -158,12 +149,55 @@ const ProductForm = ({
               }
             />
         </div>
-
+        <div>
+            <Label htmlFor="gross_profit">Gross Profit (₹)</Label>
+            <Input
+              id="gross_profit"
+              type="number"
+              step="1"
+              value={formData.gross_profit ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  gross_profit: parseFloat(e.target.value) || 0,
+                }))
+              }
+            />
+        </div>
       </div>
+          <div className='flex justify-around items-center gap-2 '>
+            <div className={cn('',isEdit?"hidden":"flex-1")}>
+              <Label className='mb-2' htmlFor="sku_id">SKU ID <span className='text-xs ml-2'>(name-size-qty-type1-type2)</span></Label>
+              <Input
+                id="sku_id"
+                type="text"
+                value={formData.sku_id ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    sku_id:(e.target.value),
+                  }))
+                }
+              />
+            </div>
+            <div className='flex-1'>
+              <Label className='mb-2' htmlFor="info_link">Add link <span className='text-xs ml-2'>(Add Product Link)</span></Label>
+              <Input
+                id="info_link"
+                type="text"
+                value={formData.info_link ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    info_link:(e.target.value),
+                  }))
+                }
+              />
+            </div>
+          </div>
       
       <div className='flex justify-around items-center gap-4'>
         <span className={cn('flex flex-col gap-4 ',formData.image_url?'':'w-full')}>
-
           <div>
             <Label htmlFor="availability">Availability</Label>
             <Select
@@ -179,6 +213,32 @@ const ProductForm = ({
                 <SelectItem value="In Stock">In Stock</SelectItem>
                 <SelectItem value="Out of Stock">Out of Stock</SelectItem>
                 <SelectItem value="Low Stock">Low Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Category  */}
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <Select
+              value={formData.category ?? ""}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, category: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Sanitary Pads">Sanitary Pads</SelectItem>
+                <SelectItem value="Maternity Pads">Maternity Pads</SelectItem>
+                <SelectItem value="Incinerator Machine">Incinerator Machine</SelectItem>
+                <SelectItem value="Wet Wipes">Wet Wipes</SelectItem>
+                <SelectItem value="Baby Diapers">Baby Diapers</SelectItem>
+                <SelectItem value="Adult Diapers">Adult Diapers</SelectItem>
+                <SelectItem value="Menstrual Cups">Menstrual Cups</SelectItem>
+                <SelectItem value="Period Underwear">Period Underwear</SelectItem>
+                <SelectItem value="Tampons">Tampons</SelectItem>
+                <SelectItem value="Vending Machine">Vending Machine</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -299,6 +359,7 @@ const ProductForm = ({
         <Button type="submit">{isEdit ? "Update Product" : "Add Product"}</Button>
       </div>
     </form>
+    </div>
   );
 };
 
@@ -316,8 +377,10 @@ const AdminProducts = () => {
     name: '',
     description: '',
     image_url: '',
+    category: '',
     availability: 'In Stock',
     gross_profit: 0,
+    sku_id: "",
     cost_price: 0,
     mrp:0,
     price_ranges: [
@@ -495,9 +558,12 @@ const AdminProducts = () => {
       description: product.description || '',
       image_url: product.image_url || '',
       availability: product.availability || 'In Stock',
-      gross_profit:0,
-      cost_price:0,
-      mrp:0,
+      gross_profit:product.gross_profit||0,
+      sku_id:product.sku_id||'',
+      category:product.category||'',
+      info_link:product.info_link||'',
+      cost_price:product.cost_price||0,
+      mrp:product.mrp||0,
       price_ranges: product.price_ranges?.length
       ? product.price_ranges
       : [],
@@ -512,6 +578,9 @@ const AdminProducts = () => {
       image_url: '',
       availability: 'In Stock',
       gross_profit:0,
+      sku_id:'',
+      category:'',
+      info_link:'',
       cost_price:0,
       mrp:0,
       price_ranges: [
@@ -561,6 +630,7 @@ const AdminProducts = () => {
   }
 
   console.log(products)
+  console.log(formData)
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
@@ -618,18 +688,21 @@ const AdminProducts = () => {
         {filteredProducts.map((product) => (
           <Card key={product.id} className="healthcare-card">
             <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start gap-2 justify-between">
                 <div className="flex-1">
-                  <CardTitle className="text-lg">{product.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {product.availability || 'Unknown'}
-                  </p>
+                  <CardTitle className="text-lg mb-1">{product.name}</CardTitle>
+                  <div className="flex justify-between items-center w-full">
+                    <Badge variant="outline">
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {product.availability || 'Unknown'}
+                      </p>
+                    </Badge>
+                    <p className="text-sm truncate text-muted-foreground mt-1">
+                      {product.sku_id || 'Unknown'}
+                    </p>
+
+                  </div>
                 </div>
-                <Badge variant="outline">
-                  {product.price_ranges?.length
-                    ? `${product.price_ranges.length} Price Tier${product.price_ranges.length > 1 ? 's' : ''}`
-                    : 'No Pricing'}
-                </Badge>
               </div>
             </CardHeader>
 
@@ -666,10 +739,27 @@ const AdminProducts = () => {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => openEditModal(product)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => openEditModal(product)}
+                >
                   <Edit className="w-4 h-4 mr-2" />
                   Edit
                 </Button>
+
+                {product.info_link && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-blue-600 hover:text-blue-800"
+                    onClick={() => window.open(product.info_link as string, "_blank")}
+                  >
+                    View Info
+                  </Button>
+                )}
+
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -679,6 +769,7 @@ const AdminProducts = () => {
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
+
             </CardContent>
           </Card>
         ))}
