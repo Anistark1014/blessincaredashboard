@@ -88,7 +88,8 @@ const ProductForm = ({
   }, [setFormData]);
 
   return (
-    <div className="h-screen overflow-auto px-4 py-6">
+    <div className="h-[85vh] overflow-auto px-4 py-6">
+
     <form onSubmit={onSubmit} className="space-y-4 min-h-full">
       <div>
         <Label htmlFor="name">Name *</Label>
