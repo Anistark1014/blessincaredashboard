@@ -578,7 +578,7 @@ const AdminProducts = () => {
     try {
       const { error } = await supabase
         .from('products')
-        .update(formData)
+        .update(formData as any)
         .eq('id', editingProduct.id);
 
       if (error) throw error;
@@ -632,7 +632,7 @@ const AdminProducts = () => {
       availability: product.availability || 'In Stock',
       gross_profit:product.gross_profit||0,
       sku_id:product.sku_id||'',
-      category:product.category||'',
+      category:product.category ||'',
       media:product.media || [],
       info_link:product.info_link||'',
       cost_price:product.cost_price||0,
