@@ -18,7 +18,7 @@ interface Sale {
   date: string;
   type: string;
   member: string;
-  product: string;
+  product: string; 
   qty: number;
   price: number;
   total: number;
@@ -30,26 +30,21 @@ interface Sale {
   cumulativePaid?: number;
 }
 
-// Enhanced Product interface
+// MODIFIED: Product interface now matches your actual schema
 interface Product {
   id: string;
-  name?: string;
-  product_name?: string;
-  product?: string;
-  price?: number;
-  unit_price?: number;
-  cost_price?: number;
-  selling_price?: number;
+  name: string;
+  mrp: number | null; // Using 'mrp' as the selling price field
 }
 
-// Undo operation types with new 'import' type
+// Undo operation types
 interface UndoOperation {
   type: 'delete' | 'add' | 'edit' | 'import';
   timestamp: number;
   data: {
     deletedRecords?: Sale[];
     addedRecord?: Sale;
-    importedRecords?: Sale[]; // For undoing imports
+    importedRecords?: Sale[];
     recordId?: string;
     field?: keyof Sale;
     oldValue?: any;
@@ -72,16 +67,13 @@ const statusColors = {
 };
 
 const getSelectStyles = (isDark: boolean) => ({
-  control: (provided: any, state: any) => ({
+  control: (provided: any) => ({
     ...provided,
     backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
     borderColor: isDark ? '#4B5563' : '#D1D5DB',
-    color: isDark ? '#F9FAFB' : '#111827',
     minHeight: '38px',
     boxShadow: 'none',
-    '&:hover': {
-      borderColor: isDark ? '#6B7280' : '#9CA3AF',
-    },
+    '&:hover': { borderColor: isDark ? '#6B7280' : '#9CA3AF' },
   }),
   menu: (provided: any) => ({
     ...provided,
@@ -90,28 +82,13 @@ const getSelectStyles = (isDark: boolean) => ({
   }),
   option: (provided: any, state: any) => ({
     ...provided,
-    backgroundColor: state.isSelected
-      ? '#3B82F6'
-      : state.isFocused
-      ? (isDark ? '#374151' : '#F3F4F6')
-      : 'transparent',
+    backgroundColor: state.isSelected ? '#3B82F6' : state.isFocused ? (isDark ? '#374151' : '#F3F4F6') : 'transparent',
     color: state.isSelected ? '#FFFFFF' : (isDark ? '#F9FAFB' : '#111827'),
-    '&:active': {
-        backgroundColor: '#2563EB',
-    },
+    '&:active': { backgroundColor: '#2563EB' },
   }),
-  singleValue: (provided: any) => ({
-    ...provided,
-    color: isDark ? '#F9FAFB' : '#111827',
-  }),
-  placeholder: (provided: any) => ({
-    ...provided,
-    color: isDark ? '#9CA3AF' : '#6B7280',
-  }),
-  input: (provided: any) => ({
-    ...provided,
-    color: isDark ? '#F9FAFB' : '#111827',
-  }),
+  singleValue: (provided: any) => ({ ...provided, color: isDark ? '#F9FAFB' : '#111827' }),
+  placeholder: (provided: any) => ({ ...provided, color: isDark ? '#9CA3AF' : '#6B7280' }),
+  input: (provided: any) => ({ ...provided, color: isDark ? '#F9FAFB' : '#111827' }),
 });
 
 
@@ -135,26 +112,17 @@ const SalesTable: React.FC = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
 
-
   const addToUndoStack = (operation: UndoOperation) => {
     if (isUndoing) return;
-    setUndoStack(prev => {
-      const newStack = [...prev, operation];
-      return newStack.slice(-10);
-    });
+    setUndoStack(prev => [...prev, operation].slice(-10));
   };
 
   useEffect(() => {
-    const checkDarkMode = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-      setIsDarkMode(isDark);
-    };
+    const checkDarkMode = () => setIsDarkMode(document.documentElement.classList.contains('dark'));
     checkDarkMode();
     const observer = new MutationObserver(checkDarkMode);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, []);
 
   const fetchSales = async () => {
@@ -169,38 +137,47 @@ const SalesTable: React.FC = () => {
     if (error) {
       console.error('Error fetching sales:', error.message);
     } else {
-      setSales(data as Sale[]);
+      setSales(data || []);
     }
   };
 
+  // FIXED: Selects 'mrp' to match your schema
   const fetchProducts = async () => {
-    const { data, error } = await supabase.from("products").select("*");
+    const { data, error } = await supabase.from("products").select("id, name, mrp");
     if (!error && data) {
       setProducts(data as Product[]);
-      const uniqueProducts = Array.from(new Set(data.map((item) => item.product || item.name || item.product_name).filter(Boolean)));
-      const options = uniqueProducts.map((product) => ({ label: product, value: product }));
+      const options = data.map((product) => ({ label: product.name, value: product.name }));
       setProductOptions(options);
     } else {
       console.error("Error fetching products:", error);
+      setProducts([]);
     }
   };
-
+  
+  // FIXED: Uses 'mrp' to get the product price
   const getProductPrice = (productName: string): number => {
-    const product = products.find(p => p.product === productName || p.name === productName || p.product_name === productName);
-    if (product) {
-      return product.selling_price || product.price || product.unit_price || product.cost_price || 0;
-    }
-    return 0;
+    const product = products.find(p => p.name === productName);
+    return product?.mrp || 0;
   };
 
   const fetchDropdownData = async () => {
-    const { data: resellerData, error } = await supabase.from('users').select('id, company_name').eq('role', 'reseller');
-    if (error) {
-        console.error("Error fetching resellers:", error);
-    } else {
-        setResellers(resellerData?.filter(r => r.company_name).map(r => ({ label: r.company_name, value: r.company_name })) || []);
+    try {
+      // The query now selects 'email' which is a standard column
+      const resellerPromise = supabase.from('users').select('name, id, email').eq('role', 'reseller');
+      const productsPromise = fetchProducts();
+
+      const [resellerResult] = await Promise.all([resellerPromise, productsPromise]);
+      const { data: resellerData, error: resellerError } = resellerResult;
+
+      if (resellerError) throw resellerError;
+      
+      // The options are now created using the user's email
+      const resellerOptions = resellerData?.filter(r => r.id).map(r => ({ label: r.name, value: r.name })) || [];
+      setResellers(resellerOptions);
+
+    } catch (error) {
+      console.error("Error fetching dropdown data:", error);
     }
-    await fetchProducts();
   };
 
   useEffect(() => {
@@ -237,7 +214,6 @@ const SalesTable: React.FC = () => {
         fetchSales();
     }
   };
-
   const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
     const originalSale = sales.find(sale => sale.id === id);
     if (!originalSale) return;
@@ -245,7 +221,7 @@ const SalesTable: React.FC = () => {
     let updatedRecord = { ...originalSale, [field]: value };
     let updatePayload: Partial<Sale> = { [field]: value };
 
-    if (['qty', 'price', 'paid'].includes(field)) {
+    if (['qty', 'price', 'paid'].includes(field as string)) {
         const qty = Number(field === 'qty' ? value : updatedRecord.qty || 0);
         const price = Number(field === 'price' ? value : updatedRecord.price || 0);
         const paid = Number(field === 'paid' ? value : updatedRecord.paid || 0);
@@ -271,7 +247,6 @@ const SalesTable: React.FC = () => {
         setSales(sales); 
     }
   };
-  
   const handleRowSelect = (id: string) => {
     setSelectedRows((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   };
@@ -283,7 +258,6 @@ const SalesTable: React.FC = () => {
       setSelectedRows([]);
     }
   };
-
   const deleteSelectedRows = async () => {
     if (selectedRows.length === 0) return;
     const deletedRecords = sales.filter((s) => selectedRows.includes(s.id));
@@ -329,7 +303,6 @@ const SalesTable: React.FC = () => {
               alert('Undo delete failed: ' + error.message);
             } else if (data) {
               setSales(prev => [...data, ...prev]);
-              // alert(`Restored ${data.length} deleted record(s)`);
             }
           }
           break;
@@ -352,7 +325,6 @@ const SalesTable: React.FC = () => {
               alert('Undo edit failed: ' + error.message);
             } else {
               fetchSales();
-              // alert(`Reverted edit for record`);
             }
           }
           break;
@@ -367,18 +339,15 @@ const SalesTable: React.FC = () => {
   };
   
   const renderEditableCell = (sale: Sale, field: keyof Sale, formatter?: (value: any) => string, isCurrency = false, type = 'text') => {
-    const isCalculatedField = ['total', 'incoming', 'balance'].includes(field);
+    const isCalculatedField = ['total', 'incoming', 'balance'].includes(field as string);
     const isEditing = !isCalculatedField && editingCell?.rowId === sale.id && editingCell.field === field;
     const rawValue = sale[field];
-    const resellerOptionsForCell = resellers;
-    const productOptionsForCell = productOptions;
     const clickHandler = isCalculatedField ? undefined : () => setEditingCell({ rowId: sale.id, field });
     const cursorClass = isCalculatedField ? 'cursor-not-allowed' : 'cursor-pointer';
-
     const handleBlur = () => setEditingCell(null);
 
     if (field === 'member' || field === 'product') {
-      const options = field === 'member' ? resellerOptionsForCell : productOptionsForCell;
+      const options = field === 'member' ? resellers : productOptions;
       return (
         <TableCell className="px-2 py-1" onClick={clickHandler}>
           {isEditing ? (
@@ -389,9 +358,7 @@ const SalesTable: React.FC = () => {
                 handleEditChange(sale.id, field, selected?.value);
                 if (field === 'product' && selected?.value) {
                   const productPrice = getProductPrice(selected.value);
-                  if (productPrice > 0) {
-                    handleEditChange(sale.id, 'price', productPrice);
-                  }
+                  handleEditChange(sale.id, 'price', productPrice);
                 }
                 handleBlur();
               }}
@@ -439,7 +406,7 @@ const SalesTable: React.FC = () => {
           <Input
             type={type}
             className="h-8"
-            value={rawValue ?? ''}
+            value={rawValue as any ?? ''}
             onChange={(e) => handleEditChange(sale.id, field, type === 'number' ? Number(e.target.value) : e.target.value)}
             onBlur={handleBlur}
             onKeyDown={(e) => e.key === 'Enter' && handleBlur()}
@@ -459,9 +426,7 @@ const SalesTable: React.FC = () => {
       const updated = { ...prev, [field]: value };
       if (field === 'product' && value) {
         const productPrice = getProductPrice(value);
-        if (productPrice > 0) {
-          updated.price = productPrice;
-        }
+        updated.price = productPrice;
       }
       return updated;
     });
@@ -472,22 +437,21 @@ const SalesTable: React.FC = () => {
     const price = newSale.price || 0;
     const paid = newSale.paid || 0;
     const total = qty * price;
-    const incoming = total - paid;
-    const balance = incoming;
-    const payment_status = paid >= total ? 'Fully Paid' : paid === 0 ? 'Pending' : 'Partially Paid';
-    setNewSale((prev) => ({ ...prev, total, incoming, balance, payment_status }));
+    const balance = total - paid;
+    const payment_status = total > 0 && paid >= total ? 'Fully Paid' : paid > 0 ? 'Partially Paid' : 'Pending';
+    
+    setNewSale((prev) => ({ ...prev, total, balance, payment_status, incoming: balance }));
   }, [newSale.qty, newSale.price, newSale.paid]);
   
   const handleAddNew = async () => {
     const requiredFields: (keyof Sale)[] = ['date', 'member', 'product', 'qty', 'price'];
     const allFilled = requiredFields.every((field) => newSale[field] !== undefined && newSale[field] !== '' && newSale[field] !== 0);
     if (!allFilled) {
-      const missingFields = requiredFields.filter((field) => !newSale[field] || newSale[field] === '' || newSale[field] === 0);
-      alert(`Please fill all required fields: ${missingFields.join(', ')}`);
+      alert(`Please fill all required fields: ${requiredFields.join(', ')}`);
       return;
     }
-    const completeRecord = { ...newSale, type: newSale.type || 'sale', total: newSale.total || 0, paid: newSale.paid || 0, incoming: newSale.incoming || 0, balance: newSale.balance || 0, payment_status: newSale.payment_status || 'Pending' };
-    const { data, error } = await supabase.from('sales').insert([completeRecord]).select();
+    const { cumulativePaid, ...recordToInsert } = newSale;
+    const { data, error } = await supabase.from('sales').insert([recordToInsert]).select();
     if (error) {
       alert('Insert failed: ' + error.message);
     } else if (data && data.length > 0) {
@@ -536,13 +500,7 @@ const SalesTable: React.FC = () => {
   }, [sales, searchTerm]);
 
   const computedSales = useMemo(() => {
-    const chronoSorted = [...filteredSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return chronoSorted.map((sale, index) => {
-      const cumulativePaid = chronoSorted
-        .slice(0, index + 1)
-        .reduce((sum, s) => sum + (s.paid || 0), 0);
-      return { ...sale, cumulativePaid };
-    });
+    return [...filteredSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredSales]);
 
   const displayItems = useMemo(() => {
@@ -551,16 +509,10 @@ const SalesTable: React.FC = () => {
       sortableItems.sort((a, b) => {
         const valA = a[sortConfig.key!];
         const valB = b[sortConfig.key!];
-
         if (valA === null || valA === undefined) return 1;
         if (valB === null || valB === undefined) return -1;
-        
-        if (valA < valB) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (valA > valB) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
+        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
     }
@@ -577,55 +529,50 @@ const SalesTable: React.FC = () => {
     }
     setSortConfig({ key, direction });
   };
-  
+
   const getSortIndicator = (name: keyof Sale) => {
     if (sortConfig.key !== name) return null;
     return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
-  };
+  }; 
   
   return (
     <div className="space-y-6">
-      <EnhancedSalesDashboard data={filteredSales} />
-
+      <EnhancedSalesDashboard data={displayItems} />
       <Card className="overflow-hidden">
         <CardHeader className="p-4 md:p-6 bg-card">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <CardTitle className="text-2xl">Sales Records</CardTitle>
-                         <span className="w-full sm:w-auto">
-                                        <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
-                                    </span>
+                        <span className="w-full sm:w-auto">
+                            <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
+                        </span>
                 </div>
-              
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
-                           <div className="w-full md:w-auto md:flex-grow">
-                               <div className="relative">
-                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                   <Input
-                                       placeholder="Search by member, product, type..."
-                                       className="pl-10"
-                                       value={searchTerm}
-                                       onChange={(e) => setSearchTerm(e.target.value)}
-                                   />
-                               </div>
-                           </div>
-                           <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
-                    <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
-                        <Undo className="h-4 w-4 " />
-                        {/* Undo */}
-                    </Button>
-                    <ExcelImport onDataParsed={handleImportedData} Sale={{} as Sale} />
-                    <Button onClick={handleExportToExcel} variant="outline" size="sm">
-                        <Upload className="h-4 w-4 " />
-                        {/* Export */}
-                    </Button>
-                    <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
-                        <Plus className="h-4 w-4 " />
-                        {/* Add Sale */}
-                    </Button>
-                           </div>
-                       </div>
+                <div className="w-full md:w-auto md:flex-grow">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by member, product, type..."
+                            className="pl-10"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
+                <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
+                    <Undo className="h-4 w-4 " />
+                </Button>
+                <ExcelImport onDataParsed={handleImportedData} />
+                <Button onClick={handleExportToExcel} variant="outline" size="sm">
+                    <Upload className="h-4 w-4 " />
+                </Button>
+                <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
+                    <Plus className="h-4 w-4 " />
+                </Button>
+                </div>
+            </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -650,7 +597,7 @@ const SalesTable: React.FC = () => {
                   <TableHead className="cursor-pointer" onClick={() => requestSort('product')}>Product{getSortIndicator('product')}</TableHead>
                   <TableHead className="text-right cursor-pointer" onClick={() => requestSort('qty')}>Qty{getSortIndicator('qty')}</TableHead>
                   <TableHead className="text-right cursor-pointer" onClick={() => requestSort('price')}>Price{getSortIndicator('price')}</TableHead>
-                  <TableHead className="text-right cursor-pointer" onClick={() => requestSort('total')}>Total{getSortIndicator('total')}</TableHead>
+                  <TableHead className="text-right cursor-pointer" onClick={() => requestSort('total')}>Total Sale{getSortIndicator('total')}</TableHead>
                   <TableHead className="text-right cursor-pointer" onClick={() => requestSort('paid')}>Paid{getSortIndicator('paid')}</TableHead>
                   <TableHead className="text-right cursor-pointer" onClick={() => requestSort('balance')}>Balance{getSortIndicator('balance')}</TableHead>
                   <TableHead className="cursor-pointer" onClick={() => requestSort('payment_status')}>Status{getSortIndicator('payment_status')}</TableHead>
@@ -666,18 +613,14 @@ const SalesTable: React.FC = () => {
                   <TableRow className="bg-secondary">
                     <TableCell></TableCell>
                     <TableCell className="p-1"><Input type="date" className="h-8" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date', e.target.value)} /></TableCell>
-                    <TableCell className="p-1 min-w-[150px]"><Select options={resellers} onChange={(selected: any) => handleNewChange('member', selected?.value)} value={newSale.member ? { label: newSale.member, value: newSale.member } : null} placeholder="Select Member" styles={getSelectStyles(isDarkMode)} /></TableCell>
-                    <TableCell className="p-1 min-w-[150px]"><Select options={productOptions} onChange={(selected: any) => handleNewChange("product", selected?.value || "")} value={newSale.product ? { label: newSale.product, value: newSale.product } : null} placeholder="Select Product" styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="p-1 min-w-[150px]"><Select options={resellers} onChange={(s: any) => handleNewChange('member', s?.value)} styles={getSelectStyles(isDarkMode)} /></TableCell>
+                    <TableCell className="p-1 min-w-[150px]"><Select options={productOptions} onChange={(s: any) => handleNewChange("product", s?.value || "")} styles={getSelectStyles(isDarkMode)} /></TableCell>
                     <TableCell className="p-1"><Input type="number" className="h-8 w-16 text-right" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty', Number(e.target.value))} /></TableCell>
                     <TableCell className="p-1"><Input type="number" className="h-8 w-24 text-right" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price', Number(e.target.value))} /></TableCell>
                     <TableCell className="p-1 text-right">{formatCurrency(newSale.total ?? 0)}</TableCell>
                     <TableCell className="p-1"><Input type="number" className="h-8 w-24 text-right" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid', Number(e.target.value))} /></TableCell>
                     <TableCell className="p-1 text-right">{formatCurrency(newSale.balance ?? 0)}</TableCell>
-                    <TableCell className="p-1">
-                        <div className={cn("font-semibold", statusColors[newSale.payment_status || 'Pending'])}>
-                            {newSale.payment_status || 'Pending'}
-                        </div>
-                    </TableCell>
+                    <TableCell className="p-1"><div className={cn("font-semibold", statusColors[newSale.payment_status || 'Pending'])}>{newSale.payment_status || 'Pending'}</div></TableCell>
                     <TableCell className="p-1 text-right">
                         <div className="flex gap-2 justify-end">
                             <Button onClick={handleAddNew} size="sm" className="bg-green-600 hover:bg-green-700 text-white">Save</Button>
@@ -687,7 +630,7 @@ const SalesTable: React.FC = () => {
                   </TableRow>
                 )}
                 {displayItems.map((sale) => (
-                  <TableRow key={sale.id} data-state={selectedRows.includes(sale.id) && "selected"}>
+                  <TableRow key={sale.id} data-state={selectedRows.includes(sale.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
                         <div
                             onClick={() => handleRowSelect(sale.id)}
@@ -710,9 +653,7 @@ const SalesTable: React.FC = () => {
                     {renderEditableCell(sale, 'paid', formatCurrency, true, 'number')}
                     {renderEditableCell(sale, 'balance', formatCurrency, true, 'number')}
                     {renderEditableCell(sale, 'payment_status')}
-                    <TableCell className="text-right">
-                       {/* Action per row can be added here if needed */}
-                    </TableCell>
+                    <TableCell className="text-right"></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
