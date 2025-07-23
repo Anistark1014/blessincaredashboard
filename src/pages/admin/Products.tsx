@@ -28,6 +28,8 @@ interface ProductFormData {
   availability?: string;
   created_at?: string;
   image_url?: string;
+  category?: string;
+  info_link?: string;
   sku_id?: string | null;
   gross_profit: number | null; // ✅ Add this line
   cost_price: number | null; // ✅ Add this line
@@ -163,26 +165,39 @@ const ProductForm = ({
             />
         </div>
       </div>
-        {isEdit?"":(
-          <div>
-            <Label htmlFor="sku_id">SKU ID</Label>
-            <Input
-              id="sku_id"
-              type="text"
-              value={formData.sku_id ?? ""}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  sku_id:(e.target.value),
-                }))
-              }
-            />
-        </div>
-        )}
+          <div className='flex justify-around items-center gap-2 '>
+            <div className={cn('',isEdit?"hidden":"flex-1")}>
+              <Label className='mb-2' htmlFor="sku_id">SKU ID <span className='text-xs ml-2'>(name-size-qty-type1-type2)</span></Label>
+              <Input
+                id="sku_id"
+                type="text"
+                value={formData.sku_id ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    sku_id:(e.target.value),
+                  }))
+                }
+              />
+            </div>
+            <div className='flex-1'>
+              <Label className='mb-2' htmlFor="info_link">Add link <span className='text-xs ml-2'>(Add Product Link)</span></Label>
+              <Input
+                id="info_link"
+                type="text"
+                value={formData.info_link ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    info_link:(e.target.value),
+                  }))
+                }
+              />
+            </div>
+          </div>
       
       <div className='flex justify-around items-center gap-4'>
         <span className={cn('flex flex-col gap-4 ',formData.image_url?'':'w-full')}>
-
           <div>
             <Label htmlFor="availability">Availability</Label>
             <Select
@@ -198,6 +213,32 @@ const ProductForm = ({
                 <SelectItem value="In Stock">In Stock</SelectItem>
                 <SelectItem value="Out of Stock">Out of Stock</SelectItem>
                 <SelectItem value="Low Stock">Low Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Category  */}
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <Select
+              value={formData.category ?? ""}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, category: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Sanitary Pads">Sanitary Pads</SelectItem>
+                <SelectItem value="Maternity Pads">Maternity Pads</SelectItem>
+                <SelectItem value="Incinerator Machine">Incinerator Machine</SelectItem>
+                <SelectItem value="Wet Wipes">Wet Wipes</SelectItem>
+                <SelectItem value="Baby Diapers">Baby Diapers</SelectItem>
+                <SelectItem value="Adult Diapers">Adult Diapers</SelectItem>
+                <SelectItem value="Menstrual Cups">Menstrual Cups</SelectItem>
+                <SelectItem value="Period Underwear">Period Underwear</SelectItem>
+                <SelectItem value="Tampons">Tampons</SelectItem>
+                <SelectItem value="Vending Machine">Vending Machine</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -336,6 +377,7 @@ const AdminProducts = () => {
     name: '',
     description: '',
     image_url: '',
+    category: '',
     availability: 'In Stock',
     gross_profit: 0,
     sku_id: "",
@@ -516,10 +558,12 @@ const AdminProducts = () => {
       description: product.description || '',
       image_url: product.image_url || '',
       availability: product.availability || 'In Stock',
-      gross_profit:0,
-      sku_id:'',
-      cost_price:0,
-      mrp:0,
+      gross_profit:product.gross_profit||0,
+      sku_id:product.sku_id||'',
+      category:product.category||'',
+      info_link:product.info_link||'',
+      cost_price:product.cost_price||0,
+      mrp:product.mrp||0,
       price_ranges: product.price_ranges?.length
       ? product.price_ranges
       : [],
@@ -535,6 +579,8 @@ const AdminProducts = () => {
       availability: 'In Stock',
       gross_profit:0,
       sku_id:'',
+      category:'',
+      info_link:'',
       cost_price:0,
       mrp:0,
       price_ranges: [
@@ -693,10 +739,27 @@ const AdminProducts = () => {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => openEditModal(product)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => openEditModal(product)}
+                >
                   <Edit className="w-4 h-4 mr-2" />
                   Edit
                 </Button>
+
+                {product.info_link && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-blue-600 hover:text-blue-800"
+                    onClick={() => window.open(product.info_link as string, "_blank")}
+                  >
+                    View Info
+                  </Button>
+                )}
+
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -706,6 +769,7 @@ const AdminProducts = () => {
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
+
             </CardContent>
           </Card>
         ))}
