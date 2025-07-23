@@ -21,6 +21,11 @@ interface PriceRange {
   price: number;
 }
 
+interface MediaItem {
+  type: 'image' | 'video';
+  url: string;
+}
+
 interface ProductFormData {
   id?: string;
   name: string;
@@ -35,7 +40,9 @@ interface ProductFormData {
   cost_price: number | null; // ✅ Add this line
   mrp: number | null; // ✅ Add this line
   price_ranges?: PriceRange[];
+  media?: MediaItem[]|null; // ✅ Integrated media field
 }
+
 
 // Move ProductForm outside as a separate component
 const ProductForm = ({ 
@@ -328,6 +335,7 @@ const ProductForm = ({
                   }
                 />
               </div>
+
               <Button
                 type="button"
                 variant="destructive"
@@ -345,6 +353,70 @@ const ProductForm = ({
           >
             + Add Price Range
           </Button>
+        </div>
+      </div>
+
+      <div>
+        <div className='flex justify-around items-center mb-2'>
+        <Label className='flex-1'>Media (Images / YouTube Videos)</Label>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setFormData((prev) => ({
+                ...prev,
+                media: [...(prev.media ?? []), { type: 'image', url: '' }],
+              }))
+            }
+          >
+            + Add Media
+          </Button>
+        </div>
+        <div className="space-y-4 mt-2">
+          {(formData.media ?? []).map((item, index) => (
+            <div key={index} className="flex items-center gap-2">
+            <Label>Media Type</Label>
+              <Select
+                value={item.type}
+                onValueChange={(value) => {
+                  const updated = [...(formData.media ?? [])];
+                  updated[index].type = value as 'image' | 'video';
+                  setFormData((prev) => ({ ...prev, media: updated }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select media type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="image">Image</SelectItem>
+                  <SelectItem value="video">Video</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Input
+                type="text"
+                value={item.url}
+                placeholder="Enter URL"
+                onChange={(e) => {
+                  const updated = [...(formData.media ?? [])];
+                  updated[index].url = e.target.value;
+                  setFormData((prev) => ({ ...prev, media: updated }));
+                }}
+              />
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  const updated = [...(formData.media ?? [])];
+                  updated.splice(index, 1);
+                  setFormData((prev) => ({ ...prev, media: updated }));
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+
         </div>
       </div>
 
@@ -389,7 +461,8 @@ const AdminProducts = () => {
         max: 100,
         price: 100
       }
-    ]
+    ],
+    media:[]
   });
 
   const { toast } = useToast();
@@ -477,7 +550,6 @@ const AdminProducts = () => {
       if (error) throw error;
 
       setIsAddModalOpen(false);
-      resetForm();
       toast({
         title: "Success",
         description: "Product added successfully"
@@ -561,6 +633,7 @@ const AdminProducts = () => {
       gross_profit:product.gross_profit||0,
       sku_id:product.sku_id||'',
       category:product.category||'',
+      media:product.media || [],
       info_link:product.info_link||'',
       cost_price:product.cost_price||0,
       mrp:product.mrp||0,
@@ -580,6 +653,7 @@ const AdminProducts = () => {
       gross_profit:0,
       sku_id:'',
       category:'',
+      media:[],
       info_link:'',
       cost_price:0,
       mrp:0,
