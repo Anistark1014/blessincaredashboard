@@ -328,3 +328,23 @@
   }
 }
 
+/* Apply to the whole app or scope it via a class */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--lavender));
+  border-radius: 9999px;
+  border: 2px solid hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--lavender-dark));
+}

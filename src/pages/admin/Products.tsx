@@ -28,6 +28,7 @@ interface ProductFormData {
   availability?: string;
   created_at?: string;
   image_url?: string;
+  sku_id?: string | null;
   gross_profit: number | null; // ✅ Add this line
   cost_price: number | null; // ✅ Add this line
   mrp: number | null; // ✅ Add this line
@@ -87,7 +88,8 @@ const ProductForm = ({
   }, [setFormData]);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 h-full">
+    <div className="h-screen overflow-auto px-4 py-6">
+    <form onSubmit={onSubmit} className="space-y-4 min-h-full">
       <div>
         <Label htmlFor="name">Name *</Label>
         <Input
@@ -113,21 +115,7 @@ const ProductForm = ({
       </div>
 
       <div className='flex justify-around items-center gap-4'>
-        <div>
-            <Label htmlFor="gross_profit">Gross Profit (₹)</Label>
-            <Input
-              id="gross_profit"
-              type="number"
-              step="1"
-              value={formData.gross_profit ?? ""}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  gross_profit: parseFloat(e.target.value) || 0,
-                }))
-              }
-            />
-        </div>
+
         <div>
             <Label htmlFor="cost_price">Cost Price (₹)</Label>
             <Input
@@ -158,8 +146,38 @@ const ProductForm = ({
               }
             />
         </div>
-
+        <div>
+            <Label htmlFor="gross_profit">Gross Profit (₹)</Label>
+            <Input
+              id="gross_profit"
+              type="number"
+              step="1"
+              value={formData.gross_profit ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  gross_profit: parseFloat(e.target.value) || 0,
+                }))
+              }
+            />
+        </div>
       </div>
+        {isEdit?"":(
+          <div>
+            <Label htmlFor="sku_id">SKU ID</Label>
+            <Input
+              id="sku_id"
+              type="text"
+              value={formData.sku_id ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  sku_id:(e.target.value),
+                }))
+              }
+            />
+        </div>
+        )}
       
       <div className='flex justify-around items-center gap-4'>
         <span className={cn('flex flex-col gap-4 ',formData.image_url?'':'w-full')}>
@@ -299,6 +317,7 @@ const ProductForm = ({
         <Button type="submit">{isEdit ? "Update Product" : "Add Product"}</Button>
       </div>
     </form>
+    </div>
   );
 };
 
@@ -318,6 +337,7 @@ const AdminProducts = () => {
     image_url: '',
     availability: 'In Stock',
     gross_profit: 0,
+    sku_id: "",
     cost_price: 0,
     mrp:0,
     price_ranges: [
@@ -496,6 +516,7 @@ const AdminProducts = () => {
       image_url: product.image_url || '',
       availability: product.availability || 'In Stock',
       gross_profit:0,
+      sku_id:'',
       cost_price:0,
       mrp:0,
       price_ranges: product.price_ranges?.length
@@ -512,6 +533,7 @@ const AdminProducts = () => {
       image_url: '',
       availability: 'In Stock',
       gross_profit:0,
+      sku_id:'',
       cost_price:0,
       mrp:0,
       price_ranges: [
@@ -561,6 +583,7 @@ const AdminProducts = () => {
   }
 
   console.log(products)
+  console.log(formData)
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
@@ -618,18 +641,21 @@ const AdminProducts = () => {
         {filteredProducts.map((product) => (
           <Card key={product.id} className="healthcare-card">
             <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start gap-2 justify-between">
                 <div className="flex-1">
-                  <CardTitle className="text-lg">{product.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {product.availability || 'Unknown'}
-                  </p>
+                  <CardTitle className="text-lg mb-1">{product.name}</CardTitle>
+                  <div className="flex justify-between items-center w-full">
+                    <Badge variant="outline">
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {product.availability || 'Unknown'}
+                      </p>
+                    </Badge>
+                    <p className="text-sm truncate text-muted-foreground mt-1">
+                      {product.sku_id || 'Unknown'}
+                    </p>
+
+                  </div>
                 </div>
-                <Badge variant="outline">
-                  {product.price_ranges?.length
-                    ? `${product.price_ranges.length} Price Tier${product.price_ranges.length > 1 ? 's' : ''}`
-                    : 'No Pricing'}
-                </Badge>
               </div>
             </CardHeader>
 
