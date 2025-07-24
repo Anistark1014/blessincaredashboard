@@ -5,12 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import MonthYearPicker from './MonthYearPicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+// **UPDATED**: Imported functions to handle month and year calculations
+import { addDays, format, subMonths, subYears } from 'date-fns';
+import { DateRange } from 'react-day-picker';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Upload, Trash2, Plus, Undo, Download } from 'lucide-react';
+import { Search, Upload, Trash2, Plus, Undo, Calendar as CalendarIcon } from 'lucide-react';
 
 // --- INTERFACE DEFINITIONS ---
 
@@ -107,10 +111,12 @@ const SalesTable: React.FC = () => {
   const [addingNew, setAddingNew] = useState(false);
   const [newSale, setNewSale] = useState<Partial<Sale>>({});
   
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [date, setDate] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: addDays(new Date(), 0),
+  });
   
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -125,8 +131,12 @@ const SalesTable: React.FC = () => {
   // --- DATA FETCHING ---
 
   const fetchSales = async () => {
-    const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
-    const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999).toISOString();
+    if (!date?.from || !date?.to) {
+      return;
+    }
+
+    const startDate = date.from.toISOString();
+    const endDate = date.to.toISOString();
 
     const { data, error } = await supabase
       .from('sales')
@@ -170,7 +180,7 @@ const SalesTable: React.FC = () => {
   
   useEffect(() => {
     fetchSales();
-  }, [selectedMonth, selectedYear]);
+  }, [date]);
 
   useEffect(() => {
     fetchDropdownData();
@@ -185,7 +195,6 @@ const SalesTable: React.FC = () => {
   }, []);
 
   // --- CRUD & FEATURE FUNCTIONS ---
-
   const addToUndoStack = (operation: UndoOperation) => {
     if (isUndoing) return;
     setUndoStack(prev => [...prev, operation].slice(-10));
@@ -341,7 +350,7 @@ const SalesTable: React.FC = () => {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sales");
-    XLSX.writeFile(workbook, `Sales_${selectedYear}_${selectedMonth + 1}.xlsx`);
+    XLSX.writeFile(workbook, `Sales_Report.xlsx`);
   };
   
   const handleImportedData = async (importedRows: any[]) => {
@@ -351,15 +360,15 @@ const SalesTable: React.FC = () => {
     }
 
     const processedData = importedRows.map(row => {
-      const user = users.find(u => u.name === row.Member);
-      const product = products.find(p => p.name === row.Product);
+      const user = users.find(u => u.name === row.member);
+      const product = products.find(p => p.name === row.product);
       
       if (!user || !product) {
         console.warn(`Skipping row due to missing user or product:`, row);
         return null;
       }
 
-      const qty = Number(row.Quantity || 0);
+      const qty = Number(row.qty || 0);
       let price = 0;
       if (product.price_ranges && product.price_ranges.length > 0) {
         const priceRange = product.price_ranges.find(r => qty >= r.min && qty <= r.max);
@@ -368,13 +377,13 @@ const SalesTable: React.FC = () => {
         price = product.mrp || 0;
       }
 
-      const paid = Number(row.Paid || 0);
+      const paid = Number(row.paid || 0);
       const total = qty * price;
       const balance = total - paid;
       const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
 
       return {
-        date: row.Date,
+        date: row.date,
         member_id: user.id,
         product_id: product.id,
         qty,
@@ -384,10 +393,10 @@ const SalesTable: React.FC = () => {
         balance,
         payment_status,
       };
-    }).filter(Boolean); // Filter out any null rows that were skipped
+    }).filter(Boolean);
 
     if (processedData.length === 0) {
-      alert("No valid rows could be processed from the import. Please check user and product names.");
+      alert("No valid rows could be processed from the import. Please check user and product names match exactly.");
       return;
     }
 
@@ -403,7 +412,6 @@ const SalesTable: React.FC = () => {
   };
 
   // --- UI HANDLERS & MEMOS ---
-
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale(prev => {
       const updated = { ...prev, [field]: value };
@@ -491,6 +499,27 @@ const SalesTable: React.FC = () => {
       setSelectedRows(sortedSales.map(s => s.id));
     }
   };
+  
+  const displayDate = useMemo(() => {
+    if (!date?.from) {
+        return null;
+    }
+    const fromMonth = format(date.from, "MMM");
+    const fromYear = format(date.from, "yyyy");
+    if (date.to && (format(date.from, 'yyyyMM') === format(date.to, 'yyyyMM'))) {
+        return `${fromMonth.toUpperCase()} ${fromYear}`;
+    }
+    if(date.to) {
+        const toMonth = format(date.to, "MMM");
+        const toYear = format(date.to, "yyyy");
+        if (fromYear === toYear) {
+            return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+        }
+        return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+    }
+    return `${fromMonth.toUpperCase()} ${fromYear}`;
+  }, [date]);
+
 
   // --- RENDER LOGIC ---
 
@@ -577,8 +606,15 @@ const SalesTable: React.FC = () => {
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <CardTitle className="text-2xl">Sales Records</CardTitle>
-            <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
+            <div className="flex items-center gap-4">
+                <CardTitle className="text-2xl">Sales Records</CardTitle>
+                {displayDate && (
+                    <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
+                        <CalendarIcon className="h-4 w-4" />
+                        <span className="font-semibold">{displayDate}</span>
+                    </div>
+                )}
+            </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
             <div className="relative flex-grow">
@@ -590,10 +626,58 @@ const SalesTable: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !date && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date?.from ? (
+                    date.to ? (
+                      <>
+                        {format(date.from, "LLL dd, y")} -{" "}
+                        {format(date.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(date.from, "LLL dd, y")
+                    )
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 flex" align="start">
+                <div className="flex flex-col space-y-2 p-2 border-r">
+                   <Button variant="ghost" onClick={() => setDate({from: new Date(), to: new Date()})}>Today</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -1), to: new Date()})}>Yesterday</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -7), to: new Date()})}>Last 7 Days</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -30), to: new Date()})}>Last 30 Days</Button>
+                   {/* **NEW**: Added longer-range presets */}
+                   <Button variant="ghost" onClick={() => setDate({from: subMonths(new Date(), 2), to: new Date()})}>Last 2 Months</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: subMonths(new Date(), 6), to: new Date()})}>Last 6 Months</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: subYears(new Date(), 1), to: new Date()})}>Last 1 Year</Button>
+                </div>
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={date?.from}
+                  selected={date}
+                  onSelect={setDate}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+
             <div className="flex items-center gap-2">
               <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}><Undo className="h-4 w-4" /></Button>
               <ExcelImport onDataParsed={handleImportedData} />
-              <Button onClick={handleExportToExcel} variant="outline" size="sm"><Download className="h-4 w-4" /></Button>
+              <Button onClick={handleExportToExcel} variant="outline" size="sm"><Upload className="h-4 w-4" /></Button>
               <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}><Plus className="h-4 w-4" /></Button>
             </div>
           </div>

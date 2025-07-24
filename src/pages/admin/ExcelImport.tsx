@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
-import { Upload } from 'lucide-react'; // Using a more descriptive icon
+import { Download, Upload } from 'lucide-react'; // Using a more descriptive icon
 
 // Define the required internal keys and the possible header names for each
 const HEADER_ALIASES: { [key: string]: string[] } = {
@@ -94,7 +94,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
         accept=".xlsx, .xls, .csv"
       />
       <Button onClick={handleButtonClick} variant="outline" size="sm">
-        <Upload className="h-4 w-4" />
+        <Download className="h-4 w-4" />
       </Button>
     </>
   );
