@@ -9,6 +9,8 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "noImplicitAny": false,
     "noUnusedParameters": false,
     "skipLibCheck": true,

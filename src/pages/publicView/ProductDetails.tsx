@@ -123,7 +123,16 @@ console.log(product)
       {product.description && (
         <div>
           <h2 className="text-xl font-semibold mb-2">Description</h2>
-          <p className="text-muted-foreground">{product.description}</p>
+          <p className="text-muted-foreground">
+                        {product.description && (
+              <div
+                className="text-sm text-muted-foreground line-clamp-2"
+                dangerouslySetInnerHTML={{
+                  __html: product.description ?? ""
+                }}
+              />
+            )}
+          </p>
         </div>
       )}
 
