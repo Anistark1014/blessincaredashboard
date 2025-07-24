@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Upload, Trash2, Plus, Undo } from 'lucide-react';
+import { Search, Upload, Trash2, Plus, Undo, Download } from 'lucide-react';
 
 // --- INTERFACE DEFINITIONS ---
 
@@ -593,8 +593,8 @@ const SalesTable: React.FC = () => {
             <div className="flex items-center gap-2">
               <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}><Undo className="h-4 w-4" /></Button>
               <ExcelImport onDataParsed={handleImportedData} />
-              <Button onClick={handleExportToExcel} variant="outline" size="sm"><Upload className="h-4 w-4" /></Button>
-              <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}><Plus className="h-4 w-4 mr-2" /> Add</Button>
+              <Button onClick={handleExportToExcel} variant="outline" size="sm"><Download className="h-4 w-4" /></Button>
+              <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}><Plus className="h-4 w-4" /></Button>
             </div>
           </div>
         </CardHeader>
@@ -623,7 +623,7 @@ const SalesTable: React.FC = () => {
                   <TableHead onClick={() => requestSort('price')} className="text-right cursor-pointer">Price</TableHead>
                   <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer">Total</TableHead>
                   <TableHead onClick={() => requestSort('paid')} className="text-right cursor-pointer">Paid</TableHead>
-                  <TableHead onClick={() => requestSort('balance')} className="text-right cursor-pointer">Balance</TableHead>
+                  <TableHead onClick={() => requestSort('balance')} className="text-right cursor-pointer">Outstanding</TableHead>
                   <TableHead onClick={() => requestSort('payment_status')} className="cursor-pointer">Status</TableHead>
                   <TableHead className="text-right pr-4">
                     <Button variant="ghost" size="icon" onClick={deleteSelectedRows} disabled={selectedRows.length === 0}><Trash2 className="h-4 w-4" /></Button>
