@@ -5,20 +5,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import MonthYearPicker from './MonthYearPicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { addDays, format } from 'date-fns';
+import { DateRange } from 'react-day-picker';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Upload, Trash2, Plus, Undo } from 'lucide-react';
+import { Search, Upload, Trash2, Plus, Undo, Calendar as CalendarIcon } from 'lucide-react';
 
 // --- INTERFACE DEFINITIONS ---
 
 interface Product {
   id: string;
   name: string;
-  mrp: number;
+  mrp: number | null;
   sku_id?: string;
+  price_ranges: { min: number; max: number; price: number }[] | null;
 }
 
 interface User {
@@ -49,6 +53,7 @@ interface UndoOperation {
   data: {
     deletedRecords?: Sale[];
     addedRecord?: Sale;
+    importedRecords?: Sale[];
     recordId?: string;
     field?: keyof Sale;
     oldValue?: any;
@@ -105,10 +110,13 @@ const SalesTable: React.FC = () => {
   const [addingNew, setAddingNew] = useState(false);
   const [newSale, setNewSale] = useState<Partial<Sale>>({});
   
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  // **NEW**: State for the date range picker
+  const [date, setDate] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: addDays(new Date(), 0),
+  });
   
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -122,9 +130,14 @@ const SalesTable: React.FC = () => {
 
   // --- DATA FETCHING ---
 
+  // **UPDATED**: Fetches sales based on the selected date range.
   const fetchSales = async () => {
-    const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
-    const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999).toISOString();
+    if (!date?.from || !date?.to) {
+      return; // Don't fetch if the date range isn't fully selected
+    }
+
+    const startDate = date.from.toISOString();
+    const endDate = date.to.toISOString();
 
     const { data, error } = await supabase
       .from('sales')
@@ -144,7 +157,7 @@ const SalesTable: React.FC = () => {
   const fetchDropdownData = async () => {
     try {
       const usersPromise = supabase.from('users').select('id, name');
-      const productsPromise = supabase.from('products').select('id, name, mrp');
+      const productsPromise = supabase.from('products').select('id, name, mrp, price_ranges');
 
       const [usersResult, productsResult] = await Promise.all([usersPromise, productsPromise]);
 
@@ -166,9 +179,10 @@ const SalesTable: React.FC = () => {
     }
   };
   
+  // **UPDATED**: This effect now triggers a refetch whenever the date range changes.
   useEffect(() => {
     fetchSales();
-  }, [selectedMonth, selectedYear]);
+  }, [date]);
 
   useEffect(() => {
     fetchDropdownData();
@@ -183,7 +197,7 @@ const SalesTable: React.FC = () => {
   }, []);
 
   // --- CRUD & FEATURE FUNCTIONS ---
-
+  // ... (All functions like handleAddNew, handleEditChange, etc. remain the same)
   const addToUndoStack = (operation: UndoOperation) => {
     if (isUndoing) return;
     setUndoStack(prev => [...prev, operation].slice(-10));
@@ -228,18 +242,30 @@ const SalesTable: React.FC = () => {
     let updatePayload: { [key: string]: any } = { [field]: value };
     let updatedRecordForUI = { ...originalSale, [field]: value };
 
-    if (['qty', 'price', 'paid'].includes(field as string)) {
-        const qty = Number(field === 'qty' ? value : updatedRecordForUI.qty);
-        const price = Number(field === 'price' ? value : updatedRecordForUI.price);
-        const paid = Number(field === 'paid' ? value : updatedRecordForUI.paid);
-        const total = qty * price;
-        const balance = total - paid;
-        const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
-        const calculatedFields = { total, balance, payment_status };
-        
-        updatePayload = { ...updatePayload, ...calculatedFields };
-        updatedRecordForUI = { ...updatedRecordForUI, ...calculatedFields };
+    if (field === 'qty') {
+        const product = originalSale.products;
+        const newQty = Number(value);
+
+        if (product && product.price_ranges && product.price_ranges.length > 0) {
+            const priceRange = product.price_ranges.find(range => newQty >= range.min && newQty <= range.max);
+            const newPrice = priceRange ? priceRange.price : product.mrp || 0;
+            
+            updatePayload.price = newPrice;
+            updatedRecordForUI.price = newPrice;
+        }
     }
+
+    const qty = Number(updatedRecordForUI.qty);
+    const price = Number(updatedRecordForUI.price);
+    const paid = Number(updatedRecordForUI.paid);
+    const total = qty * price;
+    const balance = total - paid;
+    const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
+    
+    const calculatedFields = { total, balance, payment_status };
+    
+    updatePayload = { ...updatePayload, ...calculatedFields };
+    updatedRecordForUI = { ...updatedRecordForUI, ...calculatedFields };
     
     addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue: originalSale[field], newValue: value, record: originalSale } });
     
@@ -292,6 +318,12 @@ const SalesTable: React.FC = () => {
             await supabase.from('sales').update(originalRecord).eq('id', originalRecord.id);
           }
           break;
+        case 'import':
+          if (lastOperation.data.importedRecords) {
+            const idsToDelete = lastOperation.data.importedRecords.map(rec => rec.id);
+            await supabase.from('sales').delete().in('id', idsToDelete);
+          }
+          break;
       }
       setUndoStack(prev => prev.slice(0, -1));
       fetchSales();
@@ -321,21 +353,77 @@ const SalesTable: React.FC = () => {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sales");
-    XLSX.writeFile(workbook, `Sales_${selectedYear}_${selectedMonth + 1}.xlsx`);
+    XLSX.writeFile(workbook, `Sales_Report.xlsx`);
   };
   
   const handleImportedData = async (importedRows: any[]) => {
-    alert("Import functionality needs to be configured based on your Excel file format.");
+    if (!importedRows || importedRows.length === 0) {
+      alert("No data found in the imported file.");
+      return;
+    }
+
+    const processedData = importedRows.map(row => {
+      const user = users.find(u => u.name === row.member);
+      const product = products.find(p => p.name === row.product);
+      
+      if (!user || !product) {
+        console.warn(`Skipping row due to missing user or product:`, row);
+        return null;
+      }
+
+      const qty = Number(row.qty || 0);
+      let price = 0;
+      if (product.price_ranges && product.price_ranges.length > 0) {
+        const priceRange = product.price_ranges.find(r => qty >= r.min && qty <= r.max);
+        price = priceRange ? priceRange.price : product.mrp || 0;
+      } else {
+        price = product.mrp || 0;
+      }
+
+      const paid = Number(row.paid || 0);
+      const total = qty * price;
+      const balance = total - paid;
+      const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
+
+      return {
+        date: row.date,
+        member_id: user.id,
+        product_id: product.id,
+        qty,
+        price,
+        total,
+        paid,
+        balance,
+        payment_status,
+      };
+    }).filter(Boolean);
+
+    if (processedData.length === 0) {
+      alert("No valid rows could be processed from the import. Please check user and product names match exactly.");
+      return;
+    }
+
+    const { data: newRecords, error } = await supabase.from('sales').insert(processedData).select();
+
+    if (error) {
+      alert(`Import failed: ${error.message}`);
+    } else if (newRecords) {
+      alert(`${newRecords.length} rows imported successfully!`);
+      addToUndoStack({ type: 'import', timestamp: Date.now(), data: { importedRecords: newRecords as Sale[] } });
+      fetchSales();
+    }
   };
 
   // --- UI HANDLERS & MEMOS ---
-
+  // ... (All other handlers remain the same)
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale(prev => {
       const updated = { ...prev, [field]: value };
       if (field === 'product_id' && value) {
         const product = products.find(p => p.id === value);
-        if (product) updated.price = product.mrp;
+        if (product) {
+          updated.price = product.mrp || 0;
+        }
       }
       return updated;
     });
@@ -343,13 +431,26 @@ const SalesTable: React.FC = () => {
 
   useEffect(() => {
     const qty = newSale.qty || 0;
-    const price = newSale.price || 0;
+    let price = newSale.price || 0;
+
+    if (newSale.product_id && qty > 0) {
+        const product = products.find(p => p.id === newSale.product_id);
+        if (product && product.price_ranges && product.price_ranges.length > 0) {
+            const priceRange = product.price_ranges.find(range => qty >= range.min && qty <= range.max);
+            price = priceRange ? priceRange.price : product.mrp || 0;
+        } else if (product) {
+            price = product.mrp || 0;
+        }
+    }
+
     const paid = newSale.paid || 0;
     const total = qty * price;
     const balance = total - paid;
     const payment_status = total > 0 && paid >= total ? 'Fully Paid' : paid > 0 ? 'Partially Paid' : 'Pending';
-    setNewSale(prev => ({ ...prev, total, balance, payment_status }));
-  }, [newSale.qty, newSale.price, newSale.paid]);
+    
+    setNewSale(prev => ({ ...prev, price, total, balance, payment_status }));
+  }, [newSale.qty, newSale.product_id, newSale.paid, products]);
+
 
   const sortedSales = useMemo(() => {
     let sortableItems = sales.filter(s => {
@@ -390,7 +491,7 @@ const SalesTable: React.FC = () => {
     }
     setSortConfig({ key, direction });
   };
-  
+
   const handleRowSelect = (id: string) => {
     setSelectedRows(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
@@ -411,7 +512,6 @@ const SalesTable: React.FC = () => {
     const clickHandler = isCalculated ? undefined : () => setEditingCell({ rowId: sale.id, field });
 
     if (isEditing) {
-      // **NEW**: Handle payment_status with a dropdown
       if (field === 'payment_status') {
         return (
           <TableCell className="p-1">
@@ -460,7 +560,6 @@ const SalesTable: React.FC = () => {
       );
     }
     
-    // Default display view
     const displayValue = field === 'member_id' 
       ? sale.users?.name 
       : field === 'product_id' 
@@ -469,7 +568,6 @@ const SalesTable: React.FC = () => {
     
     const isCurrency = ['price', 'total', 'paid', 'balance'].includes(field);
     
-    // **NEW**: Special styling for payment status text
     if (field === 'payment_status') {
       return (
         <TableCell className={cn("cursor-pointer font-semibold", statusColors[sale.payment_status])} onClick={clickHandler}>
@@ -492,7 +590,7 @@ const SalesTable: React.FC = () => {
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="text-2xl">Sales Records</CardTitle>
-            <MonthYearPicker onSelect={(month, year) => { setSelectedMonth(month); setSelectedYear(year); }} />
+            {/* **REMOVED**: Old MonthYearPicker */}
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
             <div className="relative flex-grow">
@@ -504,6 +602,51 @@ const SalesTable: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            
+            {/* **NEW**: Date Range Picker component */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !date && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date?.from ? (
+                    date.to ? (
+                      <>
+                        {format(date.from, "LLL dd, y")} -{" "}
+                        {format(date.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(date.from, "LLL dd, y")
+                    )
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 flex" align="start">
+                <div className="flex flex-col space-y-2 p-2 border-r">
+                   <Button variant="ghost" onClick={() => setDate({from: new Date(), to: new Date()})}>Today</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -1), to: new Date()})}>Yesterday</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -7), to: new Date()})}>Last 7 Days</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -30), to: new Date()})}>Last 30 Days</Button>
+                </div>
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={date?.from}
+                  selected={date}
+                  onSelect={setDate}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+
             <div className="flex items-center gap-2">
               <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}><Undo className="h-4 w-4" /></Button>
               <ExcelImport onDataParsed={handleImportedData} />
@@ -518,7 +661,6 @@ const SalesTable: React.FC = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px] px-4">
-                    {/* **NEW**: Styled select-all button */}
                     <div
                       onClick={handleSelectAll}
                       className={cn(
@@ -569,7 +711,6 @@ const SalesTable: React.FC = () => {
                 {sortedSales.length > 0 ? sortedSales.map((sale) => (
                   <TableRow key={sale.id} data-state={selectedRows.includes(sale.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
-                      {/* **NEW**: Styled row selection button */}
                       <div
                         onClick={() => handleRowSelect(sale.id)}
                         className={cn(
