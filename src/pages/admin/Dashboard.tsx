@@ -126,16 +126,6 @@ const AdminDashboard = () => {
     p.availability === 'low-stock' || p.availability === 'out-of-stock'
   );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'status-pending';
-      case 'approved': return 'status-approved';
-      case 'delivered': return 'status-success';
-      case 'shipped': return 'bg-blush text-blush-foreground';
-      case 'in-production': return 'bg-lavender text-lavender-foreground';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
 
   console.log("Requests", requests);
   console.log("Resellers", resellers);

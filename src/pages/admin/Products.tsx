@@ -545,10 +545,27 @@ const navigate = useNavigate();
       return;
     }
 
+    // Ensure all nullable fields are null, not undefined
+    const normalizedFormData = {
+      ...formData,
+      description: formData.description ?? null,
+      availability: formData.availability ?? null,
+      created_at: formData.created_at ?? null,
+      image_url: formData.image_url ?? null,
+      category: formData.category ?? null,
+      info_link: formData.info_link ?? null,
+      sku_id: formData.sku_id ?? null,
+      gross_profit: formData.gross_profit ?? null,
+      cost_price: formData.cost_price ?? null,
+      mrp: formData.mrp ?? null,
+      price_ranges: formData.price_ranges ?? [],
+      media: formData.media ?? null,
+    };
+
     try {
       const { error } = await supabase
         .from('products')
-        .insert([formData]);
+        .insert([normalizedFormData]);
 
       if (error) throw error;
 

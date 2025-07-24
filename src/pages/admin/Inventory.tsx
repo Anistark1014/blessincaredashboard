@@ -336,6 +336,7 @@ const Inventory: React.FC = () => {
       const { error: updateError } = await supabase
         .from('products')
         .update({ 
+          // @ts-expect-error: inventory field exists in the database but not in the generated types
           inventory: selectedProduct.inventory + parseInt(quantity) 
         })
         .eq('id', selectedProductId);

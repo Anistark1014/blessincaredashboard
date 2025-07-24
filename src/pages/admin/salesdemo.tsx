@@ -17,7 +17,7 @@
   // }, []);
 
 
-    // FIX: Join 'products' to get product details in one request
+  //   FIX: Join 'products' to get product details in one request
 
   
   // const handleImportedData = async (importedRows: Partial<Sale>[]) => {
