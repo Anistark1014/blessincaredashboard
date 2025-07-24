@@ -13,6 +13,8 @@ import { Plus, Search, Edit, Trash2, Package} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
   import { useNavigate } from "react-router-dom";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 
 
 type Product = Tables<'products'>;
@@ -115,13 +117,14 @@ const ProductForm = ({
 
       <div>
         <Label htmlFor="description">Description</Label>
-        <Textarea
+        <ReactQuill
           id="description"
+          theme="snow"
           value={formData.description ?? ""}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, description: e.target.value }))
+          onChange={(value:string) =>
+            setFormData((prev) => ({ ...prev, description: value }))
           }
-          rows={3}
+          className=""
         />
       </div>
 
@@ -795,13 +798,14 @@ const navigate = useNavigate();
                   <Package className="w-10 h-10 text-muted-foreground" />
                 </div>
               )}
-
-              {product.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {product.description}
-                </p>
-              )}
-
+            {product.description && (
+              <div
+                className="text-sm text-muted-foreground line-clamp-2"
+                dangerouslySetInnerHTML={{
+                  __html: product.description ?? ""
+                }}
+              />
+            )}
               <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">Price Ranges:</p>
                 {product.price_ranges?.length ? (
