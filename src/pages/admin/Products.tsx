@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Search, Edit, Trash2, Package} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+  import { useNavigate } from "react-router-dom";
+
 
 type Product = Tables<'products'>;
 
@@ -436,6 +438,8 @@ const ProductForm = ({
 };
 
 const AdminProducts = () => {
+
+const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -760,7 +764,7 @@ const AdminProducts = () => {
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProducts.map((product) => (
-          <Card key={product.id} className="healthcare-card">
+          <Card onClick={() => navigate(`/admin/product/${product.id}`)} key={product.id} className="healthcare-card">
             <CardHeader className="pb-3">
               <div className="flex items-start gap-2 justify-between">
                 <div className="flex-1">
@@ -817,13 +821,15 @@ const AdminProducts = () => {
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={() => openEditModal(product)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // 👈 Prevent card click
+                    openEditModal(product)}}
                 >
                   <Edit className="w-4 h-4 mr-2" />
                   Edit
                 </Button>
 
-                {product.info_link && (
+                {/* {product.info_link && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -832,13 +838,15 @@ const AdminProducts = () => {
                   >
                     View Info
                   </Button>
-                )}
+                )} */}
 
                 <Button 
                   variant="outline" 
                   size="sm" 
                   className="text-destructive hover:text-destructive"
-                  onClick={() => deleteProduct(product.id)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // 👈 Prevent card click
+                    deleteProduct(product.id)}}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>

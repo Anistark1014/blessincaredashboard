@@ -16,6 +16,7 @@ import AdminSales from "./pages/admin/Sales";
 import AdminExpenses from "./pages/admin/Expenses";
 import ResellerRequests from "./pages/reseller/Requests";
 import AdminInventory from "./pages/admin/Inventory";
+import ProductDetails from "./pages/ProductDetails";
 
 const queryClient = new QueryClient();
 
@@ -136,6 +137,18 @@ const App = () => (
                 <AdminInventory />
               </ProtectedRoute>
             } />
+
+            <Route path="/reseller/product/:id" element={
+                <ProtectedRoute allowedRole="reseller">
+                  <ProductDetails />
+                </ProtectedRoute>
+              } />
+            <Route path="/admin/product/:id" element={
+                <ProtectedRoute allowedRole="admin">
+                  <ProductDetails />
+                </ProtectedRoute>
+              } />
+
             
             {/* Catch all */}
             <Route path="*" element={<NotFound />} />
