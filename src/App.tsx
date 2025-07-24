@@ -16,7 +16,10 @@ import AdminSales from "./pages/admin/Sales";
 import AdminExpenses from "./pages/admin/Expenses";
 import ResellerRequests from "./pages/reseller/Requests";
 import AdminInventory from "./pages/admin/Inventory";
-import ProductDetails from "./pages/ProductDetails";
+import ProductDetails from "./pages/publicView/ProductDetails";
+import ViewProducts from "./pages/publicView/ViewProducts";
+import PublicLayout from "./components/PublicLayout"; // <-- import this if not already
+
 
 const queryClient = new QueryClient();
 
@@ -31,7 +34,7 @@ const DashboardRedirect: React.FC = () => {
   }
   
   if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
   }
   
   // Redirect based on user role
@@ -56,7 +59,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRole?: 'resel
   }
   
   if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
   }
   
   if (allowedRole && user?.role !== allowedRole) {
@@ -72,88 +75,82 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/auth" element={<Auth />} />
-            
-            {/* Protected Routes - Auto redirect based on role */}
-            <Route path="/" element={<DashboardRedirect />} />
-            <Route path="/dashboard" element={<DashboardRedirect />} />
-            
-            {/* Reseller Routes */}
-            <Route path="/reseller" element={
-              <ProtectedRoute allowedRole="reseller">
-                <ResellerDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/reseller/catalog" element={
-              <ProtectedRoute allowedRole="reseller">
-                <ProductCatalog />
-              </ProtectedRoute>
-            } />
-            <Route path="/reseller/requests" element={
-              <ProtectedRoute allowedRole="reseller">
-                <ResellerRequests/>
-              </ProtectedRoute>
-            } />
-            <Route path="/reseller/payments" element={
-              <ProtectedRoute allowedRole="reseller">
-                <div className="healthcare-card p-6">
-                  <h1 className="text-2xl font-bold text-foreground mb-4">Payments</h1>
-                  <p className="text-muted-foreground">Manage your payments here.</p>
-                </div>
-              </ProtectedRoute>
-            } />
-            
-            {/* Admin Routes */}
-            <Route path="/admin" element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/products" element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminProducts/>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/resellers" element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminResellers/>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/sales" element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminSales/>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/expenses" element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminExpenses/>
-              </ProtectedRoute>
-            } />
-             <Route path="/admin/inventory" element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminInventory />
-              </ProtectedRoute>
-            } />
 
-            <Route path="/reseller/product/:id" element={
-                <ProtectedRoute allowedRole="reseller">
-                  <ProductDetails />
-                </ProtectedRoute>
-              } />
-            <Route path="/admin/product/:id" element={
-                <ProtectedRoute allowedRole="admin">
-                  <ProductDetails />
-                </ProtectedRoute>
-              } />
+      <BrowserRouter>
+        <Routes>
+          {/* Public Routes inside PublicLayout */}
+          <Route element={<PublicLayout />}>
+            <Route path="/login" element={<Auth />} />
+            <Route path="/catalogue" element={<ViewProducts />} />
+            <Route path="/product/:id" element={<ProductDetails />} />
+          {/* <Route path="/" element={<Home />} /> */}
+          </Route>
 
-            
-            {/* Catch all */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+          {/* Protected Routes - Auto redirect based on role */}
+          <Route path="/reseller" element={<DashboardRedirect />} />
+
+          {/* Reseller Routes */}
+          <Route path="/reseller" element={
+            <ProtectedRoute allowedRole="reseller">
+              <ResellerDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/reseller/catalog" element={
+            <ProtectedRoute allowedRole="reseller">
+              <ProductCatalog />
+            </ProtectedRoute>
+          } />
+          <Route path="/reseller/requests" element={
+            <ProtectedRoute allowedRole="reseller">
+              <ResellerRequests />
+            </ProtectedRoute>
+          } />
+          <Route path="/reseller/payments" element={
+            <ProtectedRoute allowedRole="reseller">
+              <div className="healthcare-card p-6">
+                <h1 className="text-2xl font-bold text-foreground mb-4">Payments</h1>
+                <p className="text-muted-foreground">Manage your payments here.</p>
+              </div>
+            </ProtectedRoute>
+          } />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/products" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminProducts />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/resellers" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminResellers />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/sales" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminSales />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/expenses" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminExpenses />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/inventory" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminInventory />
+            </ProtectedRoute>
+          } />
+
+          {/* Catch all */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>

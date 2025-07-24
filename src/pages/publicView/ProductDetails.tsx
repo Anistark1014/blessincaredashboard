@@ -40,6 +40,10 @@ const ProductDetails = () => {
 
   useEffect(() => {
     const fetchProduct = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const { data, error } = await supabase
         .from("products")

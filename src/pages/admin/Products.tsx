@@ -45,7 +45,6 @@ interface ProductFormData {
   media?: MediaItem[]|null; // ✅ Integrated media field
 }
 
-
 // Move ProductForm outside as a separate component
 const ProductForm = ({ 
   formData, 
@@ -764,7 +763,7 @@ const navigate = useNavigate();
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProducts.map((product) => (
-          <Card onClick={() => navigate(`/admin/product/${product.id}`)} key={product.id} className="healthcare-card">
+          <Card onClick={() => navigate(`/product/${product.id}`)} key={product.id} className="healthcare-card">
             <CardHeader className="pb-3">
               <div className="flex items-start gap-2 justify-between">
                 <div className="flex-1">

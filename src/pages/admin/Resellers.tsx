@@ -413,9 +413,23 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
 
   const handleToggleFlag = async (resellerId: string, currentStatus: boolean) => {
     try {
+      // Find the reseller object to get required fields
+      const reseller = resellers.find(r => r.id === resellerId);
+      if (!reseller) throw new Error("Reseller not found");
+
       const { error } = await supabase
         .from('users')
-        .update({ flagged_status: !currentStatus })
+        .update({
+          flagged_status: currentStatus,
+          region: reseller.region,
+          name: reseller.name,
+          contact_info: reseller.contact_info,
+          created_at: reseller.created_at,
+          email: reseller.email,
+          exclusive_features: reseller.exclusive_features,
+          is_active: reseller.is_active,
+          role: reseller.role
+        })
         .eq('id', resellerId);
 
       if (error) throw error;
@@ -440,7 +454,17 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ exclusive_features: exclusiveFeatures })
+        .update({
+          exclusive_features: exclusiveFeatures,
+          region: selectedReseller.region,
+          name: selectedReseller.name,
+          contact_info: selectedReseller.contact_info,
+          created_at: selectedReseller.created_at,
+          email: selectedReseller.email,
+          is_active: selectedReseller.is_active,
+          flagged_status: selectedReseller.flagged_status,
+          role: selectedReseller.role
+        })
         .eq('id', selectedReseller.id);
 
       if (error) throw error;

@@ -34,7 +34,7 @@ const Auth = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
