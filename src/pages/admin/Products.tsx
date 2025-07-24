@@ -7,14 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Edit, Trash2, Package} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-  import { useNavigate } from "react-router-dom";
-const ReactQuill = require("react-quill");
+import { useNavigate } from "react-router-dom";
+import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+
+// Create a properly typed wrapper for ReactQuill
+const QuillEditor = ReactQuill as any;
 
 
 type Product = Tables<'products'>;
@@ -113,21 +115,17 @@ const ProductForm = ({
           }
           required
         />
-      </div>
-
       <div>
-        <Label htmlFor="description">Description</Label>
-        <ReactQuill
-          id="description"
+        <QuillEditor
           theme="snow"
           value={formData.description ?? ""}
           onChange={(value:string) =>
             setFormData((prev) => ({ ...prev, description: value }))
           }
-          className=""
         />
       </div>
-
+          
+      </div>
       <div className='flex justify-around items-center gap-4'>
 
         <div>

@@ -149,7 +149,26 @@ const SalesTable: React.FC = () => {
       console.error('Error fetching sales:', error);
       alert(`Error fetching sales: ${error.message}`);
     } else {
-      setSales((data as Sale[]) || []);
+      setSales(
+        (Array.isArray(data)
+          ? data
+              .filter((row: any) => row && typeof row === 'object' && row.payment_status !== undefined)
+              .map((row: any) => ({
+                id: row.id,
+                date: row.date,
+                qty: row.qty,
+                price: row.price,
+                total: row.total,
+                paid: row.paid,
+                balance: row.balance,
+                payment_status: row.payment_status ?? 'Pending',
+                member_id: row.member_id,
+                product_id: row.product_id,
+                users: row.users && typeof row.users === 'object' ? row.users : null,
+                products: row.products && typeof row.products === 'object' ? row.products : null,
+              }))
+          : [])
+      );
     }
   };
 
@@ -208,15 +227,16 @@ const SalesTable: React.FC = () => {
     }
 
     const recordToInsert = {
-        date: newSale.date,
-        member_id: newSale.member_id,
-        product_id: newSale.product_id,
-        qty: newSale.qty,
-        price: newSale.price,
-        total: newSale.total,
-        paid: newSale.paid ?? 0,
-        balance: newSale.balance,
-        payment_status: newSale.payment_status,
+        date: String(newSale.date),
+        member_id: String(newSale.member_id),
+        product_id: String(newSale.product_id),
+        qty: Number(newSale.qty),
+        price: Number(newSale.price),
+        total: Number(newSale.total),
+        paid: Number(newSale.paid ?? 0),
+        balance: Number(newSale.balance ?? 0),
+        balance: Number(newSale.balance),
+        payment_status: (newSale.payment_status ?? 'Pending') as string | null,
     };
     
     const { data, error } = await supabase.from('sales').insert([recordToInsert]).select('*, users(*), products(*)');
@@ -224,7 +244,23 @@ const SalesTable: React.FC = () => {
     if (error) {
       alert('Insert failed: ' + error.message);
     } else if (data) {
-      const addedRecord = data[0] as Sale;
+      const rawRecord = data[0];
+      const addedRecord: Sale = {
+        id: rawRecord.id,
+        date: rawRecord.date,
+        qty: rawRecord.qty,
+        price: rawRecord.price,
+        total: rawRecord.total,
+        paid: rawRecord.paid,
+        balance: rawRecord.balance,
+        payment_status: rawRecord.payment_status ?? 'Pending',
+        member_id: rawRecord.member_id,
+        product_id: rawRecord.product_id,
+        users: (rawRecord.users && typeof rawRecord.users === 'object') ? rawRecord.users : null,
+        products: (rawRecord.products && typeof rawRecord.products === 'object')
+          ? { ...rawRecord.products, sku_id: rawRecord.products.sku_id ?? undefined }
+          : null,
+      };
       addToUndoStack({ type: 'add', timestamp: Date.now(), data: { addedRecord } });
       setSales([addedRecord, ...sales]);
       setNewSale({});
@@ -261,7 +297,13 @@ const SalesTable: React.FC = () => {
     
     const calculatedFields = { total, balance, payment_status };
     
-    updatePayload = { ...updatePayload, ...calculatedFields };
+    updatePayload = { 
+      ...updatePayload, 
+      ...calculatedFields,
+      product_id: updatedRecordForUI.product_id,
+      member_id: updatedRecordForUI.member_id,
+      payment_status: calculatedFields.payment_status
+    };
     updatedRecordForUI = { ...updatedRecordForUI, ...calculatedFields };
     
     addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue: originalSale[field], newValue: value, record: originalSale } });
@@ -269,7 +311,19 @@ const SalesTable: React.FC = () => {
     setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
     setEditingCell(null);
 
-    const { error } = await supabase.from('sales').update(updatePayload).eq('id', id);
+    const { error } = await supabase.from('sales').update(updatePayload as {
+      id?: string;
+      date?: string;
+      qty?: number;
+      price?: number;
+      total?: number;
+      paid?: number;
+      balance?: number;
+      balance?: number;
+      product_id: string;
+      member_id: string;
+      payment_status: string | null;
+    }).eq('id', id);
     if (error) {
       console.error('Update failed:', error.message);
       setSales(sales);
