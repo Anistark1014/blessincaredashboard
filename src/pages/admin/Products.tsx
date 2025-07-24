@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Trash2, Package} from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useNavigate } from "react-router-dom";
@@ -46,17 +46,17 @@ interface ProductFormData {
   cost_price: number | null; // ✅ Add this line
   mrp: number | null; // ✅ Add this line
   price_ranges?: PriceRange[];
-  media?: MediaItem[]|null; // ✅ Integrated media field
+  media?: MediaItem[] | null; // ✅ Integrated media field
 }
 
 // Move ProductForm outside as a separate component
-const ProductForm = ({ 
-  formData, 
-  setFormData, 
-  onSubmit, 
-  isEdit = false, 
+const ProductForm = ({
+  formData,
+  setFormData,
+  onSubmit,
+  isEdit = false,
   onCancel,
-  uploadImageToSupabase 
+  uploadImageToSupabase
 }: {
   formData: ProductFormData;
   setFormData: React.Dispatch<React.SetStateAction<ProductFormData>>;
@@ -104,31 +104,31 @@ const ProductForm = ({
   return (
     <div className="h-[85vh] overflow-auto px-4 py-6">
 
-    <form onSubmit={onSubmit} className="space-y-4 min-h-full">
-      <div>
-        <Label htmlFor="name">Name *</Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, name: e.target.value }))
-          }
-          required
-        />
-      <div>
-        <QuillEditor
-          theme="snow"
-          value={formData.description ?? ""}
-          onChange={(value:string) =>
-            setFormData((prev) => ({ ...prev, description: value }))
-          }
-        />
-      </div>
-          
-      </div>
-      <div className='flex justify-around items-center gap-4'>
-
+      <form onSubmit={onSubmit} className="space-y-4 min-h-full">
         <div>
+          <Label htmlFor="name">Name *</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, name: e.target.value }))
+            }
+            required
+          />
+          <div>
+            <QuillEditor
+              theme="snow"
+              value={formData.description ?? ""}
+              onChange={(value: string) =>
+                setFormData((prev) => ({ ...prev, description: value }))
+              }
+            />
+          </div>
+
+        </div>
+        <div className='flex justify-around items-center gap-4'>
+
+          <div>
             <Label htmlFor="cost_price">Cost Price (₹)</Label>
             <Input
               id="cost_price"
@@ -142,8 +142,8 @@ const ProductForm = ({
                 }))
               }
             />
-        </div>
-        <div>
+          </div>
+          <div>
             <Label htmlFor="mrp">MRP (₹)</Label>
             <Input
               id="mrp"
@@ -157,8 +157,8 @@ const ProductForm = ({
                 }))
               }
             />
-        </div>
-        <div>
+          </div>
+          <div>
             <Label htmlFor="gross_profit">Gross Profit (₹)</Label>
             <Input
               id="gross_profit"
@@ -172,274 +172,274 @@ const ProductForm = ({
                 }))
               }
             />
+          </div>
         </div>
-      </div>
-          <div className='flex justify-around items-center gap-2 '>
-            <div className={cn('',isEdit?"hidden":"flex-1")}>
-              <Label className='mb-2' htmlFor="sku_id">SKU ID <span className='text-xs ml-2'>(name-size-qty-type1-type2)</span></Label>
-              <Input
-                id="sku_id"
-                type="text"
-                value={formData.sku_id ?? ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    sku_id:(e.target.value),
-                  }))
-                }
-              />
-            </div>
-            <div className='flex-1'>
-              <Label className='mb-2' htmlFor="info_link">Add link <span className='text-xs ml-2'>(Add Product Link)</span></Label>
-              <Input
-                id="info_link"
-                type="text"
-                value={formData.info_link ?? ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    info_link:(e.target.value),
-                  }))
-                }
-              />
-            </div>
-          </div>
-      
-      <div className='flex justify-around items-center gap-4'>
-        <span className={cn('flex flex-col gap-4 ',formData.image_url?'':'w-full')}>
-          <div>
-            <Label htmlFor="availability">Availability</Label>
-            <Select
-              value={formData.availability ?? ""}
-              onValueChange={(value) =>
-                setFormData((prev) => ({ ...prev, availability: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="In Stock">In Stock</SelectItem>
-                <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                <SelectItem value="Low Stock">Low Stock</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {/* Category  */}
-          <div>
-            <Label htmlFor="category">Category</Label>
-            <Select
-              value={formData.category ?? ""}
-              onValueChange={(value) =>
-                setFormData((prev) => ({ ...prev, category: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Sanitary Pads">Sanitary Pads</SelectItem>
-                <SelectItem value="Maternity Pads">Maternity Pads</SelectItem>
-                <SelectItem value="Incinerator Machine">Incinerator Machine</SelectItem>
-                <SelectItem value="Wet Wipes">Wet Wipes</SelectItem>
-                <SelectItem value="Baby Diapers">Baby Diapers</SelectItem>
-                <SelectItem value="Adult Diapers">Adult Diapers</SelectItem>
-                <SelectItem value="Menstrual Cups">Menstrual Cups</SelectItem>
-                <SelectItem value="Period Underwear">Period Underwear</SelectItem>
-                <SelectItem value="Tampons">Tampons</SelectItem>
-                <SelectItem value="Vending Machine">Vending Machine</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="image">Product Image</Label>
+        <div className='flex justify-around items-center gap-2 '>
+          <div className={cn('', isEdit ? "hidden" : "flex-1")}>
+            <Label className='mb-2' htmlFor="sku_id">SKU ID <span className='text-xs ml-2'>(name-size-qty-type1-type2)</span></Label>
             <Input
-              id="image"
-              type="file"
-              accept="image/*"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  // Show preview immediately
-                  const previewUrl = URL.createObjectURL(file);
-                  setFormData((prev) => ({ ...prev, image_url: previewUrl }));
-
-                  // Upload to Supabase
-                  const url = await uploadImageToSupabase(file);
-                  if (url) {
-                    setFormData((prev) => ({ ...prev, image_url: url }));
-                  }
-                }
-              }}
+              id="sku_id"
+              type="text"
+              value={formData.sku_id ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  sku_id: (e.target.value),
+                }))
+              }
             />
           </div>
-        </span>
-        <span>
-          <div className="mt-3">
-            {formData.image_url ? (
-              <img
-                src={formData.image_url}
-                alt="Image Preview"
-                className="w-40 h-40 object-cover rounded border"
-              />
-            ) : ("")}
+          <div className='flex-1'>
+            <Label className='mb-2' htmlFor="info_link">Add link <span className='text-xs ml-2'>(Add Product Link)</span></Label>
+            <Input
+              id="info_link"
+              type="text"
+              value={formData.info_link ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  info_link: (e.target.value),
+                }))
+              }
+            />
           </div>
-        </span>
-      </div>
-      
-      <div>
-        <Label>Price Ranges *</Label>
-        <div className="space-y-2">
-          {(formData.price_ranges ?? []).map((range, index) => (
-            <div key={index} className="grid grid-cols-4 gap-2 items-end">
-              <div>
-                <Label>Min Qty</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={range.min}
-                  onChange={(e) =>
-                    handlePriceRangeChange(
-                      index,
-                      "min",
-                      parseInt(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-              <div>
-                <Label>Max Qty</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={range.max}
-                  onChange={(e) =>
-                    handlePriceRangeChange(
-                      index,
-                      "max",
-                      parseInt(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-              <div>
-                <Label>Price (₹)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={range.price}
-                  onChange={(e) =>
-                    handlePriceRangeChange(
-                      index,
-                      "price",
-                      parseFloat(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => removePriceRange(index)}
-              >
-                Remove
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={addPriceRange}
-            className="mt-2"
-          >
-            + Add Price Range
-          </Button>
         </div>
-      </div>
 
-      <div>
-        <div className='flex justify-around items-center mb-2'>
-        <Label className='flex-1'>Media (Images / YouTube Videos)</Label>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setFormData((prev) => ({
-                ...prev,
-                media: [...(prev.media ?? []), { type: 'image', url: '' }],
-              }))
-            }
-          >
-            + Add Media
-          </Button>
-        </div>
-        <div className="space-y-4 mt-2">
-          {(formData.media ?? []).map((item, index) => (
-            <div key={index} className="flex items-center gap-2">
-            <Label>Media Type</Label>
+        <div className='flex justify-around items-center gap-4'>
+          <span className={cn('flex flex-col gap-4 ', formData.image_url ? '' : 'w-full')}>
+            <div>
+              <Label htmlFor="availability">Availability</Label>
               <Select
-                value={item.type}
-                onValueChange={(value) => {
-                  const updated = [...(formData.media ?? [])];
-                  updated[index].type = value as 'image' | 'video';
-                  setFormData((prev) => ({ ...prev, media: updated }));
-                }}
+                value={formData.availability ?? ""}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, availability: value }))
+                }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select media type" />
+                  <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="video">Video</SelectItem>
+                  <SelectItem value="In Stock">In Stock</SelectItem>
+                  <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                  <SelectItem value="Low Stock">Low Stock</SelectItem>
                 </SelectContent>
               </Select>
-
+            </div>
+            {/* Category  */}
+            <div>
+              <Label htmlFor="category">Category</Label>
+              <Select
+                value={formData.category ?? ""}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, category: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sanitary Pads">Sanitary Pads</SelectItem>
+                  <SelectItem value="Maternity Pads">Maternity Pads</SelectItem>
+                  <SelectItem value="Incinerator Machine">Incinerator Machine</SelectItem>
+                  <SelectItem value="Wet Wipes">Wet Wipes</SelectItem>
+                  <SelectItem value="Baby Diapers">Baby Diapers</SelectItem>
+                  <SelectItem value="Adult Diapers">Adult Diapers</SelectItem>
+                  <SelectItem value="Menstrual Cups">Menstrual Cups</SelectItem>
+                  <SelectItem value="Period Underwear">Period Underwear</SelectItem>
+                  <SelectItem value="Tampons">Tampons</SelectItem>
+                  <SelectItem value="Vending Machine">Vending Machine</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="image">Product Image</Label>
               <Input
-                type="text"
-                value={item.url}
-                placeholder="Enter URL"
-                onChange={(e) => {
-                  const updated = [...(formData.media ?? [])];
-                  updated[index].url = e.target.value;
-                  setFormData((prev) => ({ ...prev, media: updated }));
+                id="image"
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    // Show preview immediately
+                    const previewUrl = URL.createObjectURL(file);
+                    setFormData((prev) => ({ ...prev, image_url: previewUrl }));
+
+                    // Upload to Supabase
+                    const url = await uploadImageToSupabase(file);
+                    if (url) {
+                      setFormData((prev) => ({ ...prev, image_url: url }));
+                    }
+                  }
                 }}
               />
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => {
-                  const updated = [...(formData.media ?? [])];
-                  updated.splice(index, 1);
-                  setFormData((prev) => ({ ...prev, media: updated }));
-                }}
-              >
-                Remove
-              </Button>
             </div>
-          ))}
-
+          </span>
+          <span>
+            <div className="mt-3">
+              {formData.image_url ? (
+                <img
+                  src={formData.image_url}
+                  alt="Image Preview"
+                  className="w-40 h-40 object-cover rounded border"
+                />
+              ) : ("")}
+            </div>
+          </span>
         </div>
-      </div>
 
-      <div className="flex justify-end gap-2 pt-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
-        <Button type="submit">{isEdit ? "Update Product" : "Add Product"}</Button>
-      </div>
-    </form>
+        <div>
+          <Label>Price Ranges *</Label>
+          <div className="space-y-2">
+            {(formData.price_ranges ?? []).map((range, index) => (
+              <div key={index} className="grid grid-cols-4 gap-2 items-end">
+                <div>
+                  <Label>Min Qty</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={range.min}
+                    onChange={(e) =>
+                      handlePriceRangeChange(
+                        index,
+                        "min",
+                        parseInt(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Max Qty</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={range.max}
+                    onChange={(e) =>
+                      handlePriceRangeChange(
+                        index,
+                        "max",
+                        parseInt(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Price (₹)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={range.price}
+                    onChange={(e) =>
+                      handlePriceRangeChange(
+                        index,
+                        "price",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => removePriceRange(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addPriceRange}
+              className="mt-2"
+            >
+              + Add Price Range
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <div className='flex justify-around items-center mb-2'>
+            <Label className='flex-1'>Media (Images / YouTube Videos)</Label>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setFormData((prev) => ({
+                  ...prev,
+                  media: [...(prev.media ?? []), { type: 'image', url: '' }],
+                }))
+              }
+            >
+              + Add Media
+            </Button>
+          </div>
+          <div className="space-y-4 mt-2">
+            {(formData.media ?? []).map((item, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Label>Media Type</Label>
+                <Select
+                  value={item.type}
+                  onValueChange={(value) => {
+                    const updated = [...(formData.media ?? [])];
+                    updated[index].type = value as 'image' | 'video';
+                    setFormData((prev) => ({ ...prev, media: updated }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select media type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="video">Video</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Input
+                  type="text"
+                  value={item.url}
+                  placeholder="Enter URL"
+                  onChange={(e) => {
+                    const updated = [...(formData.media ?? [])];
+                    updated[index].url = e.target.value;
+                    setFormData((prev) => ({ ...prev, media: updated }));
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => {
+                    const updated = [...(formData.media ?? [])];
+                    updated.splice(index, 1);
+                    setFormData((prev) => ({ ...prev, media: updated }));
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button type="submit">{isEdit ? "Update Product" : "Add Product"}</Button>
+        </div>
+      </form>
     </div>
   );
 };
 
 const AdminProducts = () => {
 
-const navigate = useNavigate();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -458,7 +458,7 @@ const navigate = useNavigate();
     gross_profit: 0,
     sku_id: "",
     cost_price: 0,
-    mrp:0,
+    mrp: 0,
     price_ranges: [
       {
         min: 1,
@@ -466,24 +466,24 @@ const navigate = useNavigate();
         price: 100
       }
     ],
-    media:[]
+    media: []
   });
 
   const { toast } = useToast();
 
   useEffect(() => {
     fetchProducts();
-    
+
     // Set up real-time subscription
     const channel = supabase
       .channel('products-changes')
-      .on('postgres_changes', 
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'products' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setProducts(prev => [payload.new as Product, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
-            setProducts(prev => prev.map(p => 
+            setProducts(prev => prev.map(p =>
               p.id === payload.new.id ? payload.new as Product : p
             ));
           } else if (payload.eventType === 'DELETE') {
@@ -510,7 +510,7 @@ const navigate = useNavigate();
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setProducts(data as  Product[]);
+      setProducts(data as Product[]);
     } catch (error) {
       toast({
         title: "Error",
@@ -536,8 +536,8 @@ const navigate = useNavigate();
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name ) {
+
+    if (!formData.name) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -586,7 +586,7 @@ const navigate = useNavigate();
 
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!editingProduct || !formData.name || !formData.price_ranges) {
       toast({
         title: "Error",
@@ -641,6 +641,7 @@ const navigate = useNavigate();
         description: "Failed to delete product",
         variant: "destructive"
       });
+      // console.log(error);
     }
   };
 
@@ -651,33 +652,33 @@ const navigate = useNavigate();
       description: product.description || '',
       image_url: product.image_url || '',
       availability: product.availability || 'In Stock',
-      gross_profit:product.gross_profit||0,
-      sku_id:product.sku_id||'',
-      category:product.category ||'',
-      media:product.media || [],
-      info_link:product.info_link||'',
-      cost_price:product.cost_price||0,
-      mrp:product.mrp||0,
+      gross_profit: product.gross_profit || 0,
+      sku_id: product.sku_id || '',
+      category: product.category || '',
+      media: product.media || [],
+      info_link: product.info_link || '',
+      cost_price: product.cost_price || 0,
+      mrp: product.mrp || 0,
       price_ranges: product.price_ranges?.length
-      ? product.price_ranges
-      : [],
+        ? product.price_ranges
+        : [],
     });
     setIsEditModalOpen(true);
   };
-  
+
   const resetForm = useCallback(() => {
     setFormData({
       name: '',
       description: '',
       image_url: '',
       availability: 'In Stock',
-      gross_profit:0,
-      sku_id:'',
-      category:'',
-      media:[],
-      info_link:'',
-      cost_price:0,
-      mrp:0,
+      gross_profit: 0,
+      sku_id: '',
+      category: '',
+      media: [],
+      info_link: '',
+      cost_price: 0,
+      mrp: 0,
       price_ranges: [
         { min: 1, max: 100, price: 100 },
       ],
@@ -748,10 +749,10 @@ const navigate = useNavigate();
               <DialogHeader>
                 <DialogTitle>Add New Product</DialogTitle>
               </DialogHeader>
-              <ProductForm 
+              <ProductForm
                 formData={formData}
                 setFormData={setFormData}
-                onSubmit={handleAddProduct} 
+                onSubmit={handleAddProduct}
                 onCancel={handleAddCancel}
                 uploadImageToSupabase={uploadImageToSupabase}
               />
@@ -808,19 +809,19 @@ const navigate = useNavigate();
                   alt={product.name}
                   className="w-full h-40 object-cover rounded-md"
                 />
-              ):(
+              ) : (
                 <div className="w-full h-40 flex items-center justify-center bg-muted rounded-md">
                   <Package className="w-10 h-10 text-muted-foreground" />
                 </div>
               )}
-            {product.description && (
-              <div
-                className="text-sm text-muted-foreground line-clamp-2"
-                dangerouslySetInnerHTML={{
-                  __html: product.description ?? ""
-                }}
-              />
-            )}
+              {product.description && (
+                <div
+                  className="text-sm text-muted-foreground line-clamp-2"
+                  dangerouslySetInnerHTML={{
+                    __html: product.description ?? ""
+                  }}
+                />
+              )}
               <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">Price Ranges:</p>
                 {product.price_ranges?.length ? (
@@ -841,7 +842,8 @@ const navigate = useNavigate();
                   className="flex-1"
                   onClick={(e) => {
                     e.stopPropagation(); // 👈 Prevent card click
-                    openEditModal(product)}}
+                    openEditModal(product)
+                  }}
                 >
                   <Edit className="w-4 h-4 mr-2" />
                   Edit
@@ -858,13 +860,14 @@ const navigate = useNavigate();
                   </Button>
                 )} */}
 
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="text-destructive hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation(); // 👈 Prevent card click
-                    deleteProduct(product.id)}}
+                    deleteProduct(product.id)
+                  }}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -899,11 +902,11 @@ const navigate = useNavigate();
           <DialogHeader>
             <DialogTitle>Edit Product</DialogTitle>
           </DialogHeader>
-          <ProductForm 
+          <ProductForm
             formData={formData}
             setFormData={setFormData}
-            onSubmit={handleEditProduct} 
-            isEdit 
+            onSubmit={handleEditProduct}
+            isEdit
             onCancel={handleEditCancel}
             uploadImageToSupabase={uploadImageToSupabase}
           />

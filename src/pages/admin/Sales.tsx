@@ -41,7 +41,7 @@ interface Sale {
   total: number;
   paid: number;
   balance: number;
-  payment_status: string;
+  payment_status: "Fully Paid" | "Partially Paid" | "Pending";
   member_id: string;
   product_id: string;
   users: User | null;
@@ -234,8 +234,8 @@ const SalesTable: React.FC = () => {
         price: Number(newSale.price),
         total: Number(newSale.total),
         paid: Number(newSale.paid ?? 0),
+        incoming: 0, // Add this line to satisfy the required property
         balance: Number(newSale.balance ?? 0),
-        balance: Number(newSale.balance),
         payment_status: (newSale.payment_status ?? 'Pending') as string | null,
     };
     
@@ -253,7 +253,7 @@ const SalesTable: React.FC = () => {
         total: rawRecord.total,
         paid: rawRecord.paid,
         balance: rawRecord.balance,
-        payment_status: rawRecord.payment_status ?? 'Pending',
+        payment_status: (rawRecord.payment_status ?? 'Pending') as "Fully Paid" | "Partially Paid" | "Pending",
         member_id: rawRecord.member_id,
         product_id: rawRecord.product_id,
         users: (rawRecord.users && typeof rawRecord.users === 'object') ? rawRecord.users : null,
@@ -304,9 +304,13 @@ const SalesTable: React.FC = () => {
       member_id: updatedRecordForUI.member_id,
       payment_status: calculatedFields.payment_status
     };
-    updatedRecordForUI = { ...updatedRecordForUI, ...calculatedFields };
+    updatedRecordForUI = { 
+      ...updatedRecordForUI, 
+      ...calculatedFields, 
+      payment_status: calculatedFields.payment_status as "Fully Paid" | "Partially Paid" | "Pending"
+    };
     
-    addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue: originalSale[field], newValue: value, record: originalSale } });
+    addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue: originalSale[field], record: originalSale } });
     
     setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
     setEditingCell(null);
@@ -319,7 +323,7 @@ const SalesTable: React.FC = () => {
       total?: number;
       paid?: number;
       balance?: number;
-      balance?: number;
+      // balance?: number;
       product_id: string;
       member_id: string;
       payment_status: string | null;
@@ -354,7 +358,10 @@ const SalesTable: React.FC = () => {
       switch (lastOperation.type) {
         case 'delete':
           if (lastOperation.data.deletedRecords) {
-            const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => rec);
+            const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => ({
+              ...rec,
+              incoming: 0, // or set to a value from your business logic if needed
+            }));
             await supabase.from('sales').insert(recordsToRestore);
           }
           break;
@@ -444,10 +451,22 @@ const SalesTable: React.FC = () => {
         price,
         total,
         paid,
+        incoming: 0, // Add required property
         balance,
         payment_status,
       };
-    }).filter(Boolean);
+    }).filter((row): row is {
+      date: any;
+      member_id: string;
+      product_id: string;
+      qty: number;
+      price: number;
+      total: number;
+      paid: number;
+      incoming: number;
+      balance: number;
+      payment_status: string;
+    } => row !== null);
 
     if (processedData.length === 0) {
       alert("No valid rows could be processed from the import. Please check user and product names match exactly.");
@@ -460,7 +479,13 @@ const SalesTable: React.FC = () => {
       alert(`Import failed: ${error.message}`);
     } else if (newRecords) {
       alert(`${newRecords.length} rows imported successfully!`);
-      addToUndoStack({ type: 'import', timestamp: Date.now(), data: { importedRecords: newRecords as Sale[] } });
+      // Map newRecords to Sale type by adding users and products as null
+      const importedSales: Sale[] = (newRecords as any[]).map(rec => ({
+        ...rec,
+        users: null,
+        products: null,
+      }));
+      addToUndoStack({ type: 'import', timestamp: Date.now(), data: { importedRecords: importedSales } });
       fetchSales();
     }
   };
