@@ -1,73 +1,81 @@
-# Welcome to your Lovable project
+# 💖 Blessin Care [ Women's Healthcare Reseller & Admin Management System ]
 
-## Project info
+A responsive, web-based platform designed to streamline operations between **Resellers** and the **Admin (Owner)** in the women’s healthcare product distribution space.
 
-**URL**: https://lovable.dev/projects/9ab89e59-1a4c-4349-876d-cd37438a5d77
+> Empowering resellers and enhancing visibility for admins with elegance, care, and clarity.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 🔧 Tech Stack
 
-**Use Lovable**
+- ⚡ Vite — Fast bundler and dev server
+- ⚛️ React — UI library
+- 🧠 TypeScript — Type-safe coding
+- 🎨 Tailwind CSS — Utility-first styling
+- 🧩 shadcn/ui — Accessible, modern UI components
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/9ab89e59-1a4c-4349-876d-cd37438a5d77) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## ✨ Project Description
 
-**Use your preferred IDE**
+This system supports **two user roles**:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 👩‍💼 Reseller Panel
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Resellers can register, request products, view order status, make payments, and receive alerts.
 
-Follow these steps:
+#### 📋 Key Features:
+- Smooth **Login/Registration** page
+- 📊 **Dashboard**: summary of requests, payments, and notifications
+- 🛍️ **Product Catalog**: filters, search, and request option
+- 📝 **Request Form**: select products, quantity, and submit
+- 🚚 **Track Requests**: view all past and current requests with statuses:
+  - `Pending`, `Approved`, `In Production`, `Shipped`, `Delivered`
+- 💸 **Payment Panel**:
+  - Tracks full/partial payments
+  - Status color tags:
+    - 🟥 Payment Pending
+    - 🟧 Partial Paid
+    - 🟩 Fully Paid
+  - Option to “Pay Remaining Amount”
+- 🔔 **Notifications**:
+  - Status updates, payment alerts, delivery confirmations
+  - “Mark as Read” feature for managing alerts
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 🧠 Admin Dashboard
 
-# Step 3: Install the necessary dependencies.
-npm i
+Admins manage products, reseller requests, payments, production, and financials.
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+#### 📋 Key Features:
+- 📊 **Dashboard Home**:
+  - Revenue summary (daily/weekly/monthly)
+  - Order statistics and expense tracking
+- 📦 **Product Management**:
+  - Add/edit/delete products
+  - Inventory & lifecycle tracking
+- 🧾 **Reseller Management**:
+  - Reseller profiles, order history, payment status
+  - Flag resellers with late payments
+- 📈 **Sales Tracking**:
+  - Product journey visualization (production → warehouse → delivery)
+- 💰 **Payment Tracking**:
+  - View reseller payment breakdown
+  - “Send Payment Reminder” option
+- 📉 **Expense Tracker**:
+  - Track fixed/variable costs
+  - Graph summaries by date and category
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🎨 UI & UX Design
 
-**Use GitHub Codespaces**
+- **Style Theme**: Soft, feminine, modern
+- **Color Palette**: Pastel lavender, blush pink, peach, ivory, mint green
+- **Typography**: Poppins, Inter, or Lato
+- **UI**: Rounded cards, clean icons, intuitive navigation, healthcare illustrations
+- **Mobile-First**: Fully responsive and accessible
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/9ab89e59-1a4c-4349-876d-cd37438a5d77) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
