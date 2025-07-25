@@ -14,7 +14,7 @@ import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Upload, Trash2, Plus, Undo, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, Upload, Trash2, Plus, Undo, Redo, Calendar as CalendarIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +73,8 @@ interface UndoOperation {
     field?: keyof Sale;
     oldValue?: any;
     record?: Sale;
+    originalRecord?: Sale;
+    updatedRecord?: Sale;
   };
 }
 
@@ -138,6 +140,7 @@ const SalesTable: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
 
   const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'ascending' | 'descending' }>({
@@ -234,6 +237,7 @@ const SalesTable: React.FC = () => {
   const addToUndoStack = (operation: UndoOperation) => {
     if (isUndoing) return;
     setUndoStack(prev => [...prev, operation].slice(-10));
+    setRedoStack([]);
   };
 
   const handleAddNew = async () => {
@@ -367,48 +371,78 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  const handleUndo = async () => {
+const handleUndo = async () => {
     if (undoStack.length === 0) return;
     setIsUndoing(true);
     const lastOperation = undoStack[undoStack.length - 1];
 
     try {
-      switch (lastOperation.type) {
-        case 'delete':
-          if (lastOperation.data.deletedRecords) {
-            const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => ({
-              ...rec,
-              outstanding: 0, // or set to a value from your business logic if needed
-            }));
-            await supabase.from('sales').insert(recordsToRestore);
-          }
-          break;
-        case 'add':
-          if (lastOperation.data.addedRecord) {
-            await supabase.from('sales').delete().eq('id', lastOperation.data.addedRecord.id);
-          }
-          break;
-        case 'edit':
-          if (lastOperation.data.record) {
-            const { users, products, ...originalRecord } = lastOperation.data.record;
-            await supabase.from('sales').update(originalRecord).eq('id', originalRecord.id);
-          }
-          break;
-        case 'import':
-          if (lastOperation.data.importedRecords) {
-            const idsToDelete = lastOperation.data.importedRecords.map(rec => rec.id);
-            await supabase.from('sales').delete().in('id', idsToDelete);
-          }
-          break;
-      }
-      setUndoStack(prev => prev.slice(0, -1));
-      fetchSales();
+        switch (lastOperation.type) {
+            case 'delete':
+                if (lastOperation.data.deletedRecords) {
+                    const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => rec);
+                    await supabase.from('sales').insert(recordsToRestore);
+                }
+                break;
+            case 'add':
+                if (lastOperation.data.addedRecord) {
+                    await supabase.from('sales').delete().eq('id', lastOperation.data.addedRecord.id);
+                }
+                break;
+            case 'edit':
+                if (lastOperation.data.originalRecord) {
+                    await supabase.from('sales').update(lastOperation.data.originalRecord).eq('id', lastOperation.data.originalRecord.id);
+                }
+                break;
+            // ... other cases
+        }
+        setUndoStack(prev => prev.slice(0, -1));
+        // **FIXED**: Corrected the variable name here
+        setRedoStack(prev => [lastOperation, ...prev]);
+        fetchSales();
     } catch (error: any) {
-      alert('Undo failed: ' + error.message);
+        alert('Undo failed: ' + error.message);
     } finally {
-      setIsUndoing(false);
+        setIsUndoing(false);
     }
-  };
+};
+
+  // --- Add this new function in the CRUD & FEATURE FUNCTIONS section ---
+
+const handleRedo = async () => {
+    if (redoStack.length === 0) return;
+    setIsUndoing(true); // Reuse the same loading state
+    const operationToRedo = redoStack[0];
+
+    try {
+        switch (operationToRedo.type) {
+            case 'add':
+                // Re-insert the record
+                await supabase.from('sales').insert(operationToRedo.data.addedRecord!);
+                break;
+            case 'delete':
+                // Re-delete the records
+                const idsToDelete = operationToRedo.data.deletedRecords!.map(r => r.id);
+                await supabase.from('sales').delete().in('id', idsToDelete);
+                break;
+            case 'edit':
+                // Re-apply the newer version of the record
+                await supabase.from('sales').update(operationToRedo.data.updatedRecord!).eq('id', operationToRedo.data.updatedRecord!.id);
+                break;
+        }
+
+        // Move the operation from redo back to undo
+        setRedoStack(prev => prev.slice(1));
+        setUndoStack(prev => [...prev, operationToRedo]);
+
+        fetchSales();
+        // toast({ title: "Action Redone" });
+    } catch (error: any) {
+        alert('Redo failed: ' + error.message);
+    } finally {
+        setIsUndoing(false);
+    }
+};
 
   const handleExportToExcel = () => {
     if (sortedSales.length === 0) {
@@ -741,7 +775,7 @@ const SalesTable: React.FC = () => {
                         {date?.from ? (date.to ? (`${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`) : format(date.from, "LLL dd, y")) : (<span>Pick a date</span>)}
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 flex" align="start">
+                <PopoverContent className="w-auto p-0 flex" side="bottom" align="start">
                     {/* Presets Column */}
                     <div className="flex flex-col space-y-1 p-2 border-r">
                         <Button variant="ghost" onClick={() => { setDate({ from: new Date(), to: new Date() }); setPopoverOpen(false); }}>Today</Button>
@@ -814,6 +848,14 @@ const SalesTable: React.FC = () => {
             <div className="flex items-center gap-2">
               
               <TooltipProvider delayDuration={0}>
+                 <Tooltip>
+            <TooltipTrigger asChild>
+                <Button onClick={handleRedo} variant="outline" size="sm" disabled={redoStack.length === 0 || isUndoing}>
+                    <Redo className="h-4 w-4" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Redo</p></TooltipContent>
+        </Tooltip>
                     <Tooltip >
     <TooltipTrigger asChild>
       <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
@@ -849,11 +891,11 @@ const SalesTable: React.FC = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 ">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
+              <TableHeader >
+                <TableRow >
                   <TableHead className="w-[50px] px-4">
                     <div
                       onClick={handleSelectAll}
