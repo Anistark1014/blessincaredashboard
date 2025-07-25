@@ -81,6 +81,7 @@ const App = () => (
           {/* Public Routes inside PublicLayout */}
           <Route element={<PublicLayout />}>
             <Route path="/login" element={<Auth />} />
+            <Route path="/" element={<DashboardRedirect />} />
             <Route path="/catalogue" element={<ViewProducts />} />
             <Route path="/product/:id" element={<ProductDetails />} />
           {/* <Route path="/" element={<Home />} /> */}

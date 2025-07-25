@@ -641,7 +641,7 @@ const AdminProducts = () => {
         description: "Failed to delete product",
         variant: "destructive"
       });
-      // console.log(error);
+      console.log(error);
     }
   };
 
@@ -763,7 +763,7 @@ const AdminProducts = () => {
 
       {/* Filters */}
       <Card className="healthcare-card">
-        <CardContent className="pt-6">
+        <CardContent className="-mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />

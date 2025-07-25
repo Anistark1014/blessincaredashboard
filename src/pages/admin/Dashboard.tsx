@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import {AdminSettings} from '@/components/AdminSettings';
 
 const AdminDashboard = () => {
   const [requests, setRequests] = useState<any[]>([]);
@@ -254,44 +255,47 @@ const AdminDashboard = () => {
             ))}
           </CardContent>
         </Card>
-
-        {/* Inventory Alerts */}
-        <Card className="healthcare-card">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Inventory Alerts</CardTitle>
-              <Link to="/admin/products">
-                <Button variant="ghost" size="sm">Manage</Button>
-              </Link>
-            </div>
-            <CardDescription>Products requiring attention</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {lowStockProducts.length > 0 ? (
-              lowStockProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40">
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.category}</p>
-                    <p className="text-xs text-muted-foreground">${product.price}</p>
-                  </div>
-                  <Badge className={
-                    product.availability === 'out-of-stock'
-                      ? 'status-error'
-                      : 'status-warning'
-                  }>
-                    {product.availability.replace('-', ' ')}
-                  </Badge>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-6">
-                <Package className="w-12 h-12 text-muted-foreground mx-auto mb-2 opacity-50" />
-                <p className="text-muted-foreground">All products are well stocked</p>
+        
+        <div className="flex flex-col justify-start items-start gap-2 w-full">
+            <AdminSettings/>
+          {/* Inventory Alerts */}
+          <Card className="healthcare-card w-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Inventory Alerts</CardTitle>
+                <Link to="/admin/products">
+                  <Button variant="ghost" size="sm">Manage</Button>
+                </Link>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <CardDescription>Products requiring attention</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {lowStockProducts.length > 0 ? (
+                lowStockProducts.map((product) => (
+                  <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{product.name}</p>
+                      <p className="text-sm text-muted-foreground">{product.category}</p>
+                      <p className="text-xs text-muted-foreground">${product.price}</p>
+                    </div>
+                    <Badge className={
+                      product.availability === 'out-of-stock'
+                        ? 'status-error'
+                        : 'status-warning'
+                    }>
+                      {product.availability.replace('-', ' ')}
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6">
+                  <Package className="w-12 h-12 text-muted-foreground mx-auto mb-2 opacity-50" />
+                  <p className="text-muted-foreground">All products are well stocked</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
