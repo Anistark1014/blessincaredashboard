@@ -15,7 +15,21 @@ import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
 import { Search, Upload, Trash2, Plus, Undo, Calendar as CalendarIcon } from 'lucide-react';
-
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 // --- INTERFACE DEFINITIONS ---
 
 interface Product {
@@ -116,6 +130,9 @@ const SalesTable: React.FC = () => {
     to: addDays(new Date(), 0),
   });
   
+  const [customDate, setCustomDate] = useState<DateRange | undefined>(date);
+  const [isPopoverOpen, setPopoverOpen] = useState(false);
+  const [isDialogOpen, setDialogOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -491,6 +508,12 @@ const SalesTable: React.FC = () => {
     }
   };
 
+  const handleApplyCustomDate = () => {
+    setDate(customDate); // Apply the date from the dialog
+    setDialogOpen(false);  // Close the dialog
+    setPopoverOpen(false); // Close the main popover
+   };
+
   // --- UI HANDLERS & MEMOS ---
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale(prev => {
@@ -707,58 +730,110 @@ const SalesTable: React.FC = () => {
               />
             </div>
             
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "w-[300px] justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date?.from ? (
-                    date.to ? (
-                      <>
-                        {format(date.from, "LLL dd, y")} -{" "}
-                        {format(date.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(date.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 flex" align="start">
-                <div className="flex flex-col space-y-2 p-2 border-r">
-                   <Button variant="ghost" onClick={() => setDate({from: new Date(), to: new Date()})}>Today</Button>
-                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -7), to: new Date()})}>Last 7 Days</Button>
-                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -30), to: new Date()})}>Last 30 Days</Button>
-                   {/* **NEW**: Added longer-range presets */}
-                   <Button variant="ghost" onClick={() => setDate({from: subMonths(new Date(), 2), to: new Date()})}>Last 2 Months</Button>
-                   <Button variant="ghost" onClick={() => setDate({from: subMonths(new Date(), 6), to: new Date()})}>Last 6 Months</Button>
-                   <Button variant="ghost" onClick={() => setDate({from: subYears(new Date(), 1), to: new Date()})}>Last 1 Year</Button>
-                   <Button variant="ghost" onClick={() => setDate({from: subYears(new Date(), 50), to: new Date()})}>All Time</Button>
-                </div>
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={date?.from}
-                  selected={date}
-                  onSelect={setDate}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
+            <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                    <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn("w-[300px] justify-start text-left font-normal", !date && "text-muted-foreground")}
+                    >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date?.from ? (date.to ? (`${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`) : format(date.from, "LLL dd, y")) : (<span>Pick a date</span>)}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 flex" align="start">
+                    {/* Presets Column */}
+                    <div className="flex flex-col space-y-1 p-2 border-r">
+                        <Button variant="ghost" onClick={() => { setDate({ from: new Date(), to: new Date() }); setPopoverOpen(false); }}>Today</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -7), to: new Date() }); setPopoverOpen(false); }}>Last 7 Days</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -30), to: new Date() }); setPopoverOpen(false); }}>Last 30 Days</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 2), to: new Date() }); setPopoverOpen(false); }}>Last 2 Months</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 6), to: new Date() }); setPopoverOpen(false); }}>Last 6 Months</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 1), to: new Date() }); setPopoverOpen(false); }}>Last 1 Year</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 50), to: new Date() }); setPopoverOpen(false); }}>All Time</Button>
+
+                        {/* Custom Range Dialog */}
+                        <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" className="text-blue-600 hover:text-blue-700 justify-start">Custom...</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Select Custom Date Range</DialogTitle></DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.from && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {customDate?.from ? format(customDate.from, "dd-MM-yyyy") : <span>Start Date</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.from} onSelect={(day) => setCustomDate((prev) => ({ ...prev, from: day }))} /></PopoverContent>
+                                    </Popover>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.to && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {customDate?.to ? format(customDate.to, "dd-MM-yyyy") : <span>End Date</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.to} onSelect={(day) => setCustomDate((prev) => ({ ...prev, to: day }))} /></PopoverContent>
+                                    </Popover>
+                                </div>
+                                <DialogFooter>
+                                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                                    <Button onClick={handleApplyCustomDate}>Apply</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+
+                    {/* Main Calendar */}
+                    {/* <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={date?.from}
+                        selected={date}
+                        onSelect={setDate}
+                        numberOfMonths={2}
+                    /> */}
+                </PopoverContent>
             </Popover>
 
             <div className="flex items-center gap-2">
-              <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}><Undo className="h-4 w-4" /></Button>
-              <ExcelImport onDataParsed={handleImportedData} />
-              <Button onClick={handleExportToExcel} variant="outline" size="sm"><Upload className="h-4 w-4" /></Button>
-              <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}><Plus className="h-4 w-4" /></Button>
+              
+              <TooltipProvider delayDuration={0}>
+                    <Tooltip >
+    <TooltipTrigger asChild>
+      <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
+        <Undo className="h-4 w-4"/>
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Undo</p>
+    </TooltipContent>
+  </Tooltip>
+  <ExcelImport onDataParsed={handleImportedData} />
+                <Tooltip >
+    <TooltipTrigger asChild>
+      <Button onClick={handleExportToExcel} variant="outline" size="sm">
+        <Upload className="h-4 w-4"/>
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Export Sales</p>
+    </TooltipContent>
+  </Tooltip>
+  <Tooltip >
+    <TooltipTrigger asChild>
+      <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
+        <Plus className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Add new</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
             </div>
           </div>
         </CardHeader>

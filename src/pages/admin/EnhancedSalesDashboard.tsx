@@ -35,10 +35,10 @@ const EnhancedSalesDashboard: React.FC<DashboardProps> = ({ data }) => {
   const stats = useMemo(() => {
     return data.reduce(
       (acc, sale) => {
-        acc.totalSales += sale.total || 0;
-        acc.totalPaid += sale.paid || 0;
+        acc.totalSales += Number(sale.total || 0);
+        acc.totalPaid += Number(sale.paid || 0);
         // Calculate GMV: quantity * product's MRP
-        acc.gmv += (sale.qty || 0) * (sale.products?.mrp || 0);
+        acc.gmv += Number(sale.qty || 0) * Number(sale.products?.mrp || 0);
         return acc;
       },
       {
@@ -114,3 +114,4 @@ const EnhancedSalesDashboard: React.FC<DashboardProps> = ({ data }) => {
 };
 
 export default EnhancedSalesDashboard;
+
