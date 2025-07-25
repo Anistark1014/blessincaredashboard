@@ -39,7 +39,7 @@ interface Expense {
 }
 
 interface UndoOperation {
-  type: 'delete' | 'add' | 'edit';
+  type: 'delete' | 'add' | 'edit' | 'import';
   data: {
     deletedRecords?: Expense[];
     addedRecord?: Expense;
@@ -165,7 +165,9 @@ const handleAddNew = async () => {
 
     // Prepare the record for insertion without the user_id
     const recordToInsert = {
-        ...newExpense,
+        date: newExpense.date as string,
+        category: newExpense.category as string,
+        description: newExpense.description ?? '',
         amount: Number(newExpense.amount),
     };
 
@@ -178,8 +180,14 @@ const handleAddNew = async () => {
     if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-        setExpenses(prev => [data, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-        addToUndoStack({ type: 'add', data: { addedRecord: data } });
+        setExpenses(prev => [
+            {
+                ...data,
+                description: data.description ?? ''
+            },
+            ...prev
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        addToUndoStack({ type: 'add', data: { addedRecord: { ...data, description: data.description ?? '' } } });
         setNewExpense({ date: format(new Date(), 'yyyy-MM-dd'), amount: 0, category: '', description: '' });
         setAddingNew(false);
         toast({ title: "Success", description: "Expense added." });
@@ -241,7 +249,12 @@ const handleAddNew = async () => {
     if (error) {
         toast({ title: "Import Failed", description: error.message, variant: "destructive" });
     } else {
-        addToUndoStack({ type: 'import', data: { importedRecords: data } });
+        // Ensure description is always a string
+        const normalizedData = (data as Expense[]).map(exp => ({
+            ...exp,
+            description: exp.description ?? ''
+        }));
+        addToUndoStack({ type: 'import', data: { importedRecords: normalizedData } });
         fetchExpenses();
         toast({ title: "Success", description: `${data.length} expenses imported.` });
     }
