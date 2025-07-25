@@ -369,10 +369,10 @@ const Finance = () => {
       </div>
 
       {/* Financial Management Section */}
-      <div className="flex flex-col md:flex-row gap-4 items-start">
-        <div className="w-full md:w-1/2">
+      <div className="flex flex-col md:flex-row gap-4 items-start md:gap-y-6">
+        <div className="w-full md:w-1/3">
           {/* You can add more content here if needed */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-1">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Balance</CardTitle>
@@ -433,7 +433,7 @@ const Finance = () => {
             </Card>
           </div>
         </div>
-        <div className="w-full md:w-1/2">
+        <div className="w-full md:w-2/3">
           <Card>
             <CardHeader>
               <CardTitle>Financial Management</CardTitle>
