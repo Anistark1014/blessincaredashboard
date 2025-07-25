@@ -776,7 +776,19 @@ const SalesTable: React.FC = () => {
                                                 {customDate?.to ? format(customDate.to, "dd-MM-yyyy") : <span>End Date</span>}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.to} onSelect={(day) => setCustomDate((prev) => ({ ...prev, to: day }))} /></PopoverContent>
+                                        <PopoverContent className="w-auto p-0">
+                                          <Calendar
+                                            mode="single"
+                                            selected={customDate?.to}
+                                            onSelect={(day) =>
+                                              setCustomDate((prev) =>
+                                                prev
+                                                  ? { from: prev.from ?? undefined, to: day }
+                                                  : { from: undefined, to: day }
+                                              )
+                                            }
+                                          />
+                                        </PopoverContent>
                                     </Popover>
                                 </div>
                                 <DialogFooter>
