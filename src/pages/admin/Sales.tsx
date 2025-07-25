@@ -40,7 +40,7 @@ interface Sale {
   price: number;
   total: number;
   paid: number;
-  balance: number;
+  outstanding: number;
   payment_status: "Fully Paid" | "Partially Paid" | "Pending";
   member_id: string;
   product_id: string;
@@ -160,7 +160,7 @@ const SalesTable: React.FC = () => {
                 price: row.price,
                 total: row.total,
                 paid: row.paid,
-                balance: row.balance,
+                outstanding: row.outstanding,
                 payment_status: row.payment_status ?? 'Pending',
                 member_id: row.member_id,
                 product_id: row.product_id,
@@ -234,8 +234,8 @@ const SalesTable: React.FC = () => {
         price: Number(newSale.price),
         total: Number(newSale.total),
         paid: Number(newSale.paid ?? 0),
-        incoming: 0, // Add this line to satisfy the required property
-        balance: Number(newSale.balance ?? 0),
+        // outstanding: 0, // Add this line to satisfy the required property
+        outstanding: Number(newSale.outstanding ?? 0),
         payment_status: (newSale.payment_status ?? 'Pending') as string | null,
     };
     
@@ -252,7 +252,7 @@ const SalesTable: React.FC = () => {
         price: rawRecord.price,
         total: rawRecord.total,
         paid: rawRecord.paid,
-        balance: rawRecord.balance,
+        outstanding: rawRecord.outstanding,
         payment_status: (rawRecord.payment_status ?? 'Pending') as "Fully Paid" | "Partially Paid" | "Pending",
         member_id: rawRecord.member_id,
         product_id: rawRecord.product_id,
@@ -288,14 +288,15 @@ const SalesTable: React.FC = () => {
         }
     }
 
+
     const qty = Number(updatedRecordForUI.qty);
     const price = Number(updatedRecordForUI.price);
     const paid = Number(updatedRecordForUI.paid);
     const total = qty * price;
-    const balance = total - paid;
+    const outstanding = total - paid;
     const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
     
-    const calculatedFields = { total, balance, payment_status };
+    const calculatedFields = { total, outstanding, payment_status };
     
     updatePayload = { 
       ...updatePayload, 
@@ -322,8 +323,8 @@ const SalesTable: React.FC = () => {
       price?: number;
       total?: number;
       paid?: number;
-      balance?: number;
-      // balance?: number;
+      outstanding?: number;
+      // outstanding?: number;
       product_id: string;
       member_id: string;
       payment_status: string | null;
@@ -360,7 +361,7 @@ const SalesTable: React.FC = () => {
           if (lastOperation.data.deletedRecords) {
             const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => ({
               ...rec,
-              incoming: 0, // or set to a value from your business logic if needed
+              outstanding: 0, // or set to a value from your business logic if needed
             }));
             await supabase.from('sales').insert(recordsToRestore);
           }
@@ -405,7 +406,7 @@ const SalesTable: React.FC = () => {
         Price: s.price,
         Total: s.total,
         Paid: s.paid,
-        Balance: s.balance,
+        outstanding: s.outstanding,
         'Payment Status': s.payment_status,
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -440,7 +441,7 @@ const SalesTable: React.FC = () => {
 
       const paid = Number(row.paid || 0);
       const total = qty * price;
-      const balance = total - paid;
+      const outstanding = total - paid;
       const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
 
       return {
@@ -451,8 +452,8 @@ const SalesTable: React.FC = () => {
         price,
         total,
         paid,
-        incoming: 0, // Add required property
-        balance,
+        outstanding: 0, // Add required property
+        // outstanding,
         payment_status,
       };
     }).filter((row): row is {
@@ -463,8 +464,8 @@ const SalesTable: React.FC = () => {
       price: number;
       total: number;
       paid: number;
-      incoming: number;
-      balance: number;
+      // outstanding: number;
+      outstanding: number;
       payment_status: string;
     } => row !== null);
 
@@ -520,10 +521,10 @@ const SalesTable: React.FC = () => {
 
     const paid = newSale.paid || 0;
     const total = qty * price;
-    const balance = total - paid;
+    const outstanding = total - paid;
     const payment_status = total > 0 && paid >= total ? 'Fully Paid' : paid > 0 ? 'Partially Paid' : 'Pending';
     
-    setNewSale(prev => ({ ...prev, price, total, balance, payment_status }));
+    setNewSale(prev => ({ ...prev, price, total, outstanding, payment_status }));
   }, [newSale.qty, newSale.product_id, newSale.paid, products]);
 
 
@@ -604,7 +605,7 @@ const SalesTable: React.FC = () => {
 
   const renderEditableCell = (sale: Sale, field: keyof Sale) => {
     const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
-    const isCalculated = ['total', 'balance'].includes(field);
+    const isCalculated = ['total', 'outstanding'].includes(field);
     const clickHandler = isCalculated ? undefined : () => setEditingCell({ rowId: sale.id, field });
 
     if (isEditing) {
@@ -662,7 +663,7 @@ const SalesTable: React.FC = () => {
       ? sale.products?.name 
       : sale[field];
     
-    const isCurrency = ['price', 'total', 'paid', 'balance'].includes(field);
+    const isCurrency = ['price', 'total', 'paid', 'outstanding'].includes(field);
     
     if (field === 'payment_status') {
       return (
@@ -734,13 +735,13 @@ const SalesTable: React.FC = () => {
               <PopoverContent className="w-auto p-0 flex" align="start">
                 <div className="flex flex-col space-y-2 p-2 border-r">
                    <Button variant="ghost" onClick={() => setDate({from: new Date(), to: new Date()})}>Today</Button>
-                   <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -1), to: new Date()})}>Yesterday</Button>
                    <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -7), to: new Date()})}>Last 7 Days</Button>
                    <Button variant="ghost" onClick={() => setDate({from: addDays(new Date(), -30), to: new Date()})}>Last 30 Days</Button>
                    {/* **NEW**: Added longer-range presets */}
                    <Button variant="ghost" onClick={() => setDate({from: subMonths(new Date(), 2), to: new Date()})}>Last 2 Months</Button>
                    <Button variant="ghost" onClick={() => setDate({from: subMonths(new Date(), 6), to: new Date()})}>Last 6 Months</Button>
                    <Button variant="ghost" onClick={() => setDate({from: subYears(new Date(), 1), to: new Date()})}>Last 1 Year</Button>
+                   <Button variant="ghost" onClick={() => setDate({from: subYears(new Date(), 50), to: new Date()})}>All Time</Button>
                 </div>
                 <Calendar
                   initialFocus
@@ -786,7 +787,7 @@ const SalesTable: React.FC = () => {
                   <TableHead onClick={() => requestSort('price')} className="text-right cursor-pointer">Price</TableHead>
                   <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer">Total</TableHead>
                   <TableHead onClick={() => requestSort('paid')} className="text-right cursor-pointer">Paid</TableHead>
-                  <TableHead onClick={() => requestSort('balance')} className="text-right cursor-pointer">Outstanding</TableHead>
+                  <TableHead onClick={() => requestSort('outstanding')} className="text-right cursor-pointer">Outstanding</TableHead>
                   <TableHead onClick={() => requestSort('payment_status')} className="cursor-pointer">Status</TableHead>
                   <TableHead className="text-right pr-4">
                     <Button variant="ghost" size="icon" onClick={deleteSelectedRows} disabled={selectedRows.length === 0}><Trash2 className="h-4 w-4" /></Button>
@@ -804,7 +805,7 @@ const SalesTable: React.FC = () => {
                     <TableCell className="p-1"><Input type="number" step="0.01" className="h-8 w-24 text-right" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price' as keyof Sale, Number(e.target.value))} /></TableCell>
                     <TableCell className="p-1 text-right">{formatCurrency(newSale.total ?? 0)}</TableCell>
                     <TableCell className="p-1"><Input type="number" step="0.01" className="h-8 w-24 text-right" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid' as keyof Sale, Number(e.target.value))} /></TableCell>
-                    <TableCell className="p-1 text-right">{formatCurrency(newSale.balance ?? 0)}</TableCell>
+                    <TableCell className="p-1 text-right">{formatCurrency(newSale.outstanding ?? 0)}</TableCell>
                     <TableCell className="p-1"><div className={cn("font-semibold", statusColors[newSale.payment_status || 'Pending'])}>{newSale.payment_status || 'Pending'}</div></TableCell>
                     <TableCell className="p-1 text-right">
                       <div className="flex gap-2 justify-end">
@@ -836,7 +837,7 @@ const SalesTable: React.FC = () => {
                     {renderEditableCell(sale, 'price')}
                     {renderEditableCell(sale, 'total')}
                     {renderEditableCell(sale, 'paid')}
-                    {renderEditableCell(sale, 'balance')}
+                    {renderEditableCell(sale, 'outstanding')}
                     {renderEditableCell(sale, 'payment_status')}
                     <TableCell></TableCell>
                   </TableRow>
