@@ -1,25 +1,27 @@
-import React from 'react';
+import * as React from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
-import { Download, Upload } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const ExcelImportExpenses = ({ onDataParsed }) => {
-  const fileInputRef = React.useRef(null);
+const ExcelImportExpenses = ({ onDataParsed }: { onDataParsed: (data: any[]) => void }) => {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (event: ProgressEvent<FileReader>) => {
       try {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet);
-        onDataParsed(json);
+        if (event.target && event.target.result) {
+          const data = new Uint8Array(event.target.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet);
+          onDataParsed(json);
+        }
       } catch (error) {
         console.error("Error parsing Excel file:", error);
         // You can add a toast notification for the user here
