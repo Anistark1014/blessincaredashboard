@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Eye, Flag, FlagOff, Search, Users, UserCheck, UserX } from 'lucide-react';
+import { error } from 'console';
+// import { console } from 'inspector';
 interface Reseller {
   id: string;
   email: string;
@@ -165,7 +167,6 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
       .order('created_at', { ascending: false });
 
     if (resellerError) throw resellerError;
-    console.log(resellerList)
     const updatedResellers: Reseller[] = await Promise.all(
       (resellerList as any[]).map(async (reseller) => {
         const { data: requests, error: requestError } = await supabase
@@ -284,55 +285,96 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // Call createReseller function from frontend (React)
+  
+const handleAddReseller = async (
+  name: string,
+  email: string,
+  phone: string,
+  region: string
+) => {
+  // const KEY = import.meta.env.VITE_SUPABASE_EDGE_URL;
+  // console.log(KEY+"/createReseller")
+  const resellerData = {
+    name: name || "Default Name",
+    email: email || "default@example.com",
+    phone: phone || "0000000000",
+    region: region || "Default Region"
+  };
+
+  const response = await fetch(`https://virbnugthhbunxxxsizw.functions.supabase.co/createReseller`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, // 👈 required!
+    },
+    body: JSON.stringify(resellerData),
+  });
+
+  const result = await response.json();
+  console.log(result)
+  if (!response.ok) {
+    alert("Error: " + result.error);
+    return false;
+  }
+  return true;
+};
+
+    const handleSubmit = async () => {
+      const { name, email, phone, region } = formData;
+  
+      if (!name) {
+        toast({
+          title: "Missing info",
+          description: "Name and Email are required.",
+          variant: "destructive",
+        });
+        return;
+      }
+  
+      setLoading(true);
+      try {
+  
+        let status= await handleAddReseller(name, email, phone, region);
+
+        if(!status) return;
+  
+        // const { error } = await supabase.from('users').insert([
+        //   {
+        //     name,
+        //     email:email||"",
+        //     role: 'reseller',
+        //     region,
+        //     contact_info: { phone },
+        //     is_active: true,
+        //     flagged_status: false,
+        //     exclusive_features: '',
+        //   }
+        // ]);
+  
+        // if (error) throw error;
+  
+        toast({
+          title: "Success",
+          description: "New reseller added successfully!",
+        });
+  
+        setFormData({ name: '', email: '', phone: '', region: '' });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async () => {
-    const { name, email, phone, region } = formData;
-
-    if (!name) {
-      toast({
-        title: "Missing info",
-        description: "Name and Email are required.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.from('users').insert([
-        {
-          name,
-          email:email||"",
-          role: 'reseller',
-          region,
-          contact_info: { phone },
-          is_active: true,
-          flagged_status: false,
-          exclusive_features: '',
-        }
-      ]);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "New reseller added successfully!",
-      });
-
-      setFormData({ name: '', email: '', phone: '', region: '' });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   return (
@@ -513,7 +555,7 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value }) => (
   </div>
 );
 
-console.log(resellers)
+// console.log(resellers)
   return (
     <div className="space-y-6">
       {/* Header */}
