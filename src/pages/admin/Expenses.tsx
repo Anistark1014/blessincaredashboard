@@ -1,311 +1,497 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
-import { BarChart, Search, Trash2, Plus, Upload, Download, Filter, Calendar as CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subMonths, subYears, addDays } from 'date-fns';
 import { DateRange } from 'react-day-picker';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import * as XLSX from 'xlsx';
+import ExcelImportExpenses from './ExcelImportExpenses';
 
-// UI Components from shadcn/ui
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+// UI & Icons
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils'; // Make sure you have this utility from shadcn
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from '@/lib/utils';
+import { Search, Trash2, Plus, Upload, Undo, Calendar as CalendarIcon, Wallet, Hash, BarChart, Tag } from 'lucide-react';
+import Select from 'react-select';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
 
-// --- Interfaces and Constants ---
+// --- INTERFACES & CONSTANTS ---
 interface Expense {
   id: string;
-  category: string;
-  amount: number;
   date: string;
+  category: string;
   description: string;
+  amount: number;
+}
+
+interface UndoOperation {
+  type: 'delete' | 'add' | 'edit' | 'import';
+  data: {
+    deletedRecords?: Expense[];
+    addedRecord?: Expense;
+    originalRecord?: Expense;
+    importedRecords?: Expense[];
+  };
 }
 
 const expenseCategories = ['Manufacturing', 'Marketing', 'Operations', 'Research & Development', 'Administrative', 'Travel', 'Equipment', 'Utilities', 'Legal', 'Other'];
-const PIE_CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF5733', '#C70039', '#900C3F', '#581845', '#1B4F72'];
 
-// --- Main Component ---
+// --- HELPER FUNCTIONS ---
+const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
+
+const getSelectStyles = (isDark: boolean) => ({
+    control: (p: any) => ({ ...p, backgroundColor: isDark ? '#1F2937' : '#FFFFFF', borderColor: isDark ? '#4B5563' : '#D1D5DB' }),
+    menu: (p: any) => ({ ...p, backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }),
+    option: (p: any, s: any) => ({ ...p, backgroundColor: s.isSelected ? '#3B82F6' : s.isFocused ? (isDark ? '#374151' : '#F3F4F6') : 'transparent', color: s.isSelected ? '#FFFFFF' : (isDark ? '#F9FAFB' : '#111827') }),
+    singleValue: (p: any) => ({ ...p, color: isDark ? '#F9FAFB' : '#111827' }),
+});
+
+// --- MAIN COMPONENT ---
 const AdminExpenses: React.FC = () => {
-  // --- State Management ---
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({ category: '', amount: '', date: format(new Date(), 'yyyy-MM-dd'), description: '' });
-  const [selectedRows, setSelectedRows] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
-  const { toast } = useToast();
+    // --- STATE MANAGEMENT ---
+    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [addingNew, setAddingNew] = useState(false);
+    const [newExpense, setNewExpense] = useState<Partial<Omit<Expense, 'id'>>>({ date: format(new Date(), 'yyyy-MM-dd'), amount: 0, category: '', description: '' });
+    const [editingCell, setEditingCell] = useState<{ rowId: string; field: keyof Expense } | null>(null);
+    const [selectedRows, setSelectedRows] = useState<string[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [date, setDate] = useState<DateRange | undefined>({ from: new Date(new Date().getFullYear(), new Date().getMonth(), 1), to: addDays(new Date(), 0) });
+    const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
+    const [isUndoing, setIsUndoing] = useState(false);
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Expense | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    const { toast } = useToast();
+     const [isDialogOpen, setDialogOpen] = useState(false);
+      const [isPopoverOpen, setPopoverOpen] = useState(false);
+            const [customDate, setCustomDate] = useState<DateRange | undefined>(date);
 
-  // --- Data Fetching and Real-time Updates ---
-  useEffect(() => {
-    const fetchExpenses = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
-        if (error) throw error;
-        setExpenses(data as Expense[]);
-      } catch (error: any) {
-        toast({ title: "Error", description: "Failed to fetch expenses", variant: "destructive" });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchExpenses();
 
-    const subscription = supabase.channel('expenses_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchExpenses())
-      .subscribe();
-
-    return () => { subscription.unsubscribe(); };
-  }, [toast]);
-
-  // --- Data Processing and Filtering ---
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter(expense => {
-      const expenseDate = new Date(expense.date);
-      const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) || expense.category.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(expense.category);
-      const matchesDate = !dateFilter || (dateFilter.from && dateFilter.to && expenseDate >= dateFilter.from && expenseDate <= dateFilter.to);
-      return matchesSearch && matchesCategory && matchesDate;
-    });
-  }, [expenses, searchTerm, categoryFilter, dateFilter]);
-
-  const expensesByCategory = useMemo(() => {
-    const categoryMap: { [key: string]: number } = {};
-    filteredExpenses.forEach(expense => {
-      categoryMap[expense.category] = (categoryMap[expense.category] || 0) + expense.amount;
-    });
-    return Object.entries(categoryMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredExpenses]);
-
-  const totalExpenses = useMemo(() => filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0), [filteredExpenses]);
-
-  // --- Event Handlers ---
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.category || !formData.amount || !formData.date) {
-      toast({ title: "Error", description: "Please fill all required fields.", variant: "destructive" });
-      return;
-    }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase.from('expenses').insert({ ...formData, amount: Number(formData.amount), user_id: user.id });
-    if (error) {
-      toast({ title: "Error adding expense", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Success", description: "Expense added successfully." });
-      setDialogOpen(false);
-      setFormData({ category: '', amount: '', date: format(new Date(), 'yyyy-MM-dd'), description: '' });
-    }
-  };
-
-  const handleDelete = async (ids: string[]) => {
-    if (ids.length === 0) return;
+    // --- DATA FETCHING & SIDE EFFECTS ---
     
-    // For Undo, we need original data
-    const expensesToDelete = expenses.filter(exp => ids.includes(exp.id));
-
-    // Optimistic UI update
-    setExpenses(current => current.filter(exp => !ids.includes(exp.id)));
-    setSelectedRows([]);
-
-    // Permanent deletion after a delay
-    const deleteTimer = setTimeout(async () => {
-        const { error } = await supabase.from('expenses').delete().in('id', ids);
+    const fetchExpenses = async () => {
+        if (!date?.from || !date?.to) return;
+        setLoading(true);
+        const { data, error } = await supabase.from('expenses').select('*').gte('date', date.from.toISOString()).lte('date', date.to.toISOString());
         if (error) {
-            // On failure, restore data
-            setExpenses(current => [...current, ...expensesToDelete].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-            toast({ title: "Error", description: "Failed to delete expenses.", variant: "destructive" });
+            toast({ title: "Error", description: "Failed to fetch expenses.", variant: "destructive" });
+        } else {
+            setExpenses(data as Expense[]);
         }
-    }, 5000);
+        setLoading(false);
+    };
 
-    // Toast with Undo action
-    toast({
-        title: `${ids.length} Expense(s) Deleted`,
-        description: "They will be permanently removed shortly.",
-        duration: 5000,
-        action: (
-            <Button variant="outline" onClick={() => {
-                clearTimeout(deleteTimer);
-                setExpenses(current => [...current, ...expensesToDelete].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                toast({ title: "Action Reverted", description: "The expenses have been restored." });
-            }}>
-                Undo
-            </Button>
-        )
-    });
-  };
+    useEffect(() => { fetchExpenses(); }, [date]);
+    useEffect(() => { 
+        const checkDarkMode = () => setIsDarkMode(document.documentElement.classList.contains('dark'));
+        checkDarkMode();
+        const observer = new MutationObserver(checkDarkMode);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
 
-  // --- Render ---
-  if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    // --- DATA PROCESSING (FILTERING & SORTING) ---
+    const sortedExpenses = useMemo(() => {
+        let filtered = expenses.filter(exp => {
+            const lowerSearch = searchTerm.toLowerCase();
+            return (exp.description || '').toLowerCase().includes(lowerSearch) || (exp.category || '').toLowerCase().includes(lowerSearch);
+        });
+        if (sortConfig.key) {
+            filtered.sort((a, b) => {
+                const valA = a[sortConfig.key!];
+                const valB = b[sortConfig.key!];
+                if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+        return filtered;
+    }, [expenses, searchTerm, sortConfig]);
 
-  return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Top Section: KPIs and Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* KPI Cards */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Total Expenses</CardTitle>
-              <CardDescription>Sum of all expenses in the selected period</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold tracking-tighter">₹{totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Expense Count</CardTitle>
-              <CardDescription>Number of expense records found</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold tracking-tighter">{filteredExpenses.length}</p>
-            </CardContent>
-          </Card>
-        </div>
+    // --- DASHBOARD METRICS ---
+    const dashboardStats = useMemo(() => {
+        const total = sortedExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+        const count = sortedExpenses.length;
+        const categoryCounts = sortedExpenses.reduce((acc, exp) => {
+            acc[exp.category] = (acc[exp.category] || 0) + Number(exp.amount || 0);
+            return acc;
+        }, {} as Record<string, number>);
+        const topCategory = Object.entries(categoryCounts).sort(([, a], [, b]) => b - a)[0];
+        return {
+            total,
+            count,
+            average: count > 0 ? total / count : 0,
+            topCategory: topCategory ? topCategory[0] : 'N/A',
+        };
+    }, [sortedExpenses]);
 
-        {/* Pie Chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Expenses by Category</CardTitle>
-            <CardDescription>A breakdown of spending across different categories.</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              {expensesByCategory.length > 0 ? (
-                <PieChart>
-                  <Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} />
-                  <Legend />
-                  <Pie data={expensesByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
-                    {expensesByCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <BarChart className="h-8 w-8 mr-2" />
-                  <p>No data to display for the current selection.</p>
+    // --- CORE LOGIC HANDLERS (CRUD, UNDO, ETC.) ---
+    const addToUndoStack = (operation: UndoOperation) => {
+        if (isUndoing) return;
+        setUndoStack(prev => [...prev, operation].slice(-10));
+    };
+
+      const handleApplyCustomDate = () => {
+    setDate(customDate); // Apply the date from the dialog
+    setDialogOpen(false);  // Close the dialog
+    setPopoverOpen(false); // Close the main popover
+   };
+
+const handleAddNew = async () => {
+    // Validation check remains the same
+    if (!newExpense.category || !newExpense.date || Number(newExpense.amount) <= 0) {
+        return toast({
+            title: "Missing Fields",
+            description: "Category, Date, and a valid Amount (> 0) are required.",
+            variant: "destructive"
+        });
+    }
+
+    // **REMOVED**: The code that gets the user ID is no longer needed.
+
+    // Prepare the record for insertion without the user_id
+    const recordToInsert = {
+        date: newExpense.date as string,
+        category: newExpense.category as string,
+        description: newExpense.description ?? '',
+        amount: Number(newExpense.amount),
+    };
+
+    const { data, error } = await supabase
+        .from('expenses')
+        .insert(recordToInsert) // Use the object without user_id
+        .select()
+        .single();
+        
+    if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+        setExpenses(prev => [
+            {
+                ...data,
+                description: data.description ?? ''
+            },
+            ...prev
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        addToUndoStack({ type: 'add', data: { addedRecord: { ...data, description: data.description ?? '' } } });
+        setNewExpense({ date: format(new Date(), 'yyyy-MM-dd'), amount: 0, category: '', description: '' });
+        setAddingNew(false);
+        toast({ title: "Success", description: "Expense added." });
+    }
+};
+    
+    const handleEditChange = async (id: string, field: keyof Expense, value: any) => {
+        const originalRecord = expenses.find(exp => exp.id === id);
+        if (!originalRecord) return;
+        
+        const updatedRecord = { ...originalRecord, [field]: value };
+        setExpenses(expenses.map(exp => (exp.id === id ? updatedRecord : exp)));
+        setEditingCell(null);
+        
+        addToUndoStack({ type: 'edit', data: { originalRecord } });
+        
+        const { error } = await supabase.from('expenses').update({ [field]: value }).eq('id', id);
+        if (error) {
+            setExpenses(expenses);
+            toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+        }
+    };
+
+    const handleDelete = async () => {
+        if (selectedRows.length === 0) return;
+        const deletedRecords = expenses.filter(exp => selectedRows.includes(exp.id));
+        addToUndoStack({ type: 'delete', data: { deletedRecords } });
+
+        setExpenses(expenses.filter(exp => !selectedRows.includes(exp.id)));
+        const { error } = await supabase.from('expenses').delete().in('id', selectedRows);
+
+        if (error) {
+            setExpenses(prev => [...prev, ...deletedRecords]);
+            toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
+        } else {
+            toast({ title: "Success", description: `${deletedRecords.length} expense(s) deleted.` });
+            setSelectedRows([]);
+        }
+    };
+
+    const handleImportedData = async (importedRows: any[]) => {
+    if (!importedRows || importedRows.length === 0) {
+        return toast({ title: "No Data", description: "The imported file is empty or invalid.", variant: "destructive" });
+    }
+
+    // Expects Excel columns named: Date, Category, Description, Amount
+    const processedData = importedRows.map(row => ({
+        date: new Date(row.Date).toISOString().split('T')[0], // Format date correctly
+        category: row.Category,
+        description: row.Description,
+        amount: Number(row.Amount),
+    })).filter(d => d.category && d.date && !isNaN(d.amount));
+
+    if (processedData.length === 0) {
+        return toast({ title: "Invalid Data", description: "No valid expense rows found. Check column names and data.", variant: "destructive" });
+    }
+
+    const { data, error } = await supabase.from('expenses').insert(processedData).select();
+    if (error) {
+        toast({ title: "Import Failed", description: error.message, variant: "destructive" });
+    } else {
+        // Ensure description is always a string
+        const normalizedData = (data as Expense[]).map(exp => ({
+            ...exp,
+            description: exp.description ?? ''
+        }));
+        addToUndoStack({ type: 'import', data: { importedRecords: normalizedData } });
+        fetchExpenses();
+        toast({ title: "Success", description: `${data.length} expenses imported.` });
+    }
+};
+    
+    const handleUndo = async () => {
+        if (undoStack.length === 0) return;
+        setIsUndoing(true);
+        const lastOp = undoStack.pop()!;
+        
+        try {
+            switch (lastOp.type) {
+                case 'add': await supabase.from('expenses').delete().eq('id', lastOp.data.addedRecord!.id); break;
+                case 'delete': await supabase.from('expenses').insert(lastOp.data.deletedRecords!.map(({ id, ...rest }) => rest)); break;
+                case 'edit': await supabase.from('expenses').update(lastOp.data.originalRecord!).eq('id', lastOp.data.originalRecord!.id); break;
+            }
+            fetchExpenses();
+            toast({ title: "Action Undone" });
+        } catch (error: any) {
+            toast({ title: "Undo Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setIsUndoing(false);
+        }
+    };
+
+    const handleExportToExcel = () => {
+        const dataToExport = sortedExpenses.map(e => ({ Date: e.date, Category: e.category, Description: e.description, Amount: e.amount }));
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Expenses");
+        XLSX.writeFile(workbook, "Expenses_Report.xlsx");
+    };
+
+    // --- UI HANDLERS ---
+    const requestSort = (key: keyof Expense) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const handleSelectAll = (checked: boolean | 'indeterminate') => {
+        setSelectedRows(checked ? sortedExpenses.map(e => e.id) : []);
+    };
+    
+    // --- RENDER LOGIC ---
+    const renderEditableCell = (expense: Expense, field: keyof Expense) => {
+        const isEditing = editingCell?.rowId === expense.id && editingCell.field === field;
+        if (isEditing) {
+            if (field === 'category') {
+                return (
+                    <TableCell className="p-1">
+                        <Select
+                            options={expenseCategories.map(c => ({ value: c, label: c }))}
+                            defaultValue={{ value: expense.category, label: expense.category }}
+                            onChange={(opt: any) => handleEditChange(expense.id, 'category', opt.value)}
+                            onBlur={() => setEditingCell(null)}
+                            autoFocus
+                            styles={getSelectStyles(isDarkMode)}
+                        />
+                    </TableCell>
+                );
+            }
+            return (
+                <TableCell className="p-1">
+                    <Input
+                        type={field === 'date' ? 'date' : field === 'amount' ? 'number' : 'text'}
+                        defaultValue={expense[field] as any}
+                        onBlur={(e) => handleEditChange(expense.id, field, field === 'amount' ? Number(e.target.value) : e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                        autoFocus
+                        className="h-8"
+                    />
+                </TableCell>
+            );
+        }
+        return (
+            <TableCell onClick={() => setEditingCell({ rowId: expense.id, field })} className={cn("cursor-pointer", field === 'amount' && 'text-right font-semibold')}>
+                {field === 'amount' ? formatCurrency(Number(expense.amount)) : String(expense[field] ?? '')}
+            </TableCell>
+        );
+    };
+
+    if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+
+    return (
+        <TooltipProvider>
+            <div className="p-4 md:p-8 space-y-6">
+                {/* Dashboard Cards */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Total Expenses</CardTitle><Wallet className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(dashboardStats.total)}</div></CardContent></Card>
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Expense Count</CardTitle><Hash className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardStats.count}</div></CardContent></Card>
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Average Expense</CardTitle><BarChart className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(dashboardStats.average)}</div></CardContent></Card>
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Top Category</CardTitle><Tag className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardStats.topCategory}</div></CardContent></Card>
                 </div>
-              )}
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Table Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-                <CardTitle>Expense Records</CardTitle>
-                <CardDescription>Manage and review all company expenses.</CardDescription>
-            </div>
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRows)} disabled={selectedRows.length === 0}>
-                <Trash2 className="h-4 w-4 mr-2" /> Delete ({selectedRows.length})
-              </Button>
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Add Expense</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Add New Expense</DialogTitle></DialogHeader>
-                  <form onSubmit={handleAddExpense} className="space-y-4">
-                    {/* Add Expense Form remains the same */}
-                    <div>
-                        <label>Category *</label>
-                        <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full mt-1 input">
-                            <option value="">Select category</option>
-                            {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
-                    </div>
-                    <div><label>Amount *</label><Input type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} required/></div>
-                    <div><label>Date *</label><Input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required/></div>
-                    <div><label>Description</label><Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div>
-                    <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit">Save</Button></div>
-                  </form>
-                </DialogContent>
-              </Dialog>
-              <Button variant="outline" size="sm" disabled><Download className="h-4 w-4 mr-2" /> Export</Button>
-            </div>
-          </div>
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-2 mt-4">
-            <div className="relative flex-grow">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search by description or category..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-            </div>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full md:w-auto"><Filter className="h-4 w-4 mr-2"/>Filter by Category</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuLabel>Categories</DropdownMenuLabel>
-                    <DropdownMenuSeparator/>
-                    {expenseCategories.map(category => (
-                        <DropdownMenuCheckboxItem key={category} checked={categoryFilter.includes(category)} onCheckedChange={() => {
-                            setCategoryFilter(current => current.includes(category) ? current.filter(c => c !== category) : [...current, category])
-                        }}>
-                            {category}
-                        </DropdownMenuCheckboxItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-            <Popover>
+                {/* Main Table Card */}
+                <Card>
+                    <CardHeader>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <CardTitle>Expense Records</CardTitle>
+                            <div className="flex items-center gap-2">
+                                <Tooltip delayDuration={0}><TooltipTrigger asChild><Button onClick={handleUndo} variant="outline" size="icon" disabled={undoStack.length === 0}><Undo className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Undo</p></TooltipContent></Tooltip>
+                                <ExcelImportExpenses onDataParsed={handleImportedData} />
+                                <Tooltip delayDuration={0}><TooltipTrigger asChild><Button onClick={handleExportToExcel} variant="outline" size="icon"><Upload className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Export</p></TooltipContent></Tooltip>
+                                <Tooltip delayDuration={0}><TooltipTrigger asChild><Button size="icon" onClick={() => setAddingNew(true)} disabled={addingNew}><Plus className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Add new</p></TooltipContent></Tooltip>
+                            </div>
+                        </div>
+                        <div className="flex flex-col md:flex-row items-center gap-2 mt-4">
+                            <div className="relative flex-grow w-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search expenses..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+                                       <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
                 <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full md:w-[300px] justify-start text-left font-normal", !dateFilter && "text-muted-foreground")}>
+                    <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn("w-[300px] justify-start text-left font-normal", !date && "text-muted-foreground")}
+                    >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateFilter?.from ? (dateFilter.to ? <>{format(dateFilter.from, "LLL dd, y")} - {format(dateFilter.to, "LLL dd, y")}</> : format(dateFilter.from, "LLL dd, y")) : <span>Pick a date range</span>}
+                        {date?.from ? (date.to ? (`${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`) : format(date.from, "LLL dd, y")) : (<span>Pick a date</span>)}
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="range" selected={dateFilter} onSelect={setDateFilter} numberOfMonths={2}/>
+                <PopoverContent className="w-auto p-0 flex" side="bottom" align="start">
+                    {/* Presets Column */}
+                    <div className="flex flex-col space-y-1 p-2 border-r">
+                        <Button variant="ghost" onClick={() => { setDate({ from: new Date(), to: new Date() }); setPopoverOpen(false); }}>Today</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -7), to: new Date() }); setPopoverOpen(false); }}>Last 7 Days</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -30), to: new Date() }); setPopoverOpen(false); }}>Last 30 Days</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 2), to: new Date() }); setPopoverOpen(false); }}>Last 2 Months</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 6), to: new Date() }); setPopoverOpen(false); }}>Last 6 Months</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 1), to: new Date() }); setPopoverOpen(false); }}>Last 1 Year</Button>
+                        <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 50), to: new Date() }); setPopoverOpen(false); }}>All Time</Button>
+
+                        {/* Custom Range Dialog */}
+                        <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" className="text-blue-600 hover:text-blue-700 justify-start">Custom...</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Select Custom Date Range</DialogTitle></DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.from && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {customDate?.from ? format(customDate.from, "dd-MM-yyyy") : <span>Start Date</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.from} onSelect={(day) => setCustomDate((prev) => ({ ...prev, from: day }))} /></PopoverContent>
+                                    </Popover>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.to && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {customDate?.to ? format(customDate.to, "dd-MM-yyyy") : <span>End Date</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                          <Calendar
+                                            mode="single"
+                                            selected={customDate?.to}
+                                            onSelect={(day) =>
+                                              setCustomDate((prev) =>
+                                                prev
+                                                  ? { from: prev.from ?? undefined, to: day }
+                                                  : { from: undefined, to: day }
+                                              )
+                                            }
+                                          />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                                <DialogFooter>
+                                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                                    <Button onClick={handleApplyCustomDate}>Apply</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+
+                    {/* Main Calendar */}
+                    {/* <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={date?.from}
+                        selected={date}
+                        onSelect={setDate}
+                        numberOfMonths={2}
+                    /> */}
                 </PopoverContent>
             </Popover>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead><Checkbox onCheckedChange={checked => setSelectedRows(checked ? filteredExpenses.map(e => e.id) : [])} checked={selectedRows.length > 0 && selectedRows.length === filteredExpenses.length}/></TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredExpenses.length > 0 ? filteredExpenses.map(expense => (
-                  <TableRow key={expense.id} data-state={selectedRows.includes(expense.id) && "selected"}>
-                    <TableCell><Checkbox onCheckedChange={checked => setSelectedRows(current => checked ? [...current, expense.id] : current.filter(id => id !== expense.id))} checked={selectedRows.includes(expense.id)} /></TableCell>
-                    <TableCell>{format(new Date(expense.date), 'dd MMM, yyyy')}</TableCell>
-                    <TableCell><span className="font-medium">{expense.category}</span></TableCell>
-                    <TableCell className="text-muted-foreground">{expense.description || 'N/A'}</TableCell>
-                    <TableCell className="text-right font-semibold">₹{expense.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</TableCell>
-                  </TableRow>
-                )) : (
-                  <TableRow><TableCell colSpan={5} className="text-center h-24">No expenses found.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className="sticky top-0 z-10 bg-background">
+                                    <TableRow>
+                                        <TableHead className="w-[50px]"><Checkbox onCheckedChange={checked => handleSelectAll(checked === true)} checked={sortedExpenses.length > 0 && selectedRows.length === sortedExpenses.length} /></TableHead>
+                                        <TableHead onClick={() => requestSort('date')} className="cursor-pointer">Date</TableHead>
+                                        <TableHead onClick={() => requestSort('category')} className="cursor-pointer">Category</TableHead>
+                                        <TableHead onClick={() => requestSort('description')} className="cursor-pointer">Description</TableHead>
+                                        <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer">Amount</TableHead>
+                                        <TableHead className="text-right pr-4"><Tooltip delayDuration={0}><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={handleDelete} disabled={selectedRows.length === 0}><Trash2 className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent><p>Delete selected</p></TooltipContent></Tooltip></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {addingNew && (
+                                        <TableRow className="bg-muted/50">
+                                            <TableCell></TableCell>
+                                            <TableCell className="p-1"><Input type="date" className="h-8" value={newExpense.date || ''} onChange={e => setNewExpense(p => ({...p, date: e.target.value}))}/></TableCell>
+                                            <TableCell className="p-1 min-w-[200px]"><Select options={expenseCategories.map(c => ({ value: c, label: c }))} onChange={(opt: any) => setNewExpense(p => ({ ...p, category: opt.value }))} placeholder="Select category..." styles={getSelectStyles(isDarkMode)}/></TableCell>
+                                            <TableCell className="p-1"><Input className="h-8" placeholder="Expense description..." value={newExpense.description || ''} onChange={e => setNewExpense(p => ({...p, description: e.target.value}))}/></TableCell>
+                                            <TableCell className="p-1"><Input type="number" className="h-8 w-24 text-right" value={newExpense.amount || ''} onChange={e => setNewExpense(p => ({...p, amount: Number(e.target.value)}))} /></TableCell>
+                                            <TableCell className="p-1 text-right"><div className="flex gap-2 justify-end"><Button onClick={handleAddNew} size="sm">Save</Button><Button onClick={() => setAddingNew(false)} variant="ghost" size="sm">Cancel</Button></div></TableCell>
+                                        </TableRow>
+                                    )}
+                                    {sortedExpenses.length > 0 ? sortedExpenses.map(expense => (
+                                        <TableRow key={expense.id} data-state={selectedRows.includes(expense.id) ? "selected" : undefined}>
+                                            <TableCell><Checkbox onCheckedChange={checked => setSelectedRows(p => checked ? [...p, expense.id] : p.filter(id => id !== expense.id))} checked={selectedRows.includes(expense.id)} /></TableCell>
+                                            {renderEditableCell(expense, 'date')}
+                                            {renderEditableCell(expense, 'category')}
+                                            {renderEditableCell(expense, 'description')}
+                                            {renderEditableCell(expense, 'amount')}
+                                            <TableCell></TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24">No expenses found for the selected period.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </TooltipProvider>
+    );
 };
 
 export default AdminExpenses;

@@ -16,6 +16,7 @@ import AdminSales from "./pages/admin/Sales";
 import AdminExpenses from "./pages/admin/Expenses";
 import ResellerRequests from "./pages/reseller/Requests";
 import AdminInventory from "./pages/admin/Inventory";
+import AdminFinance from "./pages/admin/Finances";
 import ProductDetails from "./pages/publicView/ProductDetails";
 import ViewProducts from "./pages/publicView/ViewProducts";
 import PublicLayout from "./components/PublicLayout"; // <-- import this if not already
@@ -144,6 +145,11 @@ const App = () => (
           <Route path="/admin/inventory" element={
             <ProtectedRoute allowedRole="admin">
               <AdminInventory />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/finance" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminFinance />
             </ProtectedRoute>
           } />
 

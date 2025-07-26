@@ -40,6 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/sales', icon: BarChart3, label: 'Sales Tracking' },
     { to: '/admin/expenses', icon: Settings, label: 'Expense Tracker' },
     { to: '/admin/inventory', icon: Users, label: 'Inventory Management' },
+    { to: '/admin/finance', icon: Users, label: 'Finance Management' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;

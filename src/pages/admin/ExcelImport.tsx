@@ -2,6 +2,12 @@ import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
 import { Download, Upload } from 'lucide-react'; // Using a more descriptive icon
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 // Define the required internal keys and the possible header names for each
 const HEADER_ALIASES: { [key: string]: string[] } = {
@@ -93,9 +99,18 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
         style={{ display: 'none' }}
         accept=".xlsx, .xls, .csv"
       />
+      <TooltipProvider>
+  <Tooltip delayDuration={0}> {/* <--- Add this prop */}
+    <TooltipTrigger asChild>
       <Button onClick={handleButtonClick} variant="outline" size="sm">
         <Download className="h-4 w-4" />
       </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Import Sales</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
     </>
   );
 };
