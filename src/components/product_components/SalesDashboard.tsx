@@ -1,13 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Tables } from '@/types/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {CalendarIcon } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 
 import "react-quill/dist/quill.snow.css";
+
+import {
+  TooltipProps,
+} from "recharts";
+import { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
+import { CSSProperties } from "react";
 
 // Recharts imports for the graph
 import {
@@ -17,7 +23,6 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    Legend,
     ResponsiveContainer
 } from 'recharts';
 
@@ -297,6 +302,40 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
     }, [salesData, lineMode]);
 
 
+        // Custom Tooltip Component with color dot per line
+
+    const CustomTooltip = ({
+        active,
+        payload,
+        label,
+        }: TooltipProps<ValueType, NameType>) => {
+        if (active && payload && payload.length) {
+            return (
+            <div className="rounded-lg border border-border bg-popover text-popover-foreground p-3 shadow-md backdrop-blur-md">
+                <p className="font-semibold text-sm mb-2">{label}</p>
+                <div className="flex flex-col gap-1">
+                {payload.map((entry, index) => {
+                    const colorDotStyle: CSSProperties = {
+                    backgroundColor: entry.color || "#000",
+                    };
+                    return (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                        <span
+                        className="w-3 h-3 rounded-full inline-block"
+                        style={colorDotStyle}
+                        />
+                        <span className="font-medium">{entry.name}:</span>
+                        <span>{Number(entry.value).toLocaleString()}</span>
+                    </div>
+                    );
+                })}
+                </div>
+            </div>
+            );
+        }
+
+        return null;
+        };
     if (error) {
         return (
             <Card className="healthcare-card">
@@ -308,122 +347,168 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-[30%_1fr] gap-6 fade-in-up">
-            {/* Left Section: KPI Metrics */}
-            <Card className=" healthcare-card p-6 flex flex-col justify-around gap-4">
-                <CardHeader className="p-0 pb-4">
-                    <CardTitle className="text-2xl font-bold">Key Performance Indicators</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 grid grid-cols-1 gap-4"> {/* Adjusted for 4 KPIs */}
-                    <div className="bg-gradient-to-br from-blue-100 to-blue-200 p-4 rounded-lg shadow-sm">
-                        <p className="text-sm text-blue-800">Total Packages Sold</p>
-                        <p className="text-4xl font-extrabold text-blue-900">{kpiData.totalSalesQty.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-4 rounded-lg shadow-sm">
-                        <p className="text-sm text-purple-800">Average Order Value</p>
-                        <p className="text-4xl font-extrabold text-purple-900">₹{kpiData.averageOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-green-100 to-green-200 p-4 rounded-lg shadow-sm">
-                        <p className="text-sm text-green-800">Total Revenue</p>
-                        <p className="text-4xl font-extrabold text-green-900">₹{kpiData.totalRevenue.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 p-4 rounded-lg shadow-sm">
-                        <p className="text-sm text-yellow-800">Total Outstanding</p>
-                        <p className="text-4xl font-extrabold text-yellow-900">₹{kpiData.totalOutstanding.toLocaleString()}</p>
-                    </div>
+        <div className="flex flex-col gap-6 fade-in-up">
+            {/* KPI Metrics - Always at the top, same line on desktop */}
+            <div className="p-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="p-2 rounded-lg shadow-sm">
+                    <CardContent>
+                        <p className="text-sm ">Total Packages Sold</p>
+                        <p className="text-4xl font-extrabold mt-2">{kpiData.totalSalesQty.toLocaleString()}</p>
+                    </CardContent>
+                </Card>
+                <Card className="p-2 rounded-lg shadow-sm">
+                    <CardContent>
+                        <p className="text-sm">Average Order Value</p>
+                        <p className="text-4xl font-extrabold mt-2">₹{kpiData.averageOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </CardContent>
+                </Card>
+                <Card className="p-2 rounded-lg shadow-sm">
+                    <CardContent>
+                        <p className="text-sm ">Total Revenue</p>
+                        <p className="text-4xl font-extrabold mt-2">₹{kpiData.totalRevenue.toLocaleString()}</p>
+                    </CardContent>
+                </Card>
+                <Card className="p-2 rounded-lg shadow-sm">
+                    <CardContent>
+                        <p className="text-sm ">Total Outstanding</p>
+                        <p className="text-4xl font-extrabold mt-2">₹{kpiData.totalOutstanding.toLocaleString()}</p>
+                    </CardContent>
+                </Card>
+            </div>
 
-                </CardContent>
-            </Card>
+            {/* Sales Graph and Controls */}
 
-            {/* Right Section: Sales Graph and Controls */}
-            <Card className="col-span-1 healthcare-card p-6 flex flex-col">
-                <CardHeader className="p-0 pb-4">
-                    <CardTitle className="text-2xl font-bold">Sales Trend Analysis</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 flex flex-col flex-grow">
-                    {/* Graph Controls - Top Section */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                        {/* Date Range Picker */}
-                        <div className="flex flex-col space-y-2">
-                            <Label htmlFor="dateRange">Date Range</Label>
-                            <Popover>
+                <div className="p-0 flex flex-grow flex-col md:flex-row gap-6"> {/* Added flex-col md:flex-row and gap */}
+                    {/* Left Section: Controls */}
+                    <Card className="health-care md:w-1/3 p-4 border rounded-lg shadow-inner flex flex-col gap-6">
+                        {/* === Controls Section === */}
+                        <div className="flex flex-col gap-4">
+                            {/* Date Range Preset Select */}
+                            <div className="flex flex-col space-y-2">
+                            <Label htmlFor="dateRangePreset">Date Range Preset</Label>
+                            <Select value={dateRangePreset} onValueChange={handleDateRangePresetChange}>
+                                <SelectTrigger className="w-full" id="dateRangePreset">
+                                <SelectValue placeholder="Select preset" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="lifetime">Lifetime</SelectItem>
+                                <SelectItem value="7d">Last 7 Days</SelectItem>
+                                <SelectItem value="30d">Last 30 Days</SelectItem>
+                                <SelectItem value="90d">Last 90 Days</SelectItem>
+                                <SelectItem value="custom">Custom Range</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            </div>
+
+                            {/* Custom Date Range Picker */}
+                            {dateRangePreset === 'custom' && (
+                            <div className="flex flex-col space-y-2">
+                                <Label htmlFor="customDateRange">Custom Date Range</Label>
+                                <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
-                                        id="dateRange"
-                                        variant={"outline"}
-                                        className={`w-full justify-start text-left font-normal ${!dateRange.from && dateRangePreset !== 'lifetime' && "text-muted-foreground"
-                                            }`}
+                                    id="customDateRange"
+                                    variant={"outline"}
+                                    className={`w-full justify-start text-left font-normal ${!dateRange.from && "text-muted-foreground"}`}
                                     >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {dateRangePreset === 'lifetime' ? (
-                                            "Lifetime"
-                                        ) : dateRange.from ? (
-                                            dateRange.to ? (
-                                                <>
-                                                    {format(dateRange.from, "LLL dd, y")} -{" "}
-                                                    {format(dateRange.to, "LLL dd, y")}
-                                                </>
-                                            ) : (
-                                                format(dateRange.from, "LLL dd, y")
-                                            )
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateRange.from ? (
+                                        dateRange.to ? (
+                                        <>
+                                            {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                                        </>
                                         ) : (
-                                            <span>Select a date range</span>
-                                        )}
+                                        format(dateRange.from, "LLL dd, y")
+                                        )
+                                    ) : (
+                                        <span>Pick a date range</span>
+                                    )}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
-                                    <Select
-                                        value={dateRangePreset}
-                                        onValueChange={handleDateRangePresetChange}
-                                    >
-                                        <SelectTrigger className="w-[180px] m-2">
-                                            <SelectValue placeholder="Select preset" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="lifetime">Lifetime</SelectItem>
-                                            <SelectItem value="7d">Last 7 Days</SelectItem>
-                                            <SelectItem value="30d">Last 30 Days</SelectItem>
-                                            <SelectItem value="90d">Last 90 Days</SelectItem>
-                                            <SelectItem value="custom">Custom Range</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    {dateRangePreset === 'custom' && (
-                                        <Calendar
-                                            initialFocus
-                                            mode="range"
-                                            defaultMonth={dateRange.from}
-                                            selected={
-                                                dateRange.from && dateRange.to
-                                                    ? { from: dateRange.from, to: dateRange.to }
-                                                    : undefined
-                                            }
-                                            onSelect={setDateRange as any}
-                                            numberOfMonths={2}
-                                        />
-                                    )}
+                                    <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange.from}
+                                    selected={
+                                        dateRange.from && dateRange.to
+                                        ? { from: dateRange.from, to: dateRange.to }
+                                        : undefined
+                                    }
+                                    onSelect={setDateRange as any}
+                                    numberOfMonths={2}
+                                    />
                                 </PopoverContent>
-                            </Popover>
-                        </div>
+                                </Popover>
+                            </div>
+                            )}
 
-                        {/* X-Axis Granularity */}
-                        <div className="flex flex-col space-y-2">
+                            {/* X-Axis Granularity */}
+                            <div className="flex flex-col space-y-2">
                             <Label htmlFor="timeUnit">Show by</Label>
                             <Select value={timeUnit} onValueChange={(value: 'day' | 'month' | 'year') => setTimeUnit(value)}>
                                 <SelectTrigger className="w-full" id="timeUnit">
-                                    <SelectValue placeholder="Select time unit" />
+                                <SelectValue placeholder="Select time unit" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="day">Day</SelectItem>
-                                    <SelectItem value="month">Month</SelectItem>
-                                    <SelectItem value="year">Year</SelectItem>
-                                    {/* <SelectItem value="hour">Hour (requires timestamp data if present in db)</SelectItem> */}
+                                <SelectItem value="day">Day</SelectItem>
+                                <SelectItem value="month">Month</SelectItem>
+                                <SelectItem value="year">Year</SelectItem>
                                 </SelectContent>
                             </Select>
-                        </div>
-                    </div>
+                            </div>
 
-                    {/* Graph Rendering Area */}
-                    <div className="h-[350px] w-full mb-6">
+                            {/* Metric Toggle */}
+                            <div className="flex flex-col space-y-2">
+                            <Label htmlFor="metric">Metric to Display</Label>
+                            <Select value={metric} onValueChange={(value: 'qty' | 'price' | 'total') => setMetric(value)}>
+                                <SelectTrigger className="w-full" id="metric">
+                                <SelectValue placeholder="Select metric" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="qty">Packages Sold</SelectItem>
+                                <SelectItem value="price">Price Per Unit</SelectItem>
+                                <SelectItem value="total">Total Revenue</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            </div>
+
+                            {/* Line Mode Toggle */}
+                            <div className="flex flex-col space-y-2">
+                            <Label htmlFor="lineMode">Graph Mode</Label>
+                            <Select value={lineMode} onValueChange={(value: 'combined' | 'perProduct') => setLineMode(value)}>
+                                <SelectTrigger className="w-full" id="lineMode">
+                                <SelectValue placeholder="Select line mode" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="combined">Combined Sales</SelectItem>
+                                <SelectItem value="perProduct">Sales Per Product</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            </div>
+                        </div>
+
+                        {/* === Product Line Indicator Section (only in perProduct mode) === */}
+                        {lineMode === 'perProduct' && (
+                            <div className="flex flex-col gap-2">
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Product Line Indicators</h4>
+                            <div className="flex flex-wrap gap-3">
+                                {productNamesForLines.map((pName, index) => {
+                                const color = `hsl(${index * 60 % 360}, 70%, 50%)`;
+                                return (
+                                    <div key={pName} className="flex items-center gap-2">
+                                    <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: color }}></span>
+                                    <span className="text-sm text-gray-800 dark:text-gray-200">{pName}</span>
+                                    </div>
+                                );
+                                })}
+                            </div>
+                            </div>
+                        )}
+                    </Card>
+
+                    {/* Right Section: Graph Only */}
+                    <div className="md:flex-1 p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-inner h-[400px]"> {/* Distinct styling, flex-1 for remaining width */}
                         {loading ? (
                             <div className="flex items-center justify-center h-full text-muted-foreground">
                                 Loading sales data...
@@ -444,10 +529,10 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
                                     }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="date" className='mt82' />
+                                    <XAxis dataKey="date" />
                                     <YAxis />
-                                    <Tooltip formatter={(value: number) => value.toLocaleString()} />
-                                    <Legend />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    {/* <Legend layout="horizontal" align="center" verticalAlign="bottom" /> */}
                                     {lineMode === 'combined' ? (
                                         <Line
                                             type="monotone"
@@ -470,45 +555,14 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
                                         ))
                                     )}
                                 </LineChart>
+                                
                             </ResponsiveContainer>
+                            
                         )}
                     </div>
-
-                    {/* Graph Controls - Bottom Section */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-auto"> {/* mt-auto pushes to bottom */}
-                        {/* Metric Toggle */}
-                        <div className="flex flex-col space-y-2">
-                            <Label htmlFor="metric">Metric to Display</Label>
-                            <Select value={metric} onValueChange={(value: 'qty' | 'price' | 'total') => setMetric(value)}>
-                                <SelectTrigger className="w-full" id="metric">
-                                    <SelectValue placeholder="Select metric" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="qty">Packages Sold</SelectItem>
-                                    <SelectItem value="price">Price Per Unit</SelectItem>
-                                    <SelectItem value="total">Total Revenue</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Line Mode Toggle */}
-                        <div className="flex flex-col space-y-2">
-                            <Label htmlFor="lineMode">Graph Mode</Label>
-                            <Select value={lineMode} onValueChange={(value: 'combined' | 'perProduct') => setLineMode(value)}>
-                                <SelectTrigger className="w-full" id="lineMode">
-                                    <SelectValue placeholder="Select line mode" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="combined">Combined Sales</SelectItem>
-                                    <SelectItem value="perProduct">Sales Per Product</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
         </div>
     );
 };
 
-export default SalesDashboard
+export default SalesDashboard;
