@@ -12,7 +12,9 @@ import {
   Users,
   BarChart3,
   Settings,
-  Flower2
+  Flower2,
+  DollarSign,
+  IndianRupee
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import ToggleTheme from './ToggleTheme';
@@ -40,7 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/sales', icon: BarChart3, label: 'Sales Tracking' },
     { to: '/admin/expenses', icon: Settings, label: 'Expense Tracker' },
     { to: '/admin/inventory', icon: Users, label: 'Inventory Management' },
-    { to: '/admin/finance', icon: Users, label: 'Finance Management' },
+    { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;

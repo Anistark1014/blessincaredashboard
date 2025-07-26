@@ -1,4 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { addDays } from "date-fns";
+import { Calendar as CalendarIcon, Search } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+// DateRange type for date filtering
+type DateRange = {
+  from: Date;
+  to?: Date;
+};
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +35,7 @@ import {
   PiggyBank,
   CreditCard,
 } from "lucide-react";
+import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
 
 interface Investment {
   id: string;
@@ -58,6 +72,12 @@ const Finance = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
   const [loanAction, setLoanAction] = useState<"take" | "pay">("take");
+  const [sales, setSales] = useState<any[]>([]);
+  const [date, setDate] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: addDays(new Date(), 0),
+  });
+  const [isPopoverOpen, setPopoverOpen] = useState(false);
 
   // Investment form state
   const [investmentForm, setInvestmentForm] = useState({
@@ -80,6 +100,48 @@ const Finance = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    fetchSalesData();
+  }, [date]);
+
+  // Fetch sales data with products for KPI calculations, filtered by date range
+  const fetchSalesData = async () => {
+    if (!date?.from || !date?.to) return;
+    const startDate = date.from.toISOString();
+    const endDate = date.to.toISOString();
+    const { data, error } = await supabase
+      .from("sales")
+      .select("*, products(*)")
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: false });
+    if (!error && data) {
+      setSales(data);
+    }
+  };
+  // Memo for display date (like SalesTable)
+  const displayDate = useMemo(() => {
+    if (!date?.from) return null;
+    const fromMonth = date.from.toLocaleString("default", { month: "short" });
+    const fromYear = date.from.getFullYear();
+    if (
+      date.to &&
+      date.from.getFullYear() === date.to.getFullYear() &&
+      date.from.getMonth() === date.to.getMonth()
+    ) {
+      return `${fromMonth.toUpperCase()} ${fromYear}`;
+    }
+    if (date.to) {
+      const toMonth = date.to.toLocaleString("default", { month: "short" });
+      const toYear = date.to.getFullYear();
+      if (fromYear === toYear) {
+        return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+      }
+      return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+    }
+    return `${fromMonth.toUpperCase()} ${fromYear}`;
+  }, [date]);
 
   const fetchData = async () => {
     try {
@@ -107,9 +169,29 @@ const Finance = () => {
 
       if (paymentsError) throw paymentsError;
 
-      setInvestments(investmentsData || []);
-      setLoans(loansData || []);
-      setLoanPayments(paymentsData || []);
+      setInvestments(
+        (investmentsData || []).map((inv: any) => ({
+          id: inv.id,
+          investor_name: inv.investor_name,
+          amount: inv.amount,
+          note: inv.note,
+          created_at: inv.created_at,
+        }))
+      );
+      setLoans(
+        (loansData || []).map((loan: any) => ({
+          id: loan.id,
+          issuer: loan.issuer,
+          amount: loan.amount,
+          interest_rate: loan.interest_rate,
+          monthly_payment: loan.monthly_payment,
+          duration_months: loan.duration_months,
+          remaining_balance: loan.remaining_balance,
+          status: loan.status,
+          created_at: loan.created_at,
+        }))
+      );
+      // setLoanPayments(paymentsData || []);
 
       // Calculate balance locally
       const totalInvestments = (investmentsData || []).reduce(
@@ -136,19 +218,25 @@ const Finance = () => {
     }
   };
 
-  const calculateKPIs = () => {
-    const revenue = investments.reduce(
-      (sum, inv) => sum + Number(inv.amount),
-      0
-    );
-    const outstanding = loans.reduce(
-      (sum, loan) => sum + Number(loan.remaining_balance),
-      0
-    );
-    const gmv = revenue + outstanding;
+  // Calculate KPIs from sales data (like EnhancedSalesDashboard)
+  const salesStats = sales.reduce(
+    (acc, sale) => {
+      acc.totalSales += Number(sale.total || 0);
+      acc.totalPaid += Number(sale.paid || 0);
+      acc.gmv += Number(sale.qty || 0) * Number(sale.products?.mrp || 0);
+      return acc;
+    },
+    { totalSales: 0, totalPaid: 0, gmv: 0 }
+  );
+  const outstanding = salesStats.totalSales - salesStats.totalPaid;
+  const revenue = salesStats.totalPaid;
+  const gmv = salesStats.gmv;
 
-    return { revenue, outstanding, gmv };
-  };
+  // Add investments and loans to the company balance
+  const companyBalance =
+    revenue +
+    investments.reduce((sum, inv) => sum + Number(inv.amount), 0) +
+    loans.reduce((sum, loan) => sum + Number(loan.amount), 0);
 
   const handleInvestmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +256,16 @@ const Finance = () => {
 
       if (error) throw error;
 
-      setInvestments((prev) => [data, ...prev]);
+      setInvestments((prev) => [
+        {
+          id: data.id,
+          investor_name: data.investor_name,
+          amount: data.amount,
+          note: data.note ?? undefined,
+          created_at: data.created_at,
+        },
+        ...prev,
+      ]);
       setBalance((prev) => prev + Number(investmentForm.amount));
 
       setInvestmentForm({ investor_name: "", amount: "", note: "" });
@@ -260,7 +357,13 @@ const Finance = () => {
 
         if (loanError) throw loanError;
 
-        setLoanPayments((prev) => [paymentData, ...prev]);
+        setLoanPayments((prev) => [
+          {
+            ...paymentData,
+            note: paymentData.note ?? undefined,
+          },
+          ...prev,
+        ]);
         setLoans((prev) =>
           prev.map((loan) =>
             loan.id === selectedLoan.id
@@ -299,8 +402,6 @@ const Finance = () => {
     }
   };
 
-  const { revenue, outstanding, gmv } = calculateKPIs();
-
   return (
     <div className="space-y-6">
       <div>
@@ -308,24 +409,173 @@ const Finance = () => {
         <p className="text-muted-foreground">
           Manage investments, loans, and financial overview
         </p>
+        <div className="flex items-center gap-2 mt-2">
+          <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                id="date"
+                variant={"outline"}
+                className={cn(
+                  "w-[300px] justify-start text-left font-normal",
+                  !date && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date?.from
+                  ? date.to
+                    ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
+                    : date.from.toLocaleDateString()
+                  : "Pick a date range"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-auto p-0 flex"
+              side="bottom"
+              align="start"
+            >
+              <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    const now = new Date();
+                    setDate({
+                      from: new Date(now.getFullYear(), now.getMonth(), 1),
+                      to: addDays(new Date(), 0),
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  This Month
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    const now = new Date();
+                    const lastMonth = new Date(
+                      now.getFullYear(),
+                      now.getMonth() - 1,
+                      1
+                    );
+                    const lastMonthEnd = new Date(
+                      now.getFullYear(),
+                      now.getMonth(),
+                      0
+                    );
+                    setDate({
+                      from: lastMonth,
+                      to: lastMonthEnd,
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  Last Month
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    const now = new Date();
+                    setDate({
+                      from: new Date(now.getFullYear(), 0, 1),
+                      to: addDays(new Date(), 0),
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  This Year
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    setDate({
+                      from: new Date(2000, 0, 1),
+                      to: addDays(new Date(), 0),
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  All Time
+                </Button>
+              </div>
+              <div className="p-2 bg-muted/40 rounded-r-lg">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    value={
+                      date?.from ? date.from.toISOString().slice(0, 10) : ""
+                    }
+                    onChange={(e) => {
+                      const newFrom = e.target.value
+                        ? new Date(e.target.value)
+                        : undefined;
+                      setDate((prev) => ({ ...prev, from: newFrom! }));
+                    }}
+                    className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    value={date?.to ? date.to.toISOString().slice(0, 10) : ""}
+                    onChange={(e) => {
+                      const newTo = e.target.value
+                        ? new Date(e.target.value)
+                        : undefined;
+                      setDate((prev) =>
+                        prev && prev.from
+                          ? { ...prev, to: newTo! }
+                          : newTo
+                          ? { from: newTo, to: newTo }
+                          : prev
+                      );
+                    }}
+                    className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => setPopoverOpen(false)}
+                    className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {displayDate && (
+            <span className="text-muted-foreground text-sm">{displayDate}</span>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
+      {/* <EnhancedSalesDashboard data={sortedSales} /> */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 1. Company Balance (Sales Revenue + Investments + Loans) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Company Balance
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${balance.toLocaleString()}
+              ${companyBalance.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Current available balance
+              Sales revenue + investments + loans
             </p>
           </CardContent>
         </Card>
+        {/* 2. Revenue (Total Paid from Sales) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Revenue</CardTitle>
@@ -336,10 +586,11 @@ const Finance = () => {
               ${revenue.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total investments received
+              Total received from sales
             </p>
           </CardContent>
         </Card>
+        {/* 3. Outstanding (Total Sales - Paid) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
@@ -350,10 +601,11 @@ const Finance = () => {
               ${outstanding.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Remaining loan balance
+              Amount yet to be collected (sales)
             </p>
           </CardContent>
         </Card>
+        {/* 4. GMV (Gross Merchandise Value) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">GMV</CardTitle>
@@ -362,7 +614,7 @@ const Finance = () => {
           <CardContent>
             <div className="text-2xl font-bold">${gmv.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              Gross monetary value
+              Total value at MRP (sales)
             </p>
           </CardContent>
         </Card>
