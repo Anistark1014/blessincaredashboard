@@ -7,14 +7,13 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-// **UPDATED**: Imported functions to handle month and year calculations
 import { addDays, format, subMonths, subYears } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Upload, Trash2, Plus, Undo, Redo, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, Upload, Trash2, Plus, Undo, Redo, Calendar as CalendarIcon, Badge } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+
 // --- INTERFACE DEFINITIONS ---
 
 interface Product {
@@ -45,7 +45,11 @@ interface User {
   name: string | null;
   email?: string;
   role?: string;
+  due_balance?: number; // Add due_balance to track outstanding amounts
 }
+
+type TransactionType = 'Sale' | 'Clearance';
+type PaymentStatus = "Fully Paid" | "Partially Paid" | "Pending" | "Partial Clearance" | "Complete Clearance" | "Due Cleared";
 
 interface Sale {
   id: string;
@@ -55,9 +59,10 @@ interface Sale {
   total: number;
   paid: number;
   outstanding: number;
-  payment_status: "Fully Paid" | "Partially Paid" | "Pending";
+  payment_status: PaymentStatus;
   member_id: string;
   product_id: string;
+  transaction_type: TransactionType; // New field to distinguish record types
   users: User | null;
   products: Product | null;
 }
@@ -75,6 +80,7 @@ interface UndoOperation {
     record?: Sale;
     originalRecord?: Sale;
     updatedRecord?: Sale;
+    userBalanceChanges?: { userId: string; oldBalance: number; newBalance: number }[];
   };
 }
 
@@ -91,6 +97,14 @@ const statusColors: { [key: string]: string } = {
   'Fully Paid': 'text-green-600 dark:text-green-400',
   'Partially Paid': 'text-yellow-600 dark:text-yellow-400',
   'Pending': 'text-red-600 dark:text-red-400',
+  'Partial Clearance': 'text-blue-600 dark:text-blue-400',
+  'Complete Clearance': 'text-green-600 dark:text-green-400',
+  'Due Cleared': 'text-gray-600 dark:text-gray-400',
+};
+
+const transactionTypeColors: { [key: string]: string } = {
+  'Sale': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Clearance': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 };
 
 const getSelectStyles = (isDark: boolean) => ({
@@ -111,6 +125,12 @@ const getSelectStyles = (isDark: boolean) => ({
   singleValue: (provided: any) => ({ ...provided, color: isDark ? '#F9FAFB' : '#111827' }),
   input: (provided: any) => ({ ...provided, color: isDark ? '#F9FAFB' : '#111827' }),
 });
+
+// --- TRANSACTION TYPE OPTIONS ---
+const transactionTypeOptions = [
+  { label: 'Sale', value: 'Sale' },
+  { label: 'Clearance', value: 'Clearance' }
+];
 
 // --- MAIN COMPONENT ---
 
@@ -147,6 +167,86 @@ const SalesTable: React.FC = () => {
     key: 'date',
     direction: 'descending',
   });
+  
+  const [membersWithDues, setMembersWithDues] = useState<{ 
+  userId: string; 
+  userName: string; 
+  totalDue: number; 
+  pendingSales: { productName: string; outstanding: number; date: string }[] 
+}[]>([]);
+
+const fetchMembersWithDues = async () => {
+  try {
+    const { data: salesWithDues, error } = await supabase
+      .from('sales')
+      .select(`
+        id,
+        member_id,
+        outstanding,
+        date,
+        payment_status,
+        transaction_type,
+        users!inner(id, name),
+        products(name)
+      `)
+      .eq('transaction_type', 'Sale')
+      .in('payment_status', ['Pending', 'Partially Paid'])
+      .gt('outstanding', 0);
+
+    if (error) {
+      console.error('Error fetching members with dues:', error);
+      return;
+    }
+        const memberDuesMap = new Map();
+    
+    salesWithDues?.forEach(sale => {
+      const memberId = sale.member_id;
+      const memberName = sale.users?.name || 'Unknown';
+      
+      if (!memberDuesMap.has(memberId)) {
+        memberDuesMap.set(memberId, {
+          userId: memberId,
+          userName: memberName,
+          totalDue: 0,
+          pendingSales: []
+        });
+      }
+      
+      const memberData = memberDuesMap.get(memberId);
+      memberData.totalDue += sale.outstanding;
+      memberData.pendingSales.push({
+        productName: sale.products?.name || 'Unknown Product',
+        outstanding: sale.outstanding,
+        date: sale.date
+      });
+    });
+
+    setMembersWithDues(Array.from(memberDuesMap.values()));
+  } catch (error) {
+    console.error('Error fetching members with dues:', error);
+  }
+};
+
+useEffect(() => {
+  fetchMembersWithDues();
+}, [sales]);
+
+const getClearanceUserOptions = useMemo(() => {
+  if (newSale.transaction_type !== 'Clearance') {
+    return userOptions; // Return all users for non-clearance transactions
+  }
+  
+  // For clearance transactions, only show members with outstanding dues
+  return membersWithDues.map(member => ({
+    label: `${member.userName} (₹${member.totalDue.toFixed(2)} due - ${member.pendingSales.length} pending sales)`,
+    value: member.userId
+  }));
+}, [newSale.transaction_type, userOptions, membersWithDues]);
+
+const getPendingSalesForMember = (memberId: string) => {
+  const memberData = membersWithDues.find(m => m.userId === memberId);
+  return memberData?.pendingSales || [];
+};
 
   // --- DATA FETCHING ---
 
@@ -176,14 +276,15 @@ const SalesTable: React.FC = () => {
               .map((row: any) => ({
                 id: row.id,
                 date: row.date,
-                qty: row.qty,
-                price: row.price,
+                qty: row.qty || 0,
+                price: row.price || 0,
                 total: row.total,
                 paid: row.paid,
                 outstanding: row.outstanding,
                 payment_status: row.payment_status ?? 'Pending',
                 member_id: row.member_id,
-                product_id: row.product_id,
+                product_id: row.product_id || '',
+                transaction_type: row.transaction_type || 'Sale', // Default to Sale for existing records
                 users: row.users && typeof row.users === 'object' ? row.users : null,
                 products: row.products && typeof row.products === 'object' ? row.products : null,
               }))
@@ -194,7 +295,7 @@ const SalesTable: React.FC = () => {
 
   const fetchDropdownData = async () => {
     try {
-      const usersPromise = supabase.from('users').select('id, name');
+      const usersPromise = supabase.from('users').select('id, name, due_balance');
       const productsPromise = supabase.from('products').select('id, name, mrp, price_ranges');
 
       const [usersResult, productsResult] = await Promise.all([usersPromise, productsPromise]);
@@ -205,7 +306,10 @@ const SalesTable: React.FC = () => {
       setUsers(usersResult.data || []);
       const userOpts = (usersResult.data || [])
         .filter(u => u.name)
-        .map(u => ({ label: u.name!, value: u.id }));
+        .map(u => ({ 
+          label: `${u.name}${u.due_balance ? ` (₹${u.due_balance.toFixed(2)} due)` : ''}`, 
+          value: u.id 
+        }));
       setUserOptions(userOpts);
       
       setProducts(productsResult.data || []);
@@ -214,6 +318,64 @@ const SalesTable: React.FC = () => {
 
     } catch (error: any) {
       console.error("Error fetching dropdown data:", error.message);
+    }
+  };
+
+  // --- NEW HELPER FUNCTIONS FOR TRANSACTION LOGIC ---
+
+  const updateUserBalance = async (userId: string, amountChange: number): Promise<number> => {
+    const { data: currentUser, error: fetchError } = await supabase
+      .from('users')
+      .select('due_balance')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const oldBalance = currentUser.due_balance || 0;
+    const newBalance = oldBalance + amountChange;
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ due_balance: newBalance })
+      .eq('id', userId);
+
+    if (updateError) throw updateError;
+
+    return oldBalance;
+  };
+
+  const updatePendingSalesStatus = async (userId: string) => {
+    // Check if user's balance is now zero
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('due_balance')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user || user.due_balance !== 0) return;
+
+    // Update all pending/partially paid sales to "Due Cleared"
+    const { error: updateError } = await supabase
+      .from('sales')
+      .update({ payment_status: 'Due Cleared' })
+      .eq('member_id', userId)
+      .in('payment_status', ['Pending', 'Partially Paid']);
+
+    if (updateError) {
+      console.error('Error updating pending sales status:', updateError);
+    }
+  };
+
+  const calculatePaymentStatus = (transactionType: TransactionType, total: number, paid: number, userBalance: number): PaymentStatus => {
+    if (transactionType === 'Sale') {
+      if (paid >= total) return 'Fully Paid';
+      if (paid > 0) return 'Partially Paid';
+      return 'Pending';
+    } else { // Clearance
+      const newBalance = userBalance - paid;
+      if (newBalance <= 0) return 'Complete Clearance';
+      return 'Partial Clearance';
     }
   };
   
@@ -233,216 +395,590 @@ const SalesTable: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  // --- CRUD & FEATURE FUNCTIONS ---
+  // --- ENHANCED CRUD & FEATURE FUNCTIONS ---
   const addToUndoStack = (operation: UndoOperation) => {
     if (isUndoing) return;
     setUndoStack(prev => [...prev, operation].slice(-10));
     setRedoStack([]);
   };
 
-  const handleAddNew = async () => {
-    const requiredFields: (keyof Sale)[] = ['date', 'member_id', 'product_id', 'qty', 'price'];
+  const updateSalesRecordsForClearance = async (userId: string, clearanceAmount: number) => {
+  // Get all pending/partially paid sales for this user, ordered by date (oldest first)
+  const { data: pendingSales, error } = await supabase
+    .from('sales')
+    .select('*')
+    .eq('member_id', userId)
+    .eq('transaction_type', 'Sale')
+    .in('payment_status', ['Pending', 'Partially Paid'])
+    .gt('outstanding', 0)
+    .order('date', { ascending: true });
+
+  if (error) throw error;
+  if (!pendingSales || pendingSales.length === 0) return [];
+
+  let remainingClearanceAmount = clearanceAmount;
+  const updatedRecords: any[] = [];
+
+  for (const sale of pendingSales) {
+    if (remainingClearanceAmount <= 0) break;
+
+    const outstandingAmount = sale.outstanding;
+    const paymentToApply = Math.min(remainingClearanceAmount, outstandingAmount);
+    
+    const newPaid = sale.paid + paymentToApply;
+    const newOutstanding = sale.total - newPaid;
+    
+    let newStatus: PaymentStatus;
+    if (newOutstanding <= 0) {
+      newStatus = 'Due Cleared';
+    } else if (newPaid > 0) {
+      newStatus = 'Partially Paid';
+    } else {
+      newStatus = 'Pending';
+    }
+
+    // Update the sales record
+    const { error: updateError } = await supabase
+      .from('sales')
+      .update({
+        paid: newPaid,
+        outstanding: newOutstanding,
+        payment_status: newStatus
+      })
+      .eq('id', sale.id);
+
+    if (updateError) throw updateError;
+
+    updatedRecords.push({
+      id: sale.id,
+      oldPaid: sale.paid,
+      newPaid: newPaid,
+      oldOutstanding: sale.outstanding,
+      newOutstanding: newOutstanding,
+      oldStatus: sale.payment_status,
+      newStatus: newStatus,
+      paymentApplied: paymentToApply
+    });
+
+    remainingClearanceAmount -= paymentToApply;
+  }
+
+  return updatedRecords;
+};
+
+const revertSalesRecordsForClearance = async (updatedRecords: any[]) => {
+  for (const record of updatedRecords) {
+    await supabase
+      .from('sales')
+      .update({
+        paid: record.oldPaid,
+        outstanding: record.oldOutstanding,
+        payment_status: record.oldStatus
+      })
+      .eq('id', record.id);
+  }
+};
+
+const handleAddNew = async () => {
+  const transactionType = newSale.transaction_type || 'Sale';
+  
+  // Enhanced validation for clearance transactions
+  if (transactionType === 'Clearance') {
+    const requiredFields: (keyof Sale)[] = ['date', 'member_id', 'paid'];
     if (!requiredFields.every(field => newSale[field] != null)) {
-      alert(`Please fill all required fields: Date, Member, Product, Qty, Price`);
+      alert(`Please fill all required fields for Clearance: Date, Member, Paid Amount`);
       return;
     }
 
-    const recordToInsert = {
+    // Check if member has outstanding dues
+    const memberWithDues = membersWithDues.find(m => m.userId === newSale.member_id);
+    if (!memberWithDues || memberWithDues.totalDue <= 0) {
+      alert('Selected member has no outstanding dues to clear.');
+      return;
+    }
+
+    const paidAmount = Number(newSale.paid);
+    if (paidAmount > memberWithDues.totalDue) {
+      alert(`Payment amount (₹${paidAmount}) cannot exceed member's total due balance (₹${memberWithDues.totalDue})`);
+      return;
+    }
+
+    if (paidAmount <= 0) {
+      alert('Payment amount must be greater than zero.');
+      return;
+    }
+  } else {
+    // Original validation for sales
+    const requiredFields: (keyof Sale)[] = ['date', 'member_id', 'product_id', 'qty', 'price'];
+    if (!requiredFields.every(field => newSale[field] != null)) {
+      alert(`Please fill all required fields for Sale: Date, Member, Product, Qty, Price`);
+      return;
+    }
+  }
+
+  const user = users.find(u => u.id === newSale.member_id);
+  if (!user) {
+    alert('Selected user not found');
+    return;
+  }
+
+  try {
+    let recordToInsert: any;
+    let userBalanceChange = 0;
+    let oldUserBalance = 0;
+    let updatedSalesRecords: any[] = [];
+
+    if (transactionType === 'Sale') {
+      const qty = Number(newSale.qty);
+      const price = Number(newSale.price);
+      const total = qty * price;
+      const paid = Number(newSale.paid ?? 0);
+      const outstanding = total - paid;
+      
+      userBalanceChange = outstanding; // Increase user's due balance by outstanding amount
+      oldUserBalance = await updateUserBalance(newSale.member_id!, userBalanceChange);
+
+      const payment_status = calculatePaymentStatus(transactionType, total, paid, 0);
+
+      recordToInsert = {
         date: String(newSale.date),
         member_id: String(newSale.member_id),
         product_id: String(newSale.product_id),
-        qty: Number(newSale.qty),
-        price: Number(newSale.price),
-        total: Number(newSale.total),
-        paid: Number(newSale.paid ?? 0),
-        // outstanding: 0, // Add this line to satisfy the required property
-        outstanding: Number(newSale.outstanding ?? 0),
-        payment_status: (newSale.payment_status ?? 'Pending') as string | null,
-    };
-    
+        qty,
+        price,
+        total,
+        paid,
+        outstanding,
+        payment_status,
+        transaction_type: transactionType,
+      };
+    } else { // Clearance
+      const paid = Number(newSale.paid);
+      const currentUserBalance = user.due_balance || 0;
+      
+      // Double-check against current database balance (in case of concurrent updates)
+      if (paid > currentUserBalance) {
+        alert(`Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentUserBalance}). Please refresh and try again.`);
+        return;
+      }
+
+      // Update sales records first to apply the clearance payment
+      updatedSalesRecords = await updateSalesRecordsForClearance(newSale.member_id!, paid);
+      
+      userBalanceChange = -paid; // Decrease user's due balance
+      oldUserBalance = await updateUserBalance(newSale.member_id!, userBalanceChange);
+
+      const payment_status = calculatePaymentStatus(transactionType, 0, paid, currentUserBalance);
+
+      recordToInsert = {
+        date: String(newSale.date),
+        member_id: String(newSale.member_id),
+        product_id: null, // Clearance records don't have products
+        qty: 0,
+        price: 0,
+        total: 0, // For clearance, total is 0
+        paid,
+        outstanding: 0, // Outstanding is always 0 for clearance
+        payment_status,
+        transaction_type: transactionType,
+      };
+    }
+
     const { data, error } = await supabase.from('sales').insert([recordToInsert]).select('*, users(*), products(*)');
     
     if (error) {
+      // Revert changes if insert fails
+      await updateUserBalance(newSale.member_id!, -userBalanceChange);
+      if (updatedSalesRecords.length > 0) {
+        await revertSalesRecordsForClearance(updatedSalesRecords);
+      }
       alert('Insert failed: ' + error.message);
     } else if (data) {
       const rawRecord = data[0];
       const addedRecord: Sale = {
         id: rawRecord.id,
         date: rawRecord.date,
-        qty: rawRecord.qty,
-        price: rawRecord.price,
+        qty: rawRecord.qty || 0,
+        price: rawRecord.price || 0,
         total: rawRecord.total,
         paid: rawRecord.paid,
         outstanding: rawRecord.outstanding,
-        payment_status: (rawRecord.payment_status ?? 'Pending') as "Fully Paid" | "Partially Paid" | "Pending",
+        payment_status: rawRecord.payment_status as PaymentStatus,
         member_id: rawRecord.member_id,
-        product_id: rawRecord.product_id,
+        product_id: rawRecord.product_id || '',
+        transaction_type: rawRecord.transaction_type as TransactionType,
         users: (rawRecord.users && typeof rawRecord.users === 'object') ? rawRecord.users : null,
         products: (rawRecord.products && typeof rawRecord.products === 'object')
           ? { ...rawRecord.products, sku_id: rawRecord.products.sku_id ?? undefined }
           : null,
       };
-      addToUndoStack({ type: 'add', timestamp: Date.now(), data: { addedRecord } });
+
+      addToUndoStack({ 
+        type: 'add', 
+        timestamp: Date.now(), 
+        data: { 
+          addedRecord,
+          userBalanceChanges: [{ userId: newSale.member_id!, oldBalance: oldUserBalance, newBalance: oldUserBalance + userBalanceChange }],
+          updatedSalesRecords: updatedSalesRecords // Track sales record changes for undo
+        } 
+      });
+
       setSales([addedRecord, ...sales]);
       setNewSale({});
       setAddingNew(false);
+      
+      // Refresh all data to show updated records
+      fetchSales();
+      fetchDropdownData();
+      fetchMembersWithDues(); // Refresh the members with dues list
+      
+      if (transactionType === 'Clearance' && updatedSalesRecords.length > 0) {
+        alert(`Clearance applied successfully! Updated ${updatedSalesRecords.length} sales record(s). Total amount cleared: ₹${paid.toFixed(2)}`);
+      } else if (transactionType === 'Sale') {
+        alert(`Sale record added successfully!`);
+      }
     }
-  };
+  } catch (error: any) {
+    alert('Transaction failed: ' + error.message);
+    console.error('Transaction error:', error);
+  }
+};
+
 
   const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
     const originalSale = sales.find(sale => sale.id === id);
     if (!originalSale) return;
 
+    // Prevent editing of Clearance records except for date and member
+    if (originalSale.transaction_type === 'Clearance' && !['date', 'member_id', 'paid'].includes(field)) {
+      alert('Clearance records can only have date, member, or paid amount edited. To make other changes, delete this record and create a new one.');
+      return;
+    }
+
     let updatePayload: { [key: string]: any } = { [field]: value };
     let updatedRecordForUI = { ...originalSale, [field]: value };
+    let userBalanceChange = 0;
+    let oldUserBalance = 0;
 
-    if (field === 'qty') {
-        const product = originalSale.products;
-        const newQty = Number(value);
+    try {
+      if (originalSale.transaction_type === 'Sale') {
+        // Handle Sale record edits
+        if (field === 'qty') {
+          const product = originalSale.products;
+          const newQty = Number(value);
 
-        if (product && product.price_ranges && product.price_ranges.length > 0) {
+          if (product && product.price_ranges && product.price_ranges.length > 0) {
             const priceRange = product.price_ranges.find(range => newQty >= range.min && newQty <= range.max);
             const newPrice = priceRange ? priceRange.price : product.mrp || 0;
             
             updatePayload.price = newPrice;
             updatedRecordForUI.price = newPrice;
+          }
         }
-    }
 
+        const qty = Number(updatedRecordForUI.qty);
+        const price = Number(updatedRecordForUI.price);
+        const paid = Number(updatedRecordForUI.paid);
+        const total = qty * price;
+        const outstanding = total - paid;
+        const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+        
+        // Calculate balance change for user
+        const oldOutstanding = originalSale.outstanding;
+        userBalanceChange = outstanding - oldOutstanding;
+        
+        if (userBalanceChange !== 0) {
+          oldUserBalance = await updateUserBalance(originalSale.member_id, userBalanceChange);
+        }
 
-    const qty = Number(updatedRecordForUI.qty);
-    const price = Number(updatedRecordForUI.price);
-    const paid = Number(updatedRecordForUI.paid);
-    const total = qty * price;
-    const outstanding = total - paid;
-    const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
-    
-    const calculatedFields = { total, outstanding, payment_status };
-    
-    updatePayload = { 
-      ...updatePayload, 
-      ...calculatedFields,
-      product_id: updatedRecordForUI.product_id,
-      member_id: updatedRecordForUI.member_id,
-      payment_status: calculatedFields.payment_status
-    };
-    updatedRecordForUI = { 
-      ...updatedRecordForUI, 
-      ...calculatedFields, 
-      payment_status: calculatedFields.payment_status as "Fully Paid" | "Partially Paid" | "Pending"
-    };
-    
-    addToUndoStack({ type: 'edit', timestamp: Date.now(), data: { recordId: id, field, oldValue: originalSale[field], record: originalSale } });
-    
-    setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
-    setEditingCell(null);
+        const calculatedFields = { total, outstanding, payment_status };
+        
+        updatePayload = { 
+          ...updatePayload, 
+          ...calculatedFields,
+          product_id: updatedRecordForUI.product_id,
+          member_id: updatedRecordForUI.member_id,
+          payment_status: calculatedFields.payment_status
+        };
+        updatedRecordForUI = { 
+          ...updatedRecordForUI, 
+          ...calculatedFields, 
+          payment_status: calculatedFields.payment_status as PaymentStatus
+        };
+      } else {
+        // Handle Clearance record edits
+        if (field === 'paid') {
+          const user = users.find(u => u.id === originalSale.member_id);
+          const currentBalance = user?.due_balance || 0;
+          const oldPaid = originalSale.paid;
+          const newPaid = Number(value);
+          
+          // Calculate the effective change in payment
+          const paymentChange = newPaid - oldPaid;
+          
+          if (currentBalance + paymentChange < 0) {
+            alert(`Payment amount would exceed user's available balance`);
+            return;
+          }
 
-    const { error } = await supabase.from('sales').update(updatePayload as {
-      id?: string;
-      date?: string;
-      qty?: number;
-      price?: number;
-      total?: number;
-      paid?: number;
-      outstanding?: number;
-      // outstanding?: number;
-      product_id: string;
-      member_id: string;
-      payment_status: string | null;
-    }).eq('id', id);
-    if (error) {
-      console.error('Update failed:', error.message);
+          userBalanceChange = -paymentChange; // Opposite of payment change
+          if (userBalanceChange !== 0) {
+            oldUserBalance = await updateUserBalance(originalSale.member_id, userBalanceChange);
+          }
+
+          const payment_status = calculatePaymentStatus('Clearance', 0, newPaid, currentBalance + paymentChange);
+          updatePayload.payment_status = payment_status;
+          updatedRecordForUI.payment_status = payment_status as PaymentStatus;
+
+          // Check if we need to update pending sales
+          await updatePendingSalesStatus(originalSale.member_id);
+        }
+      }
+
+      addToUndoStack({ 
+        type: 'edit', 
+        timestamp: Date.now(), 
+        data: { 
+          recordId: id, 
+          field, 
+          oldValue: originalSale[field], 
+          record: originalSale,
+          userBalanceChanges: userBalanceChange !== 0 ? 
+            [{ userId: originalSale.member_id, oldBalance: oldUserBalance, newBalance: oldUserBalance + userBalanceChange }] : 
+            undefined
+        } 
+      });
+      
+      setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
+      setEditingCell(null);
+
+      const { error } = await supabase.from('sales').update(updatePayload).eq('id', id);
+      if (error) {
+        console.error('Update failed:', error.message);
+        // Revert user balance if update fails
+        if (userBalanceChange !== 0) {
+          await updateUserBalance(originalSale.member_id, -userBalanceChange);
+        }
+        setSales(sales);
+      } else {
+        // Refresh user data to show updated balances
+        fetchDropdownData();
+      }
+    } catch (error: any) {
+      console.error('Edit failed:', error.message);
+      alert('Edit failed: ' + error.message);
       setSales(sales);
     }
   };
 
-  const deleteSelectedRows = async () => {
-    if (selectedRows.length === 0 || !window.confirm(`Delete ${selectedRows.length} record(s)?`)) return;
+const deleteSelectedRows = async () => {
+  if (selectedRows.length === 0 || !window.confirm(`Delete ${selectedRows.length} record(s)?`)) return;
 
-    const deletedRecords = sales.filter((s) => selectedRows.includes(s.id));
-    addToUndoStack({ type: 'delete', timestamp: Date.now(), data: { deletedRecords } });
+  const deletedRecords = sales.filter((s) => selectedRows.includes(s.id));
+  
+  try {
+    // Calculate user balance changes and handle clearance reversals
+    const userBalanceChanges: { userId: string; oldBalance: number; newBalance: number }[] = [];
+    const salesRecordReversals: any[] = [];
+    
+    for (const record of deletedRecords) {
+      let balanceChange = 0;
+      
+      if (record.transaction_type === 'Sale') {
+        balanceChange = -record.outstanding; // Decrease user's due balance
+      } else { // Clearance - need to reverse the sales record updates
+        balanceChange = record.paid; // Increase user's due balance (reverse the clearance)
+        
+        // Find which sales records were affected by this clearance and reverse them
+        // This is a simplified version - in production, you'd want to store the linkage
+        const { data: userSales, error } = await supabase
+          .from('sales')
+          .select('*')
+          .eq('member_id', record.member_id)
+          .eq('transaction_type', 'Sale')
+          .order('date', { ascending: true });
+        
+        if (!error && userSales) {
+          let remainingAmount = record.paid;
+          for (const sale of userSales) {
+            if (remainingAmount <= 0) break;
+            if (sale.paid > 0) {
+              const paymentToReverse = Math.min(remainingAmount, sale.paid);
+              const newPaid = sale.paid - paymentToReverse;
+              const newOutstanding = sale.total - newPaid;
+              const newStatus = newPaid >= sale.total ? 'Fully Paid' : (newPaid > 0 ? 'Partially Paid' : 'Pending');
+              
+              salesRecordReversals.push({
+                id: sale.id,
+                oldPaid: sale.paid,
+                newPaid: newPaid,
+                oldOutstanding: sale.outstanding,
+                newOutstanding: newOutstanding,
+                oldStatus: sale.payment_status,
+                newStatus: newStatus
+              });
+              
+              remainingAmount -= paymentToReverse;
+            }
+          }
+        }
+      }
+      
+      if (balanceChange !== 0) {
+        const oldBalance = await updateUserBalance(record.member_id, balanceChange);
+        userBalanceChanges.push({ 
+          userId: record.member_id, 
+          oldBalance, 
+          newBalance: oldBalance + balanceChange 
+        });
+      }
+    }
+
+    // Apply sales record reversals
+    for (const reversal of salesRecordReversals) {
+      await supabase
+        .from('sales')
+        .update({
+          paid: reversal.newPaid,
+          outstanding: reversal.newOutstanding,
+          payment_status: reversal.newStatus
+        })
+        .eq('id', reversal.id);
+    }
+
+    addToUndoStack({ 
+      type: 'delete', 
+      timestamp: Date.now(), 
+      data: { 
+        deletedRecords,
+        userBalanceChanges,
+        salesRecordReversals
+      } 
+    });
 
     const { error } = await supabase.from('sales').delete().in('id', selectedRows);
     if (error) {
+      // Revert all changes if delete fails
+      for (const change of userBalanceChanges) {
+        await updateUserBalance(change.userId, change.oldBalance - change.newBalance);
+      }
+      for (const reversal of salesRecordReversals) {
+        await supabase
+          .from('sales')
+          .update({
+            paid: reversal.oldPaid,
+            outstanding: reversal.oldOutstanding,
+            payment_status: reversal.oldStatus
+          })
+          .eq('id', reversal.id);
+      }
       alert('Delete failed: ' + error.message);
     } else {
       setSales(sales.filter((s) => !selectedRows.includes(s.id)));
       setSelectedRows([]);
+      
+      // Refresh all data
+      fetchSales();
+      fetchDropdownData();
     }
-  };
+  } catch (error: any) {
+    alert('Delete failed: ' + error.message);
+  }
+};
 
-const handleUndo = async () => {
+  const handleUndo = async () => {
     if (undoStack.length === 0) return;
     setIsUndoing(true);
     const lastOperation = undoStack[undoStack.length - 1];
 
     try {
-        switch (lastOperation.type) {
-            case 'delete':
-                if (lastOperation.data.deletedRecords) {
-                    const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => rec);
-                    await supabase.from('sales').insert(recordsToRestore);
-                }
-                break;
-            case 'add':
-                if (lastOperation.data.addedRecord) {
-                    await supabase.from('sales').delete().eq('id', lastOperation.data.addedRecord.id);
-                }
-                break;
-            case 'edit':
-                if (lastOperation.data.originalRecord) {
-                    await supabase.from('sales').update(lastOperation.data.originalRecord).eq('id', lastOperation.data.originalRecord.id);
-                }
-                break;
-            // ... other cases
+      // Revert user balance changes if any
+      if (lastOperation.data.userBalanceChanges) {
+        for (const change of lastOperation.data.userBalanceChanges) {
+          await supabase
+            .from('users')
+            .update({ due_balance: change.oldBalance })
+            .eq('id', change.userId);
         }
-        setUndoStack(prev => prev.slice(0, -1));
-        // **FIXED**: Corrected the variable name here
-        setRedoStack(prev => [lastOperation, ...prev]);
-        fetchSales();
+      }
+
+      switch (lastOperation.type) {
+        case 'delete':
+          if (lastOperation.data.deletedRecords) {
+            const recordsToRestore = lastOperation.data.deletedRecords.map(({ users, products, ...rec }) => rec);
+            await supabase.from('sales').insert(recordsToRestore);
+          }
+          break;
+        case 'add':
+          if (lastOperation.data.addedRecord) {
+            await supabase.from('sales').delete().eq('id', lastOperation.data.addedRecord.id);
+          }
+          break;
+        case 'edit':
+          if (lastOperation.data.originalRecord) {
+            const { users, products, ...recordData } = lastOperation.data.originalRecord;
+            await supabase.from('sales').update(recordData).eq('id', lastOperation.data.originalRecord.id);
+          }
+          break;
+      }
+      
+      setUndoStack(prev => prev.slice(0, -1));
+      setRedoStack(prev => [lastOperation, ...prev]);
+      fetchSales();
+      fetchDropdownData(); // Refresh user balances
     } catch (error: any) {
-        alert('Undo failed: ' + error.message);
+      alert('Undo failed: ' + error.message);
     } finally {
-        setIsUndoing(false);
+      setIsUndoing(false);
     }
-};
+  };
 
-  // --- Add this new function in the CRUD & FEATURE FUNCTIONS section ---
-
-const handleRedo = async () => {
+  const handleRedo = async () => {
     if (redoStack.length === 0) return;
-    setIsUndoing(true); // Reuse the same loading state
+    setIsUndoing(true);
     const operationToRedo = redoStack[0];
 
     try {
-        switch (operationToRedo.type) {
-            case 'add':
-                // Re-insert the record
-                await supabase.from('sales').insert(operationToRedo.data.addedRecord!);
-                break;
-            case 'delete':
-                // Re-delete the records
-                const idsToDelete = operationToRedo.data.deletedRecords!.map(r => r.id);
-                await supabase.from('sales').delete().in('id', idsToDelete);
-                break;
-            case 'edit':
-                // Re-apply the newer version of the record
-                await supabase.from('sales').update(operationToRedo.data.updatedRecord!).eq('id', operationToRedo.data.updatedRecord!.id);
-                break;
+      switch (operationToRedo.type) {
+        case 'add':
+          if (operationToRedo.data.addedRecord) {
+            const { users, products, ...recordData } = operationToRedo.data.addedRecord;
+            await supabase.from('sales').insert(recordData);
+          }
+          break;
+        case 'delete':
+          const idsToDelete = operationToRedo.data.deletedRecords!.map(r => r.id);
+          await supabase.from('sales').delete().in('id', idsToDelete);
+          break;
+        case 'edit':
+          if (operationToRedo.data.updatedRecord) {
+            const { users, products, ...recordData } = operationToRedo.data.updatedRecord;
+            await supabase.from('sales').update(recordData).eq('id', operationToRedo.data.updatedRecord.id);
+          }
+          break;
+      }
+
+      // Reapply user balance changes
+      if (operationToRedo.data.userBalanceChanges) {
+        for (const change of operationToRedo.data.userBalanceChanges) {
+          await supabase
+            .from('users')
+            .update({ due_balance: change.newBalance })
+            .eq('id', change.userId);
         }
+      }
 
-        // Move the operation from redo back to undo
-        setRedoStack(prev => prev.slice(1));
-        setUndoStack(prev => [...prev, operationToRedo]);
+      setRedoStack(prev => prev.slice(1));
+      setUndoStack(prev => [...prev, operationToRedo]);
 
-        fetchSales();
-        // toast({ title: "Action Redone" });
+      fetchSales();
+      fetchDropdownData(); // Refresh user balances
     } catch (error: any) {
-        alert('Redo failed: ' + error.message);
+      alert('Redo failed: ' + error.message);
     } finally {
-        setIsUndoing(false);
+      setIsUndoing(false);
     }
-};
+  };
 
   const handleExportToExcel = () => {
     if (sortedSales.length === 0) {
@@ -451,13 +987,14 @@ const handleRedo = async () => {
     }
     const exportData = sortedSales.map(s => ({
         Date: s.date,
+        'Transaction Type': s.transaction_type,
         Member: s.users?.name || 'N/A',
         Product: s.products?.name || 'N/A',
         Quantity: s.qty,
         Price: s.price,
         Total: s.total,
         Paid: s.paid,
-        outstanding: s.outstanding,
+        Outstanding: s.outstanding,
         'Payment Status': s.payment_status,
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -475,49 +1012,73 @@ const handleRedo = async () => {
     const processedData = importedRows.map(row => {
       const user = users.find(u => u.name === row.member);
       const product = products.find(p => p.name === row.product);
+      const transactionType = row.transaction_type || 'Sale';
       
-      if (!user || !product) {
-        console.warn(`Skipping row due to missing user or product:`, row);
+      if (!user) {
+        console.warn(`Skipping row due to missing user:`, row);
         return null;
       }
 
-      const qty = Number(row.qty || 0);
-      let price = 0;
-      if (product.price_ranges && product.price_ranges.length > 0) {
-        const priceRange = product.price_ranges.find(r => qty >= r.min && qty <= r.max);
-        price = priceRange ? priceRange.price : product.mrp || 0;
-      } else {
-        price = product.mrp || 0;
+      if (transactionType === 'Sale' && !product) {
+        console.warn(`Skipping Sale row due to missing product:`, row);
+        return null;
       }
 
-      const paid = Number(row.paid || 0);
-      const total = qty * price;
-      const outstanding = total - paid;
-      const payment_status = paid >= total ? 'Fully Paid' : (paid > 0 ? 'Partially Paid' : 'Pending');
+      if (transactionType === 'Sale') {
+        const qty = Number(row.qty || 0);
+        let price = 0;
+        if (product!.price_ranges && product!.price_ranges.length > 0) {
+          const priceRange = product!.price_ranges.find(r => qty >= r.min && qty <= r.max);
+          price = priceRange ? priceRange.price : product!.mrp || 0;
+        } else {
+          price = product!.mrp || 0;
+        }
 
-      return {
-        date: row.date,
-        member_id: user.id,
-        product_id: product.id,
-        qty,
-        price,
-        total,
-        paid,
-        outstanding: 0, // Add required property
-        // outstanding,
-        payment_status,
-      };
+        const paid = Number(row.paid || 0);
+        const total = qty * price;
+        const outstanding = total - paid;
+        const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+
+        return {
+          date: row.date,
+          member_id: user.id,
+          product_id: product!.id,
+          qty,
+          price,
+          total,
+          paid,
+          outstanding,
+          payment_status,
+          transaction_type: 'Sale',
+        };
+      } else { // Clearance
+        const paid = Number(row.paid || 0);
+        const payment_status = calculatePaymentStatus('Clearance', 0, paid, user.due_balance || 0);
+
+        return {
+          date: row.date,
+          member_id: user.id,
+          product_id: null,
+          qty: 0,
+          price: 0,
+          total: 0,
+          paid,
+          outstanding: 0,
+          payment_status,
+          transaction_type: 'Clearance',
+        };
+      }
     }).filter((row): row is {
       date: any;
       member_id: string;
-      product_id: string;
+      product_id: string | null;
       qty: number;
       price: number;
       total: number;
       paid: number;
-      // outstanding: number;
       outstanding: number;
       payment_status: string;
+      transaction_type: string;
     } => row !== null);
 
     if (processedData.length === 0) {
@@ -525,33 +1086,83 @@ const handleRedo = async () => {
       return;
     }
 
-    const { data: newRecords, error } = await supabase.from('sales').insert(processedData).select();
+    try {
+      // Calculate and apply user balance changes
+      const userBalanceChanges: { userId: string; oldBalance: number; newBalance: number }[] = [];
+      
+      for (const record of processedData) {
+        let balanceChange = 0;
+        
+        if (record.transaction_type === 'Sale') {
+          balanceChange = record.outstanding;
+        } else { // Clearance
+          balanceChange = -record.paid;
+        }
+        
+        if (balanceChange !== 0) {
+          const oldBalance = await updateUserBalance(record.member_id, balanceChange);
+          userBalanceChanges.push({ 
+            userId: record.member_id, 
+            oldBalance, 
+            newBalance: oldBalance + balanceChange 
+          });
+        }
+      }
 
-    if (error) {
+      const { data: newRecords, error } = await supabase.from('sales').insert(processedData).select();
+
+      if (error) {
+        // Revert balance changes if insert fails
+        for (const change of userBalanceChanges) {
+          await updateUserBalance(change.userId, change.oldBalance - change.newBalance);
+        }
+        alert(`Import failed: ${error.message}`);
+      } else if (newRecords) {
+        alert(`${newRecords.length} rows imported successfully!`);
+        
+        const importedSales: Sale[] = (newRecords as any[]).map(rec => ({
+          ...rec,
+          users: null,
+          products: null,
+        }));
+        
+        addToUndoStack({ 
+          type: 'import', 
+          timestamp: Date.now(), 
+          data: { 
+            importedRecords: importedSales,
+            userBalanceChanges 
+          } 
+        });
+        
+        fetchSales();
+        fetchDropdownData(); // Refresh user balances
+      }
+    } catch (error: any) {
       alert(`Import failed: ${error.message}`);
-    } else if (newRecords) {
-      alert(`${newRecords.length} rows imported successfully!`);
-      // Map newRecords to Sale type by adding users and products as null
-      const importedSales: Sale[] = (newRecords as any[]).map(rec => ({
-        ...rec,
-        users: null,
-        products: null,
-      }));
-      addToUndoStack({ type: 'import', timestamp: Date.now(), data: { importedRecords: importedSales } });
-      fetchSales();
     }
   };
 
   const handleApplyCustomDate = () => {
-    setDate(customDate); // Apply the date from the dialog
-    setDialogOpen(false);  // Close the dialog
-    setPopoverOpen(false); // Close the main popover
-   };
+    setDate(customDate);
+    setDialogOpen(false);
+    setPopoverOpen(false);
+  };
 
   // --- UI HANDLERS & MEMOS ---
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale(prev => {
       const updated = { ...prev, [field]: value };
+      
+      // Reset form when transaction type changes
+      if (field === 'transaction_type') {
+        return {
+          transaction_type: value,
+          date: prev.date,
+          member_id: prev.member_id,
+        };
+      }
+      
       if (field === 'product_id' && value) {
         const product = products.find(p => p.id === value);
         if (product) {
@@ -563,27 +1174,45 @@ const handleRedo = async () => {
   };
 
   useEffect(() => {
-    const qty = newSale.qty || 0;
-    let price = newSale.price || 0;
+    if (newSale.transaction_type === 'Clearance') {
+      // For clearance, only calculate payment status
+      const paid = newSale.paid || 0;
+      const user = users.find(u => u.id === newSale.member_id);
+      const userBalance = user?.due_balance || 0;
+      const payment_status = calculatePaymentStatus('Clearance', 0, paid, userBalance);
+      
+      setNewSale(prev => ({ 
+        ...prev, 
+        qty: 0, 
+        price: 0, 
+        total: 0, 
+        outstanding: 0, 
+        product_id: '',
+        payment_status 
+      }));
+    } else {
+      // Sale transaction logic
+      const qty = newSale.qty || 0;
+      let price = newSale.price || 0;
 
-    if (newSale.product_id && qty > 0) {
+      if (newSale.product_id && qty > 0) {
         const product = products.find(p => p.id === newSale.product_id);
         if (product && product.price_ranges && product.price_ranges.length > 0) {
-            const priceRange = product.price_ranges.find(range => qty >= range.min && qty <= range.max);
-            price = priceRange ? priceRange.price : product.mrp || 0;
+          const priceRange = product.price_ranges.find(range => qty >= range.min && qty <= range.max);
+          price = priceRange ? priceRange.price : product.mrp || 0;
         } else if (product) {
-            price = product.mrp || 0;
+          price = product.mrp || 0;
         }
+      }
+
+      const paid = newSale.paid || 0;
+      const total = qty * price;
+      const outstanding = total - paid;
+      const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+      
+      setNewSale(prev => ({ ...prev, price, total, outstanding, payment_status }));
     }
-
-    const paid = newSale.paid || 0;
-    const total = qty * price;
-    const outstanding = total - paid;
-    const payment_status = total > 0 && paid >= total ? 'Fully Paid' : paid > 0 ? 'Partially Paid' : 'Pending';
-    
-    setNewSale(prev => ({ ...prev, price, total, outstanding, payment_status }));
-  }, [newSale.qty, newSale.product_id, newSale.paid, products]);
-
+  }, [newSale.qty, newSale.product_id, newSale.paid, newSale.transaction_type, newSale.member_id, products, users]);
 
   const sortedSales = useMemo(() => {
     let sortableItems = sales.filter(s => {
@@ -591,18 +1220,20 @@ const handleRedo = async () => {
       const lowerSearch = searchTerm.toLowerCase();
       const userName = s.users?.name || '';
       const productName = s.products?.name || '';
+      const transactionType = s.transaction_type || '';
       return (
         userName.toLowerCase().includes(lowerSearch) ||
-        productName.toLowerCase().includes(lowerSearch)
+        productName.toLowerCase().includes(lowerSearch) ||
+        transactionType.toLowerCase().includes(lowerSearch)
       );
     });
     
     if (sortConfig.key) {
       sortableItems.sort((a, b) => {
         const getSortValue = (item: Sale, key: string) => {
-            if (key === 'user') return item.users?.name;
-            if (key === 'product') return item.products?.name;
-            return item[key as keyof Sale];
+          if (key === 'user') return item.users?.name;
+          if (key === 'product') return item.products?.name;
+          return item[key as keyof Sale];
         }
         const valA = getSortValue(a, sortConfig.key!);
         const valB = getSortValue(b, sortConfig.key!);
@@ -639,34 +1270,38 @@ const handleRedo = async () => {
   
   const displayDate = useMemo(() => {
     if (!date?.from) {
-        return null;
+      return null;
     }
     const fromMonth = format(date.from, "MMM");
     const fromYear = format(date.from, "yyyy");
     if (date.to && (format(date.from, 'yyyyMM') === format(date.to, 'yyyyMM'))) {
-        return `${fromMonth.toUpperCase()} ${fromYear}`;
+      return `${fromMonth.toUpperCase()} ${fromYear}`;
     }
     if(date.to) {
-        const toMonth = format(date.to, "MMM");
-        const toYear = format(date.to, "yyyy");
-        if (fromYear === toYear) {
-            return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
-        }
-        return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+      const toMonth = format(date.to, "MMM");
+      const toYear = format(date.to, "yyyy");
+      if (fromYear === toYear) {
+        return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+      }
+      return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
     }
     return `${fromMonth.toUpperCase()} ${fromYear}`;
   }, [date]);
-
 
   // --- RENDER LOGIC ---
 
   const renderEditableCell = (sale: Sale, field: keyof Sale) => {
     const isEditing = editingCell?.rowId === sale.id && editingCell.field === field;
     const isCalculated = ['total', 'outstanding'].includes(field);
-    const clickHandler = isCalculated ? undefined : () => setEditingCell({ rowId: sale.id, field });
+    const isReadOnly = sale.transaction_type === 'Clearance' && !['date', 'member_id', 'paid', 'payment_status'].includes(field);
+    const clickHandler = (isCalculated || isReadOnly) ? undefined : () => setEditingCell({ rowId: sale.id, field });
 
     if (isEditing) {
       if (field === 'payment_status') {
+        const statusOptions = sale.transaction_type === 'Sale' 
+          ? ['Fully Paid', 'Partially Paid', 'Pending', 'Due Cleared']
+          : ['Partial Clearance', 'Complete Clearance'];
+          
         return (
           <TableCell className="p-1">
             <select
@@ -676,9 +1311,9 @@ const handleRedo = async () => {
               onBlur={() => setEditingCell(null)}
               autoFocus
             >
-              <option value="Fully Paid">Fully Paid</option>
-              <option value="Partially Paid">Partially Paid</option>
-              <option value="Pending">Pending</option>
+              {statusOptions.map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
             </select>
           </TableCell>
         );
@@ -700,6 +1335,7 @@ const handleRedo = async () => {
           </TableCell>
         );
       }
+      
       return (
         <TableCell className="p-1">
           <Input
@@ -724,18 +1360,211 @@ const handleRedo = async () => {
     
     if (field === 'payment_status') {
       return (
-        <TableCell className={cn("cursor-pointer font-semibold", statusColors[sale.payment_status])} onClick={clickHandler}>
+        <TableCell className={cn("font-semibold", statusColors[sale.payment_status], isReadOnly ? "cursor-default" : "cursor-pointer")} onClick={clickHandler}>
           {sale.payment_status}
         </TableCell>
       );
     }
 
+    if (field === 'transaction_type') {
+      return (
+        <TableCell>
+          <span className={cn("px-2 py-1 rounded-full text-xs font-medium", transactionTypeColors[sale.transaction_type])}>
+            {sale.transaction_type}
+          </span>
+        </TableCell>
+      );
+    }
+
     return (
-      <TableCell className={cn("cursor-pointer", isCurrency && "text-right")} onClick={clickHandler}>
+      <TableCell className={cn(isReadOnly ? "cursor-default text-gray-500" : "cursor-pointer", isCurrency && "text-right")} onClick={clickHandler}>
         {isCurrency ? formatCurrency(Number(displayValue)) : String(displayValue ?? '')}
       </TableCell>
     );
   };
+
+const renderNewRecordRow = () => {
+  const transactionType = newSale.transaction_type || 'Sale';
+  const selectedMemberPendingSales = newSale.member_id ? getPendingSalesForMember(newSale.member_id) : [];
+  
+  return (
+    <TableRow className="bg-secondary">
+      <TableCell></TableCell>
+      <TableCell className="p-1">
+        <Input 
+          type="date" 
+          className="h-8" 
+          value={newSale.date ?? ''} 
+          onChange={(e) => handleNewChange('date' as keyof Sale, e.target.value)} 
+        />
+      </TableCell>
+      <TableCell className="p-1">
+        <Select 
+          options={transactionTypeOptions}
+          value={transactionTypeOptions.find(opt => opt.value === transactionType)}
+          onChange={(s: any) => handleNewChange('transaction_type' as keyof Sale, s?.value)}
+          styles={getSelectStyles(isDarkMode)}
+          placeholder="Select type..."
+        />
+      </TableCell>
+      <TableCell className="p-1 min-w-[200px]">
+        <div className="space-y-1">
+          <Select 
+            options={getClearanceUserOptions} 
+            onChange={(s: any) => handleNewChange('member_id' as keyof Sale, s?.value)} 
+            styles={getSelectStyles(isDarkMode)} 
+            placeholder={transactionType === 'Clearance' ? "Select member with dues..." : "Select member..."}
+            noOptionsMessage={() => transactionType === 'Clearance' ? 'No members with outstanding dues' : 'No members found'}
+          />
+          {/* Show pending sales details for clearance transactions */}
+         {transactionType === 'Clearance' && newSale.member_id && selectedMemberPendingSales.length > 0 && (
+  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 p-2 bg-gray-50 dark:bg-gray-800 rounded border max-h-32 overflow-y-auto">
+    <div className="font-semibold mb-2 text-gray-800 dark:text-gray-200">
+      Pending Sales ({selectedMemberPendingSales.length} items):
+    </div>
+    <div className="space-y-1">
+      {selectedMemberPendingSales.map((sale, index) => (
+        <div key={index} className="flex justify-between items-center py-1 border-b border-gray-200 dark:border-gray-600 last:border-b-0">
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-gray-700 dark:text-gray-300 truncate">
+              {sale.productName}
+            </div>
+            <div className="text-gray-500 dark:text-gray-400 text-xs">
+              {new Date(sale.date).toLocaleDateString()}
+            </div>
+          </div>
+          <div className="font-semibold text-red-600 dark:text-red-400 ml-2">
+            ₹{sale.outstanding.toFixed(2)}
+          </div>
+        </div>
+      ))}
+    </div>
+    <div className="border-t border-gray-300 dark:border-gray-600 pt-2 mt-2">
+      <div className="flex justify-between items-center font-semibold text-gray-800 dark:text-gray-200">
+        <span>Total Due:</span>
+        <span className="text-red-600 dark:text-red-400">
+          ₹{selectedMemberPendingSales.reduce((sum, sale) => sum + sale.outstanding, 0).toFixed(2)}
+        </span>
+      </div>
+    </div>
+  </div>
+)}
+        </div>
+      </TableCell>
+      <TableCell className="p-1 min-w-[150px]">
+  {transactionType === 'Sale' ? (
+    <Select 
+      options={productOptions} 
+      onChange={(s: any) => handleNewChange("product_id" as keyof Sale, s?.value || "")} 
+      styles={getSelectStyles(isDarkMode)} 
+      placeholder="Select product..."
+    />
+  ) : (
+    // For clearance, show the products that have pending amounts
+    <div className="text-sm">
+      {newSale.member_id && selectedMemberPendingSales.length > 0 ? (
+        <div className="space-y-1">
+          {selectedMemberPendingSales.length === 1 ? (
+            // If only one pending sale, show the product name directly
+            <div className="text-gray-700 dark:text-gray-300 font-medium">
+              {selectedMemberPendingSales[0].productName}
+            </div>
+          ) : (
+            // If multiple pending sales, show a summary
+            <div className="text-gray-700 dark:text-gray-300">
+              <div className="font-medium">Multiple Products:</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {selectedMemberPendingSales.map(sale => sale.productName).join(', ')}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <span className="text-gray-400 text-sm">
+          {newSale.member_id ? 'No pending sales' : 'Select member first'}
+        </span>
+      )}
+    </div>
+  )}
+</TableCell>
+      <TableCell className="p-1">
+        {transactionType === 'Sale' ? (
+          <Input 
+            type="number" 
+            className="h-8 w-16 text-right" 
+            value={newSale.qty ?? ''} 
+            onChange={(e) => handleNewChange('qty' as keyof Sale, Number(e.target.value))} 
+          />
+        ) : (
+          <span className="text-gray-400 text-sm">0</span>
+        )}
+      </TableCell>
+      <TableCell className="p-1">
+        {transactionType === 'Sale' ? (
+          <Input 
+            type="number" 
+            step="0.01" 
+            className="h-8 w-24 text-right" 
+            value={newSale.price ?? ''} 
+            onChange={(e) => handleNewChange('price' as keyof Sale, Number(e.target.value))} 
+          />
+        ) : (
+          <span className="text-gray-400 text-sm">₹0.00</span>
+        )}
+      </TableCell>
+      <TableCell className="p-1 text-right">
+        {transactionType === 'Sale' ? formatCurrency(newSale.total ?? 0) : '₹0.00'}
+      </TableCell>
+      <TableCell className="p-1">
+        <div className="space-y-1">
+          <Input 
+            type="number" 
+            step="0.01" 
+            className="h-8 w-24 text-right" 
+            value={newSale.paid ?? ''} 
+            onChange={(e) => handleNewChange('paid' as keyof Sale, Number(e.target.value))} 
+            placeholder={transactionType === 'Clearance' ? 'Amount to clear' : '0'}
+            max={transactionType === 'Clearance' && newSale.member_id ? 
+              membersWithDues.find(m => m.userId === newSale.member_id)?.totalDue : undefined}
+          />
+          {/* Show maximum clearable amount */}
+          {transactionType === 'Clearance' && newSale.member_id && (
+            <div className="text-xs text-gray-500">
+              Max: ₹{membersWithDues.find(m => m.userId === newSale.member_id)?.totalDue.toFixed(2) || '0.00'}
+            </div>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="p-1 text-right">
+        {transactionType === 'Sale' ? formatCurrency(newSale.outstanding ?? 0) : '₹0.00'}
+      </TableCell>
+      <TableCell className="p-1">
+        <div className={cn("font-semibold", statusColors[newSale.payment_status || 'Pending'])}>
+          {newSale.payment_status || 'Pending'}
+        </div>
+      </TableCell>
+      <TableCell className="p-1 text-right">
+        <div className="flex gap-2 justify-end">
+          <Button 
+            onClick={handleAddNew} 
+            size="sm" 
+            className="bg-green-600 hover:bg-green-700 text-white"
+            disabled={
+              transactionType === 'Clearance' && 
+              (!newSale.member_id || !newSale.paid || 
+               (membersWithDues.find(m => m.userId === newSale.member_id)?.totalDue || 0) === 0)
+            }
+          >
+            Save
+          </Button>
+          <Button onClick={() => { setAddingNew(false); setNewSale({}); }} variant="ghost" size="sm">
+            Cancel
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
 
   return (
     <div className="space-y-6">
@@ -744,20 +1573,20 @@ const handleRedo = async () => {
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-                <CardTitle className="text-2xl">Sales Records</CardTitle>
-                {displayDate && (
-                    <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
-                        <CalendarIcon className="h-4 w-4" />
-                        <span className="font-semibold">{displayDate}</span>
-                    </div>
-                )}
+              <CardTitle className="text-2xl">Transaction Records</CardTitle>
+              {displayDate && (
+                <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span className="font-semibold">{displayDate}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
             <div className="relative flex-grow">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by user or product..."
+                placeholder="Search by user, product, or transaction type..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -765,137 +1594,118 @@ const handleRedo = async () => {
             </div>
             
             <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
-                <PopoverTrigger asChild>
-                    <Button
-                        id="date"
-                        variant={"outline"}
-                        className={cn("w-[300px] justify-start text-left font-normal", !date && "text-muted-foreground")}
-                    >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date?.from ? (date.to ? (`${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`) : format(date.from, "LLL dd, y")) : (<span>Pick a date</span>)}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 flex" side="bottom" align="start">
-                    {/* Presets Column */}
-                    <div className="flex flex-col space-y-1 p-2 border-r">
-                        <Button variant="ghost" onClick={() => { setDate({ from: new Date(), to: new Date() }); setPopoverOpen(false); }}>Today</Button>
-                        <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -7), to: new Date() }); setPopoverOpen(false); }}>Last 7 Days</Button>
-                        <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -30), to: new Date() }); setPopoverOpen(false); }}>Last 30 Days</Button>
-                        <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 2), to: new Date() }); setPopoverOpen(false); }}>Last 2 Months</Button>
-                        <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 6), to: new Date() }); setPopoverOpen(false); }}>Last 6 Months</Button>
-                        <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 1), to: new Date() }); setPopoverOpen(false); }}>Last 1 Year</Button>
-                        <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 50), to: new Date() }); setPopoverOpen(false); }}>All Time</Button>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn("w-[300px] justify-start text-left font-normal", !date && "text-muted-foreground")}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date?.from ? (date.to ? (`${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`) : format(date.from, "LLL dd, y")) : (<span>Pick a date</span>)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 flex" side="bottom" align="start">
+                <div className="flex flex-col space-y-1 p-2 border-r">
+                  <Button variant="ghost" onClick={() => { setDate({ from: new Date(), to: new Date() }); setPopoverOpen(false); }}>Today</Button>
+                  <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -7), to: new Date() }); setPopoverOpen(false); }}>Last 7 Days</Button>
+                  <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -30), to: new Date() }); setPopoverOpen(false); }}>Last 30 Days</Button>
+                  <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 2), to: new Date() }); setPopoverOpen(false); }}>Last 2 Months</Button>
+                  <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 6), to: new Date() }); setPopoverOpen(false); }}>Last 6 Months</Button>
+                  <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 1), to: new Date() }); setPopoverOpen(false); }}>Last 1 Year</Button>
+                  <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 50), to: new Date() }); setPopoverOpen(false); }}>All Time</Button>
 
-                        {/* Custom Range Dialog */}
-                        <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="ghost" className="text-blue-600 hover:text-blue-700 justify-start">Custom...</Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader><DialogTitle>Select Custom Date Range</DialogTitle></DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.from && "text-muted-foreground")}>
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {customDate?.from ? format(customDate.from, "dd-MM-yyyy") : <span>Start Date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.from} onSelect={(day) => setCustomDate((prev) => ({ ...prev, from: day }))} /></PopoverContent>
-                                    </Popover>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.to && "text-muted-foreground")}>
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {customDate?.to ? format(customDate.to, "dd-MM-yyyy") : <span>End Date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                          <Calendar
-                                            mode="single"
-                                            selected={customDate?.to}
-                                            onSelect={(day) =>
-                                              setCustomDate((prev) =>
-                                                prev
-                                                  ? { from: prev.from ?? undefined, to: day }
-                                                  : { from: undefined, to: day }
-                                              )
-                                            }
-                                          />
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-                                <DialogFooter>
-                                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                                    <Button onClick={handleApplyCustomDate}>Apply</Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-
-                    {/* Main Calendar */}
-                    {/* <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={date?.from}
-                        selected={date}
-                        onSelect={setDate}
-                        numberOfMonths={2}
-                    /> */}
-                </PopoverContent>
+                  <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" className="text-blue-600 hover:text-blue-700 justify-start">Custom...</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Select Custom Date Range</DialogTitle></DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.from && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {customDate?.from ? format(customDate.from, "dd-MM-yyyy") : <span>Start Date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.from} onSelect={(day) => setCustomDate((prev) => ({ ...prev, from: day }))} /></PopoverContent>
+                        </Popover>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.to && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {customDate?.to ? format(customDate.to, "dd-MM-yyyy") : <span>End Date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={customDate?.to}
+                              onSelect={(day) =>
+                                setCustomDate((prev) =>
+                                  prev
+                                    ? { from: prev.from ?? undefined, to: day }
+                                    : { from: undefined, to: day }
+                                )
+                              }
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                        <Button onClick={handleApplyCustomDate}>Apply</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </PopoverContent>
             </Popover>
 
             <div className="flex items-center gap-2">
-              
               <TooltipProvider delayDuration={0}>
-                 <Tooltip>
-            <TooltipTrigger asChild>
-                <Button onClick={handleRedo} variant="outline" size="sm" disabled={redoStack.length === 0 || isUndoing}>
-                    <Redo className="h-4 w-4" />
-                </Button>
-            </TooltipTrigger>
-            <TooltipContent><p>Redo</p></TooltipContent>
-        </Tooltip>
-                    <Tooltip >
-    <TooltipTrigger asChild>
-      <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
-        <Undo className="h-4 w-4"/>
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>Undo</p>
-    </TooltipContent>
-  </Tooltip>
-  <ExcelImport onDataParsed={handleImportedData} />
-                <Tooltip >
-    <TooltipTrigger asChild>
-      <Button onClick={handleExportToExcel} variant="outline" size="sm">
-        <Upload className="h-4 w-4"/>
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>Export Sales</p>
-    </TooltipContent>
-  </Tooltip>
-  <Tooltip >
-    <TooltipTrigger asChild>
-      <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
-        <Plus className="h-4 w-4" />
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>Add new</p>
-    </TooltipContent>
-  </Tooltip>
-</TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={handleRedo} variant="outline" size="sm" disabled={redoStack.length === 0 || isUndoing}>
+                      <Redo className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Redo</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
+                      <Undo className="h-4 w-4"/>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Undo</p></TooltipContent>
+                </Tooltip>
+                <ExcelImport onDataParsed={handleImportedData} />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={handleExportToExcel} variant="outline" size="sm">
+                      <Upload className="h-4 w-4"/>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Export</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Add new</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0 ">
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader >
-                <TableRow >
+              <TableHeader>
+                <TableRow>
                   <TableHead className="w-[50px] px-4">
                     <div
                       onClick={handleSelectAll}
@@ -910,6 +1720,7 @@ const handleRedo = async () => {
                     </div>
                   </TableHead>
                   <TableHead onClick={() => requestSort('date')} className="cursor-pointer">Date</TableHead>
+                  <TableHead onClick={() => requestSort('transaction_type')} className="cursor-pointer">Type</TableHead>
                   <TableHead onClick={() => requestSort('user')} className="cursor-pointer">Member</TableHead>
                   <TableHead onClick={() => requestSort('product')} className="cursor-pointer">Product</TableHead>
                   <TableHead onClick={() => requestSort('qty')} className="text-right cursor-pointer">Qty</TableHead>
@@ -919,31 +1730,14 @@ const handleRedo = async () => {
                   <TableHead onClick={() => requestSort('outstanding')} className="text-right cursor-pointer">Outstanding</TableHead>
                   <TableHead onClick={() => requestSort('payment_status')} className="cursor-pointer">Status</TableHead>
                   <TableHead className="text-right pr-4">
-                    <Button variant="ghost" size="icon" onClick={deleteSelectedRows} disabled={selectedRows.length === 0}><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={deleteSelectedRows} disabled={selectedRows.length === 0}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {addingNew && (
-                  <TableRow className="bg-secondary">
-                    <TableCell></TableCell>
-                    <TableCell className="p-1"><Input type="date" className="h-8" value={newSale.date ?? ''} onChange={(e) => handleNewChange('date' as keyof Sale, e.target.value)} /></TableCell>
-                    <TableCell className="p-1 min-w-[150px]"><Select options={userOptions} onChange={(s: any) => handleNewChange('member_id' as keyof Sale, s?.value)} styles={getSelectStyles(isDarkMode)} /></TableCell>
-                    <TableCell className="p-1 min-w-[150px]"><Select options={productOptions} onChange={(s: any) => handleNewChange("product_id" as keyof Sale, s?.value || "")} styles={getSelectStyles(isDarkMode)} /></TableCell>
-                    <TableCell className="p-1"><Input type="number" className="h-8 w-16 text-right" value={newSale.qty ?? ''} onChange={(e) => handleNewChange('qty' as keyof Sale, Number(e.target.value))} /></TableCell>
-                    <TableCell className="p-1"><Input type="number" step="0.01" className="h-8 w-24 text-right" value={newSale.price ?? ''} onChange={(e) => handleNewChange('price' as keyof Sale, Number(e.target.value))} /></TableCell>
-                    <TableCell className="p-1 text-right">{formatCurrency(newSale.total ?? 0)}</TableCell>
-                    <TableCell className="p-1"><Input type="number" step="0.01" className="h-8 w-24 text-right" value={newSale.paid ?? ''} onChange={(e) => handleNewChange('paid' as keyof Sale, Number(e.target.value))} /></TableCell>
-                    <TableCell className="p-1 text-right">{formatCurrency(newSale.outstanding ?? 0)}</TableCell>
-                    <TableCell className="p-1"><div className={cn("font-semibold", statusColors[newSale.payment_status || 'Pending'])}>{newSale.payment_status || 'Pending'}</div></TableCell>
-                    <TableCell className="p-1 text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button onClick={handleAddNew} size="sm" className="bg-green-600 hover:bg-green-700 text-white">Save</Button>
-                        <Button onClick={() => setAddingNew(false)} variant="ghost" size="sm">Cancel</Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
+                {addingNew && renderNewRecordRow()}
                 {sortedSales.length > 0 ? sortedSales.map((sale) => (
                   <TableRow key={sale.id} data-state={selectedRows.includes(sale.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
@@ -960,6 +1754,7 @@ const handleRedo = async () => {
                       </div>
                     </TableCell>
                     {renderEditableCell(sale, 'date')}
+                    {renderEditableCell(sale, 'transaction_type')}
                     {renderEditableCell(sale, 'member_id')}
                     {renderEditableCell(sale, 'product_id')}
                     {renderEditableCell(sale, 'qty')}
@@ -972,7 +1767,7 @@ const handleRedo = async () => {
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center h-24">
+                    <TableCell colSpan={12} className="text-center h-24">
                       No data available for the selected period.
                     </TableCell>
                   </TableRow>
