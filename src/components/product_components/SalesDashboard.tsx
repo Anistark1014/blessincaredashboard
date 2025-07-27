@@ -50,13 +50,15 @@ interface SalesDataPoint {
 
 // Data for KPIs
 interface KPIData {
-    totalSalesQty: number;
+    totalSalesQty: number; // This will conceptually represent total units sold for other calculations
     totalRevenue: number;
     totalOutstanding: number;
     averageOrderValue: number;
-    totalSales: number;
+    // RENAMED: totalSales to turnover
+    turnover: number;
     totalPaid: number;
-    gmv: number;
+    // RENAMED: gmv to totalUnitsSold
+    totalUnitsSold: number;
     numTransactions: number;
 }
 
@@ -83,9 +85,11 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
         totalRevenue: 0,
         totalOutstanding: 0,
         averageOrderValue: 0,
-        totalSales: 0,
+        // RENAMED: totalSales to turnover
+        turnover: 0,
         totalPaid: 0,
-        gmv: 0,
+        // RENAMED: gmv to totalUnitsSold
+        totalUnitsSold: 0,
         numTransactions: 0,
     });
     const [loading, setLoading] = useState(false);
@@ -140,9 +144,11 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
                     totalRevenue: 0,
                     totalOutstanding: 0,
                     averageOrderValue: 0,
-                    totalSales: 0,
+                    // RENAMED: totalSales to turnover
+                    turnover: 0,
                     totalPaid: 0,
-                    gmv: 0,
+                    // RENAMED: gmv to totalUnitsSold
+                    totalUnitsSold: 0,
                     numTransactions: 0,
                 });
                 setLoading(false);
@@ -192,9 +198,11 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
                     totalRevenue: 0,
                     totalOutstanding: 0,
                     averageOrderValue: 0,
-                    totalSales: 0,
+                    // RENAMED: totalSales to turnover
+                    turnover: 0,
                     totalPaid: 0,
-                    gmv: 0,
+                    // RENAMED: gmv to totalUnitsSold
+                    totalUnitsSold: 0,
                     numTransactions: 0,
                 });
                 return;
@@ -209,106 +217,120 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
         fetchSales();
     }, [dateRange, metric, lineMode, currentProductSearchTerm, categoryFilter, availabilityFilter, productsList, timeUnit, dateRangePreset]);
 
-    const processSalesData = useMemo(() => (
-        sales: Sales[],
-        mode: 'combined' | 'perProduct',
-        selectedMetric: 'qty' | 'price' | 'total',
-        allProducts: Product[],
-        unit: 'day' | 'month' | 'year'
-    ) => {
-        const chartMap = new Map<string, SalesDataPoint>();
-        let totalSalesQty = 0;
-        let totalRevenue = 0;
-        let totalOutstanding = 0;
-        let totalSalesValue = 0;
-        let totalGMV = 0;
-        let numTransactions = sales.length;
+const processSalesData = useMemo(() => (
+    sales: Sales[],
+    mode: 'combined' | 'perProduct',
+    selectedMetric: 'qty' | 'price' | 'total',
+    allProducts: Product[],
+    unit: 'day' | 'month' | 'year'
+) => {
+    const chartMap = new Map<string, SalesDataPoint>();
+    let totalSalesQty = 0; // This variable will now track 'Total Units Sold'
+    let totalPaid = 0;
+    let totalSalesValue = 0; // This variable will now track 'Turnover'
+    // The original 'totalGMV' variable can be removed or repurposed if needed, but 'totalUnitsSold' is directly tied to totalSalesQty
+    let numTransactions = sales.length;
 
-        const getFormattedDate = (dateString: string) => {
-            const date = new Date(dateString);
-            if (unit === 'month') return format(date, 'yyyy-MM');
-            if (unit === 'year') return format(date, 'yyyy');
-            return format(date, 'yyyy-MM-dd');
-        };
+    const getFormattedDate = (dateString: string) => {
+        const date = new Date(dateString);
+        if (unit === 'month') return format(date, 'yyyy-MM');
+        if (unit === 'year') return format(date, 'yyyy');
+        return format(date, 'yyyy-MM-dd');
+    };
 
-        sales.forEach(sale => {
-            const dateKey = getFormattedDate(sale.date);
+    sales.forEach(sale => {
+        const dateKey = getFormattedDate(sale.date);
 
-            totalSalesQty += sale.qty;
-            totalRevenue += sale.total;
-            totalOutstanding += sale.outstanding;
-            totalSalesValue += sale.price * sale.qty;
-            totalGMV += (allProducts.find(p => p.id === sale.product_id)?.mrp || 0) * sale.qty;
+        totalSalesQty += sale.qty; // Summing up quantities for 'Total Units Sold'
+        totalPaid += sale.paid;
+        totalSalesValue += sale.price * sale.qty; // Summing up (price * qty) for 'Turnover'
 
-            if (mode === 'combined') {
-                if (!chartMap.has(dateKey)) {
-                    chartMap.set(dateKey, { date: dateKey, qty: 0, price: 0, total: 0 });
-                }
-                const current = chartMap.get(dateKey)!;
-                current.qty! += sale.qty;
-                current.price! += sale.price;
-                current.total! += sale.total;
-            } else {
-                const productName = allProducts.find(p => p.id === sale.product_id)?.name || `Unknown Product (${sale.product_id})`;
-                if (!chartMap.has(dateKey)) {
-                    chartMap.set(dateKey, { date: dateKey });
-                }
-                const current = chartMap.get(dateKey)!;
-                if (!current[productName]) {
-                    current[productName] = 0;
-                }
-                current[productName] += sale[selectedMetric];
-            }
-        });
-
-        const sortedData = Array.from(chartMap.values()).sort((a, b) => {
-            if (unit === 'month') return new Date(a.date + '-01').getTime() - new Date(b.date + '-01').getTime();
-            if (unit === 'year') return new Date(a.date + '-01-01').getTime() - new Date(b.date + '-01-01').getTime();
-            return new Date(a.date).getTime() - new Date(b.date).getTime();
-        });
-
-        const averageOrderValue = numTransactions > 0 ? totalRevenue / numTransactions : 0;
+        // The 'mrp' and 'totalGMV' calculation were for the original 'GMV' metric.
+        // If 'Total Units Sold' should exclusively be `totalSalesQty`, then `totalGMV`
+        // is no longer directly used for the 'totalUnitsSold' KPI.
+        // const mrp = allProducts.find(p => p.id === sale.product_id)?.mrp || 0;
+        // totalGMV += mrp * sale.qty; // If you still need GMV for other purposes, keep this line.
 
         if (mode === 'combined') {
-            return {
-                chartData: sortedData.map(d => ({ date: d.date, [selectedMetric]: d[selectedMetric] })),
-                kpiData: {
-                    totalSalesQty,
-                    totalRevenue,
-                    totalOutstanding,
-                    averageOrderValue,
-                    totalSales: totalSalesValue,
-                    totalPaid: totalRevenue,
-                    gmv: totalGMV,
-                    numTransactions
-                }
-            };
+            if (!chartMap.has(dateKey)) {
+                chartMap.set(dateKey, { date: dateKey, qty: 0, price: 0, total: 0 });
+            }
+            const current = chartMap.get(dateKey)!;
+            current.qty! += sale.qty;
+            current.price! += sale.price;
+            current.total! += sale.total;
         } else {
-            const productNamesFromFilteredSales = Array.from(new Set(sales.map(s => allProducts.find(p => p.id === s.product_id)?.name || `Unknown Product (${s.product_id})`)));
-            const finalChartData = sortedData.map(dataPoint => {
-                const newPoint: SalesDataPoint = { date: dataPoint.date };
-                productNamesFromFilteredSales.forEach(pName => {
-                    newPoint[pName] = dataPoint[pName] || 0;
-                });
-                return newPoint;
-            });
-
-            return {
-                chartData: finalChartData,
-                kpiData: {
-                    totalSalesQty,
-                    totalRevenue,
-                    totalOutstanding,
-                    averageOrderValue,
-                    totalSales: totalSalesValue,
-                    totalPaid: totalRevenue,
-                    gmv: totalGMV,
-                    numTransactions
-                }
-            };
+            const productName = allProducts.find(p => p.id === sale.product_id)?.name || `Unknown Product (${sale.product_id})`;
+            if (!chartMap.has(dateKey)) {
+                chartMap.set(dateKey, { date: dateKey });
+            }
+            const current = chartMap.get(dateKey)!;
+            if (!current[productName]) {
+                current[productName] = 0;
+            }
+            current[productName] += sale[selectedMetric];
         }
+    });
 
-    }, []);
+    const sortedData = Array.from(chartMap.values()).sort((a, b) => {
+        if (unit === 'month') return new Date(a.date + '-01').getTime() - new Date(b.date + '-01').getTime();
+        if (unit === 'year') return new Date(a.date + '-01-01').getTime() - new Date(b.date + '-01-01').getTime();
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+
+    const averageOrderValue = numTransactions > 0 ? totalPaid / numTransactions : 0;
+    // Calculation of totalOutstanding now uses 'totalSalesValue' which represents 'Turnover'
+    const totalOutstanding = totalSalesValue - totalPaid;
+
+    if (mode === 'combined') {
+        return {
+            chartData: sortedData.map(d => ({ date: d.date, [selectedMetric]: d[selectedMetric] })),
+            kpiData: {
+                totalSalesQty: totalSalesQty, // This still tracks total quantity for internal use if needed
+                totalRevenue: totalPaid,
+                totalOutstanding,
+                averageOrderValue,
+                // ASSIGNMENT: totalSalesValue to turnover
+                turnover: totalSalesValue,
+                totalPaid,
+                // ASSIGNMENT: totalSalesQty to totalUnitsSold
+                totalUnitsSold: totalSalesQty,
+                numTransactions
+            }
+        };
+    } else {
+        const productNamesFromFilteredSales = Array.from(
+            new Set(sales.map(s => allProducts.find(p => p.id === s.product_id)?.name || `Unknown Product (${s.product_id})`))
+        );
+
+        const finalChartData = sortedData.map(dataPoint => {
+            const newPoint: SalesDataPoint = { date: dataPoint.date };
+            productNamesFromFilteredSales.forEach(pName => {
+                newPoint[pName] = dataPoint[pName] || 0;
+            });
+            return newPoint;
+        });
+
+        return {
+            chartData: finalChartData,
+            kpiData: {
+                totalSalesQty: totalSalesQty, // This still tracks total quantity for internal use if needed
+                totalRevenue: totalPaid,
+                totalOutstanding,
+                averageOrderValue,
+                // ASSIGNMENT: totalSalesValue to turnover
+                turnover: totalSalesValue,
+                totalPaid,
+                // ASSIGNMENT: totalSalesQty to totalUnitsSold
+                totalUnitsSold: totalSalesQty,
+                numTransactions
+            }
+        };
+    }
+
+}, []);
+    // Update this line to use 'turnover' instead of 'totalSales'
+    const totalBalanceDue = kpiData.turnover - kpiData.totalPaid;
 
     const handleDateRangePresetChange = (preset: string) => {
         setDateRangePreset(preset as '7d' | '30d' | '90d' | 'lifetime' | 'custom');
@@ -397,19 +419,17 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
         );
     }
 
-    const totalBalanceDue = kpiData.totalSales - kpiData.totalPaid;
-
     return (
         <div className="flex flex-col gap-6 fade-in-up">
             {/* KPI Metrics - Responsive Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                        <CardTitle className="text-sm font-medium">Turn Over</CardTitle>
                         <Wallet className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{formatCurrency(kpiData.totalSales)}</div>
+                        <div className="text-2xl font-bold">{formatCurrency(kpiData.turnover)}</div>
                         <p className="text-xs text-muted-foreground">From {kpiData.numTransactions} transactions</p>
                     </CardContent>
                 </Card>
@@ -435,12 +455,12 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Gross Merchandise Value</CardTitle>
+                        <CardTitle className="text-sm font-medium">Totla Units Sold </CardTitle>
                         <Package className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{formatCurrency(kpiData.gmv)}</div>
-                        <p className="text-xs text-muted-foreground">Total value at MRP</p>
+                        <div className="text-2xl font-bold">{formatCurrency(kpiData.totalUnitsSold)}</div>
+                        <p className="text-xs text-muted-foreground">Total Packs</p>
                     </CardContent>
                 </Card>
             </div>
