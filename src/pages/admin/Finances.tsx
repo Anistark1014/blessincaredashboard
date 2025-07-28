@@ -549,7 +549,14 @@ const Finance = () => {
               <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
                 <Button
                   variant="ghost"
-                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  className={cn(
+                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                    date && date.from && date.to &&
+                      date.from.getFullYear() === new Date().getFullYear() &&
+                      date.from.getMonth() === new Date().getMonth() &&
+                      date.to.toDateString() === new Date().toDateString()
+                      ? "bg-lavender/30" : ""
+                  )}
                   onClick={() => {
                     const now = new Date();
                     setDate({
@@ -563,7 +570,15 @@ const Finance = () => {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  className={cn(
+                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                    date && date.from && date.to &&
+                      date.from.getFullYear() === new Date().getFullYear() &&
+                      date.from.getMonth() === new Date().getMonth() - 1 &&
+                      date.to.getFullYear() === new Date().getFullYear() &&
+                      date.to.getMonth() === new Date().getMonth() - 1
+                      ? "bg-lavender/30" : ""
+                  )}
                   onClick={() => {
                     const now = new Date();
                     const lastMonth = new Date(
@@ -587,7 +602,14 @@ const Finance = () => {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  className={cn(
+                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                    date && date.from && date.to &&
+                      date.from.getFullYear() === new Date().getFullYear() &&
+                      date.from.getMonth() === 0 &&
+                      date.to.toDateString() === new Date().toDateString()
+                      ? "bg-lavender/30" : ""
+                  )}
                   onClick={() => {
                     const now = new Date();
                     setDate({
@@ -601,7 +623,13 @@ const Finance = () => {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  className={cn(
+                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                    date && date.from && date.to &&
+                      date.from.getFullYear() === 2000 &&
+                      date.from.getMonth() === 0
+                      ? "bg-lavender/30" : ""
+                  )}
                   onClick={() => {
                     setDate({
                       from: new Date(2000, 0, 1),
@@ -741,13 +769,15 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold flex flex-row items-center gap-2">
-              ₹{grossProfit.toLocaleString()}
-              <p className="text-xs font-normal">
-                ({grossProfitMargin.toLocaleString()}%)
+              <span className={grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                ₹{grossProfit.toLocaleString()}
+              </span>
+              <p className={`text-xs font-normal ${grossProfitMargin >= 20 ? 'text-green-600' : grossProfitMargin >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                ({grossProfitMargin.toFixed(2)}%)
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              (Sales - COGS)
+              Profit after direct costs
             </p>
           </CardContent>
         </Card>
@@ -759,13 +789,15 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold flex flex-row items-center gap-2">
-              ₹{netProfit.toLocaleString()}
-              <p className="text-xs font-normal">
-                ({netProfitMargin.toLocaleString()}%)
+              <span className={netProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                ₹{netProfit.toLocaleString()}
+              </span>
+              <p className={`text-xs font-normal ${netProfitMargin >= 15 ? 'text-green-600' : netProfitMargin >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                ({netProfitMargin.toFixed(2)}%)
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              (Revenue - COGS - Expenses) / Revenue
+              Final profit after all costs
             </p>
           </CardContent>
         </Card>
@@ -777,13 +809,15 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold flex flex-row items-center gap-2">
-              ₹{ebitda.toLocaleString()}
-              <p className="text-xs font-normal">
-                ({ebitdaMargin.toLocaleString()}%)
+              <span className={ebitda >= 0 ? 'text-green-600' : 'text-red-600'}>
+                ₹{ebitda.toLocaleString()}
+              </span>
+              <p className={`text-xs font-normal ${ebitdaMargin >= 20 ? 'text-green-600' : ebitdaMargin >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                ({ebitdaMargin.toFixed(2)}%)
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              (Revenue - COGS - Expenses) + Depreciation + Amortization
+              Core business profitability
             </p>
           </CardContent>
         </Card>
@@ -795,13 +829,15 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold flex flex-row items-center gap-2">
-              ₹{pat.toLocaleString()}
-              <p className="text-xs font-normal">
-                ({patMargin.toLocaleString()}%)
+              <span className={pat >= 0 ? 'text-green-600' : 'text-red-600'}>
+                ₹{pat.toLocaleString()}
+              </span>
+              <p className={`text-xs font-normal ${patMargin >= 12 ? 'text-green-600' : patMargin >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                ({patMargin.toFixed(2)}%)
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              (Net Profit - Taxes) / Net Profit Needs taxes to be added
+              Profit after all deductions
             </p>
           </CardContent>
         </Card>
@@ -812,11 +848,11 @@ const Finance = () => {
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold`}>
+            <div className={`text-2xl font-bold ${outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
               ₹{outstanding.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Amount yet to be collected (sales)
+              Money owed by customers
             </p>
           </CardContent>
         </Card>
@@ -827,11 +863,11 @@ const Finance = () => {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold`}>
+            <div className={`text-2xl font-bold ${outstandingLoans > 0 ? 'text-red-600' : 'text-green-600'}`}>
               ₹{outstandingLoans.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Amount yet to be paid (loans)
+              Outstanding loan balance
             </p>
           </CardContent>
         </Card>
@@ -842,11 +878,11 @@ const Finance = () => {
             <PiggyBank className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold`}>
+            <div className={`text-2xl font-bold text-green-600`}>
               ₹{totalInvestments.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total investments received
+              Capital invested in business
             </p>
           </CardContent>
         </Card>
@@ -877,70 +913,7 @@ const Finance = () => {
 
       {/* Financial Management Section */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:gap-y-6">
-        <div className="w-full md:w-1/3">
-          {/* You can add more content here if needed */}
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-1">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Balance</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ₹{balance.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Current available balance
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ₹{revenue.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Total investments received
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Outstanding
-                </CardTitle>
-                <AlertCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ₹{outstanding.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Remaining loan balance
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">GMV</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ₹{gmv.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Gross monetary value
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-        <div className="w-full md:w-2/3">
+        <div className="w-full md:w-2/3 mx-auto fixed top-[12%] left-1/2 -translate-x-1/2 z-10">
           <Card>
             <CardHeader>
               <CardTitle>Financial Management</CardTitle>
