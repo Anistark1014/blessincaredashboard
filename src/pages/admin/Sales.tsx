@@ -14,15 +14,15 @@ import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
 import { Search, Upload, Trash2, Plus, Undo, Redo, Calendar as CalendarIcon, Badge } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from "@/components/ui/dialog";
+// import {
+//   Dialog,
+//   DialogContent,
+//   DialogFooter,
+//   DialogHeader,
+//   DialogTitle,
+//   DialogTrigger,
+//   DialogClose,
+// } from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -81,8 +81,6 @@ interface UndoOperation {
     originalRecord?: Sale;
     updatedRecord?: Sale;
     userBalanceChanges?: { userId: string; oldBalance: number; newBalance: number }[];
-    updatedSalesRecords?: any[]; // Track sales record changes for clearance operations
-    salesRecordReversals?: any[]; // Track sales record reversals for delete operations
   };
 }
 
@@ -203,7 +201,7 @@ const fetchMembersWithDues = async () => {
     
     salesWithDues?.forEach(sale => {
       const memberId = sale.member_id;
-      const memberName = (sale.users && typeof sale.users === 'object' && 'name' in sale.users) ? (sale.users as User).name : 'Unknown';
+      const memberName = sale.users?.name || 'Unknown';
       
       if (!memberDuesMap.has(memberId)) {
         memberDuesMap.set(memberId, {
@@ -297,7 +295,7 @@ const getPendingSalesForMember = (memberId: string) => {
 
   const fetchDropdownData = async () => {
     try {
-      const usersPromise = supabase.from('users').select('id, name');
+      const usersPromise = supabase.from('users').select('id, name, due_balance');
       const productsPromise = supabase.from('products').select('id, name, mrp, price_ranges');
 
       const [usersResult, productsResult] = await Promise.all([usersPromise, productsPromise]);
@@ -309,7 +307,7 @@ const getPendingSalesForMember = (memberId: string) => {
       const userOpts = (usersResult.data || [])
         .filter(u => u.name)
         .map(u => ({ 
-          label: u.name || 'Unknown', 
+          label: `${u.name}${u.due_balance ? ` (₹${u.due_balance.toFixed(2)} due)` : ''}`, 
           value: u.id 
         }));
       setUserOptions(userOpts);
@@ -326,47 +324,41 @@ const getPendingSalesForMember = (memberId: string) => {
   // --- NEW HELPER FUNCTIONS FOR TRANSACTION LOGIC ---
 
   const updateUserBalance = async (userId: string, amountChange: number): Promise<number> => {
-    // Since due_balance doesn't exist in the users table, we'll calculate it from sales
-    const { data: userSales, error: salesError } = await supabase
-      .from('sales')
-      .select('outstanding, transaction_type')
-      .eq('member_id', userId);
+    const { data: currentUser, error: fetchError } = await supabase
+      .from('users')
+      .select('due_balance')
+      .eq('id', userId)
+      .single();
 
-    if (salesError) throw salesError;
+    if (fetchError) throw fetchError;
 
-    // Calculate current balance from sales records
-    const oldBalance = (userSales || []).reduce((total, sale) => {
-      return sale.transaction_type === 'Sale' ? total + sale.outstanding : total;
-    }, 0);
+    const oldBalance = currentUser.due_balance || 0;
+    const newBalance = oldBalance + amountChange;
 
-    // Note: In a real implementation, you might want to add due_balance column to users table
-    // For now, we'll just return the calculated balance without updating the users table
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ due_balance: newBalance })
+      .eq('id', userId);
+
+    if (updateError) throw updateError;
+
     return oldBalance;
   };
 
   const updatePendingSalesStatus = async (userId: string) => {
-    // Calculate user's current balance from sales records
-    const { data: userSales, error: salesError } = await supabase
-      .from('sales')
-      .select('outstanding, transaction_type')
-      .eq('member_id', userId);
+    // Check if user's balance is now zero
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('due_balance')
+      .eq('id', userId)
+      .single();
 
-    if (salesError) {
-      console.error('Error fetching user sales:', salesError);
-      return;
-    }
-
-    // Calculate current balance from sales records
-    const currentBalance = (userSales || []).reduce((total, sale) => {
-      return sale.transaction_type === 'Sale' ? total + sale.outstanding : total;
-    }, 0);
-
-    if (currentBalance !== 0) return;
+    if (userError || !user || user.due_balance !== 0) return;
 
     // Update all pending/partially paid sales to "Due Cleared"
     const { error: updateError } = await supabase
       .from('sales')
-      .update({ payment_status: 'Due Cleared' } as any)
+      .update({ payment_status: 'Due Cleared' })
       .eq('member_id', userId)
       .in('payment_status', ['Pending', 'Partially Paid']);
 
@@ -452,7 +444,7 @@ const getPendingSalesForMember = (memberId: string) => {
         paid: newPaid,
         outstanding: newOutstanding,
         payment_status: newStatus
-      } as any)
+      })
       .eq('id', sale.id);
 
     if (updateError) throw updateError;
@@ -477,13 +469,13 @@ const getPendingSalesForMember = (memberId: string) => {
 const revertSalesRecordsForClearance = async (updatedRecords: any[]) => {
   for (const record of updatedRecords) {
     await supabase
-    .from('sales')
-    .update({
-      paid: record.oldPaid,
-      outstanding: record.oldOutstanding,
-      payment_status: record.oldStatus
-    } as any)
-    .eq('id', record.id);
+      .from('sales')
+      .update({
+        paid: record.oldPaid,
+        outstanding: record.oldOutstanding,
+        payment_status: record.oldStatus
+      })
+      .eq('id', record.id);
   }
 };
 
@@ -641,8 +633,7 @@ const handleAddNew = async () => {
       fetchMembersWithDues(); // Refresh the members with dues list
       
       if (transactionType === 'Clearance' && updatedSalesRecords.length > 0) {
-        const paidAmount = Number(newSale.paid);
-        alert(`Clearance applied successfully! Updated ${updatedSalesRecords.length} sales record(s). Total amount cleared: ₹${paidAmount.toFixed(2)}`);
+        alert(`Clearance applied successfully! Updated ${updatedSalesRecords.length} sales record(s). Total amount cleared: ₹${paid.toFixed(2)}`);
       } else if (transactionType === 'Sale') {
         alert(`Sale record added successfully!`);
       }
@@ -761,7 +752,7 @@ const handleAddNew = async () => {
       setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
       setEditingCell(null);
 
-      const { error } = await supabase.from('sales').update(updatePayload as any).eq('id', id);
+      const { error } = await supabase.from('sales').update(updatePayload).eq('id', id);
       if (error) {
         console.error('Update failed:', error.message);
         // Revert user balance if update fails
@@ -851,7 +842,7 @@ const deleteSelectedRows = async () => {
           paid: reversal.newPaid,
           outstanding: reversal.newOutstanding,
           payment_status: reversal.newStatus
-        } as any)
+        })
         .eq('id', reversal.id);
     }
 
@@ -878,8 +869,7 @@ const deleteSelectedRows = async () => {
             paid: reversal.oldPaid,
             outstanding: reversal.oldOutstanding,
             payment_status: reversal.oldStatus
-          } as any)
-          .eq('id', reversal.id)
+          })
           .eq('id', reversal.id);
       }
       alert('Delete failed: ' + error.message);
@@ -904,12 +894,12 @@ const deleteSelectedRows = async () => {
     try {
       // Revert user balance changes if any
       if (lastOperation.data.userBalanceChanges) {
-        // We don't update due_balance in the users table since it doesn't exist
-        // The balance is calculated dynamically from sales records
-        console.log("Reverting balance changes:", lastOperation.data.userBalanceChanges);
-        
-        // If needed, we would update sales records to reflect the old balances
-        // but this is already handled by the record restoration below
+        for (const change of lastOperation.data.userBalanceChanges) {
+          await supabase
+            .from('users')
+            .update({ due_balance: change.oldBalance })
+            .eq('id', change.userId);
+        }
       }
 
       switch (lastOperation.type) {
@@ -968,11 +958,14 @@ const deleteSelectedRows = async () => {
           break;
       }
 
-      // We don't need to explicitly update user balances as they're calculated dynamically
-      // Just log the balance changes for debugging purposes
+      // Reapply user balance changes
       if (operationToRedo.data.userBalanceChanges) {
-        console.log('User balance changes applied:', operationToRedo.data.userBalanceChanges);
-        // No direct update to users table needed as balances are calculated from sales records
+        for (const change of operationToRedo.data.userBalanceChanges) {
+          await supabase
+            .from('users')
+            .update({ due_balance: change.newBalance })
+            .eq('id', change.userId);
+        }
       }
 
       setRedoStack(prev => prev.slice(1));
@@ -1084,8 +1077,8 @@ const deleteSelectedRows = async () => {
       total: number;
       paid: number;
       outstanding: number;
-      payment_status: PaymentStatus;
-      transaction_type: TransactionType;
+      payment_status: string;
+      transaction_type: string;
     } => row !== null);
 
     if (processedData.length === 0) {
@@ -1116,7 +1109,7 @@ const deleteSelectedRows = async () => {
         }
       }
 
-      const { data: newRecords, error } = await supabase.from('sales').insert(processedData as any[]).select();
+      const { data: newRecords, error } = await supabase.from('sales').insert(processedData).select();
 
       if (error) {
         // Revert balance changes if insert fails
@@ -1575,7 +1568,7 @@ const renderNewRecordRow = () => {
 
   return (
     <div className="space-y-6">
-      <EnhancedSalesDashboard data={sortedSales as any} />
+      <EnhancedSalesDashboard data={sortedSales} />
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1600,7 +1593,7 @@ const renderNewRecordRow = () => {
               />
             </div>
             
-            <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+                      <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
               <Button
                 id="date"
