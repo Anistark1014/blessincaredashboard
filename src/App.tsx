@@ -88,8 +88,6 @@ const App = () => (
           {/* <Route path="/" element={<Home />} /> */}
           </Route>
 
-          {/* Protected Routes - Auto redirect based on role */}
-          <Route path="/reseller" element={<DashboardRedirect />} />
 
           {/* Reseller Routes */}
           <Route path="/reseller" element={

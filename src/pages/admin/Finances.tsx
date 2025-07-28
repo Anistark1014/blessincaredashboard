@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { addDays } from "date-fns";
-import { Calendar as CalendarIcon, Search } from "lucide-react";
+import { Calendar as CalendarIcon, Search, Wallet } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -34,6 +34,12 @@ import {
   Activity,
   PiggyBank,
   CreditCard,
+  TrendingDown,
+  Target,
+  Users,
+  BarChart3,
+  Calculator,
+  Zap,
 } from "lucide-react";
 import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
 
@@ -65,14 +71,33 @@ interface LoanPayment {
   payment_date: string;
 }
 
+interface Expense {
+  id: string;
+  amount: number;
+  category: string;
+  description: string | null;
+  date: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  cost_price: number | null;
+  mrp: number | null;
+}
+
 const Finance = () => {
   const { toast } = useToast();
   const [balance, setBalance] = useState(0);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
+  const [investmentPop, setInvestmentPop] = useState(false);
+  const [loanPop, setLoanPop] = useState(false);
   const [loanAction, setLoanAction] = useState<"take" | "pay">("take");
   const [sales, setSales] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [date, setDate] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: addDays(new Date(), 0),
@@ -101,9 +126,42 @@ const Finance = () => {
     fetchData();
   }, []);
 
+  // Fetching the data
+  // Fetching the data
+  // Fetching the data
+
   useEffect(() => {
     fetchSalesData();
+    fetchExpensesData();
+    fetchProductsData();
   }, [date]);
+
+  // Fetch expenses data filtered by date range
+  const fetchExpensesData = async () => {
+    if (!date?.from || !date?.to) return;
+    const startDate = date.from.toISOString();
+    const endDate = date.to.toISOString();
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*")
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: false });
+    if (!error && data) {
+      setExpenses(data);
+    }
+  };
+
+  // Fetch products data for COGS calculations
+  const fetchProductsData = async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, cost_price, mrp")
+      .order("name", { ascending: true });
+    if (!error && data) {
+      setProducts(data);
+    }
+  };
 
   // Fetch sales data with products for KPI calculations, filtered by date range
   const fetchSalesData = async () => {
@@ -120,28 +178,6 @@ const Finance = () => {
       setSales(data);
     }
   };
-  // Memo for display date (like SalesTable)
-  const displayDate = useMemo(() => {
-    if (!date?.from) return null;
-    const fromMonth = date.from.toLocaleString("default", { month: "short" });
-    const fromYear = date.from.getFullYear();
-    if (
-      date.to &&
-      date.from.getFullYear() === date.to.getFullYear() &&
-      date.from.getMonth() === date.to.getMonth()
-    ) {
-      return `${fromMonth.toUpperCase()} ${fromYear}`;
-    }
-    if (date.to) {
-      const toMonth = date.to.toLocaleString("default", { month: "short" });
-      const toYear = date.to.getFullYear();
-      if (fromYear === toYear) {
-        return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
-      }
-      return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
-    }
-    return `${fromMonth.toUpperCase()} ${fromYear}`;
-  }, [date]);
 
   const fetchData = async () => {
     try {
@@ -193,11 +229,14 @@ const Finance = () => {
       );
       // setLoanPayments(paymentsData || []);
 
+      const turnover = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
+
       // Calculate balance locally
-      const totalInvestments = (investmentsData || []).reduce(
-        (sum, inv) => sum + Number(inv.amount),
-        0
-      );
+      const totalInvestments = 0;
+      // const totalInvestments = (investmentsData || []).reduce(
+      //   (sum, inv) => sum + Number(inv.amount),
+      //   0
+      // );
       const totalLoans = (loansData || []).reduce(
         (sum, loan) => sum + Number(loan.amount),
         0
@@ -217,6 +256,34 @@ const Finance = () => {
       });
     }
   };
+  // Fetching the data
+  // Fetching the data
+  // Fetching the data
+
+  // Memo for display date (like SalesTable)
+  const displayDate = useMemo(() => {
+    if (!date?.from) return null;
+    const fromMonth = date.from.toLocaleString("default", { month: "short" });
+    const fromYear = date.from.getFullYear();
+    if (
+      date.to &&
+      date.from.getFullYear() === date.to.getFullYear() &&
+      date.from.getMonth() === date.to.getMonth()
+    ) {
+      return `${fromMonth.toUpperCase()} ${fromYear}`;
+    }
+    if (date.to) {
+      const toMonth = date.to.toLocaleString("default", { month: "short" });
+      const toYear = date.to.getFullYear();
+      if (fromYear === toYear) {
+        return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+      }
+      return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+    }
+    return `${fromMonth.toUpperCase()} ${fromYear}`;
+  }, [date]);
+
+
 
   // Calculate KPIs from sales data (like EnhancedSalesDashboard)
   const salesStats = sales.reduce(
@@ -231,8 +298,54 @@ const Finance = () => {
   const outstanding = salesStats.totalSales - salesStats.totalPaid;
   const revenue = salesStats.totalPaid;
   const gmv = salesStats.gmv;
+  const turnover = salesStats.totalSales;
+  // const grossProfit = turnover - cogs;
+  // const grossProfitMargin = grossProfit / turnover;
+  // Calculate total expenses for the period
+  const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+
+  // Calculate COGS (Cost of Goods Sold)
+  const cogs = sales.reduce((sum, sale) => {
+    const product = sale.products;
+    if (product && product.cost_price) {
+      return sum + (Number(sale.qty || 0) * Number(product.cost_price));
+    }
+    return sum;
+  }, 0);
+
+  // Calculate new KPIs
+  const netProfit = revenue - totalExpenses;
+  const grossProfit = revenue - cogs;
+  const grossProfitMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+  const netProfitMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+  // EBITDA calculation (simplified - revenue - expenses excluding interest, taxes, depreciation, amortization)
+  // For now, we'll use a simplified version: revenue - operating expenses
+  const ebitda = revenue - totalExpenses;
+  const ebitdaMargin = revenue > 0 ? (ebitda / revenue) * 100 : 0;
+
+  // PAT calculation (simplified - net profit - taxes)
+  const pat = netProfit;
+  const patMargin = revenue > 0 ? (pat / revenue) * 100 : 0;
+
+  // Burn Rate calculation (monthly cash outflow)
+  // For simplicity, we'll calculate it as (expenses - revenue) / number of months in the period
+  const getMonthsInPeriod = () => {
+    if (!date?.from || !date?.to) return 1;
+    const months = (date.to.getFullYear() - date.from.getFullYear()) * 12 +
+      (date.to.getMonth() - date.from.getMonth());
+    return Math.max(1, months + 1); // At least 1 month
+  };
+  const burnRate = (totalExpenses - revenue) / getMonthsInPeriod();
+
+  // Customer LTV calculation (simplified)
+  // For now, we'll calculate average revenue per customer
+  // const uniqueCustomers = new Set(sales.map(sale => sale.member_id)).size;
+  // const customerLTV = uniqueCustomers > 0 ? revenue / uniqueCustomers : 0;
 
   // Add investments and loans to the company balance
+  const totalInvestments = investments.reduce((sum, inv) => sum + Number(inv.amount), 0);
+  const outstandingLoans = loans.reduce((sum, loan) => sum + Number(loan.remaining_balance), 0);
   const companyBalance =
     revenue +
     investments.reduce((sum, inv) => sum + Number(inv.amount), 0) +
@@ -368,10 +481,10 @@ const Finance = () => {
           prev.map((loan) =>
             loan.id === selectedLoan.id
               ? {
-                  ...loan,
-                  remaining_balance: Math.max(0, newRemainingBalance),
-                  status: newRemainingBalance <= 0 ? "paid" : "active",
-                }
+                ...loan,
+                remaining_balance: Math.max(0, newRemainingBalance),
+                status: newRemainingBalance <= 0 ? "paid" : "active",
+              }
               : loan
           )
         );
@@ -532,8 +645,8 @@ const Finance = () => {
                         prev && prev.from
                           ? { ...prev, to: newTo! }
                           : newTo
-                          ? { from: newTo, to: newTo }
-                          : prev
+                            ? { from: newTo, to: newTo }
+                            : prev
                       );
                     }}
                     className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
@@ -555,8 +668,7 @@ const Finance = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      {/* <EnhancedSalesDashboard data={sortedSales} /> */}
+      {/* Basic KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* 1. Company Balance (Sales Revenue + Investments + Loans) */}
         <Card>
@@ -568,14 +680,42 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${companyBalance.toLocaleString()}
+              ₹{companyBalance.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Sales revenue + investments + loans
             </p>
           </CardContent>
         </Card>
-        {/* 2. Revenue (Total Paid from Sales) */}
+        {/* 2. GMV (Gross Merchandise Value) */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">GMV</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{gmv.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              Total value at MRP (sales)
+            </p>
+          </CardContent>
+        </Card>
+        {/* 3. Turnover (Total Sales) */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Turnover</CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ₹{turnover.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total sales
+            </p>
+          </CardContent>
+        </Card>
+        {/* 4. Revenue (Total Paid from Sales) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Revenue</CardTitle>
@@ -583,41 +723,156 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${revenue.toLocaleString()}
+              ₹{revenue.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Total received from sales
             </p>
           </CardContent>
         </Card>
-        {/* 3. Outstanding (Total Sales - Paid) */}
+
+        {/*  Gross Profit/Margin */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Gross Profit / Margin
+            </CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold flex flex-row items-center gap-2">
+              ₹{grossProfit.toLocaleString()}
+              <p className="text-xs font-normal">
+                ({grossProfitMargin.toLocaleString()}%)
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              (Sales - COGS)
+            </p>
+          </CardContent>
+        </Card>
+        {/* 2. Net Profit/Margin */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Net Profit / Margin %</CardTitle>
+            <Calculator className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold flex flex-row items-center gap-2">
+              ₹{netProfit.toLocaleString()}
+              <p className="text-xs font-normal">
+                ({netProfitMargin.toLocaleString()}%)
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              (Revenue - COGS - Expenses) / Revenue
+            </p>
+          </CardContent>
+        </Card>
+        {/* 3. EBITDA */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">EBITDA / Margin %</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold flex flex-row items-center gap-2">
+              ₹{ebitda.toLocaleString()}
+              <p className="text-xs font-normal">
+                ({ebitdaMargin.toLocaleString()}%)
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              (Revenue - COGS - Expenses) + Depreciation + Amortization
+            </p>
+          </CardContent>
+        </Card>
+        {/* 4. PAT (Profit After Tax) */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">PAT / Margin %</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold flex flex-row items-center gap-2">
+              ₹{pat.toLocaleString()}
+              <p className="text-xs font-normal">
+                ({patMargin.toLocaleString()}%)
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              (Net Profit - Taxes) / Net Profit Needs taxes to be added
+            </p>
+          </CardContent>
+        </Card>
+        {/* 9. Total Outstanding */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${outstanding.toLocaleString()}
+            <div className={`text-2xl font-bold`}>
+              ₹{outstanding.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Amount yet to be collected (sales)
             </p>
           </CardContent>
         </Card>
-        {/* 4. GMV (Gross Merchandise Value) */}
+        {/* 10. Total Loans */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">GMV</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Loan Outstanding</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${gmv.toLocaleString()}</div>
+            <div className={`text-2xl font-bold`}>
+              ₹{outstandingLoans.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Total value at MRP (sales)
+              Amount yet to be paid (loans)
             </p>
           </CardContent>
         </Card>
+        {/* 11. Total Investment */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Investment</CardTitle>
+            <PiggyBank className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold`}>
+              ₹{totalInvestments.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total investments received
+            </p>
+          </CardContent>
+        </Card>
+        {/* 12. Burn Rate */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Burn Rate</CardTitle>
+            <Zap className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${burnRate <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ₹{burnRate.toLocaleString()}/month
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {burnRate <= 0 ? 'Cash-flow positive' : 'Monthly cash outflow'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Advanced KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+
+
+
       </div>
 
       {/* Financial Management Section */}
@@ -632,7 +887,7 @@ const Finance = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${balance.toLocaleString()}
+                  ₹{balance.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Current available balance
@@ -646,7 +901,7 @@ const Finance = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${revenue.toLocaleString()}
+                  ₹{revenue.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Total investments received
@@ -662,7 +917,7 @@ const Finance = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${outstanding.toLocaleString()}
+                  ₹{outstanding.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Remaining loan balance
@@ -676,7 +931,7 @@ const Finance = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${gmv.toLocaleString()}
+                  ₹{gmv.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Gross monetary value
@@ -877,7 +1132,7 @@ const Finance = () => {
                                   )
                                   .map((loan) => (
                                     <SelectItem key={loan.id} value={loan.id}>
-                                      {loan.issuer} - $
+                                      {loan.issuer} - ₹
                                       {loan.remaining_balance.toLocaleString()}{" "}
                                       remaining
                                     </SelectItem>

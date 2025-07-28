@@ -22,6 +22,7 @@ const PublicLayout = () => {
                 <p className="text-xs text-muted-foreground">Welcome to our store</p>
               </div>
             </div>
+              <ToggleTheme />
 
           </div>
         </div>

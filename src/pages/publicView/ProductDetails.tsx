@@ -120,21 +120,14 @@ console.log(product)
       </div>
 
       {/* Description */}
-      {product.description && (
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Description</h2>
-          <p className="text-muted-foreground">
-                        {product.description && (
-              <div
-                className="text-sm text-muted-foreground line-clamp-2"
-                dangerouslySetInnerHTML={{
-                  __html: product.description ?? ""
-                }}
-              />
-            )}
-          </p>
-        </div>
-      )}
+                                {product.description && (
+                                    <div
+                                        className="text-sm text-muted-foreground line-clamp-2"
+                                        dangerouslySetInnerHTML={{
+                                            __html: product.description ?? ""
+                                        }}
+                                    />
+                                )}
 
       {/* Price Ranges */}
       {product.price_ranges && product.price_ranges.length > 0 && (
