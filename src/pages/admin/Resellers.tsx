@@ -152,7 +152,7 @@ const AdminResellers: React.FC = () => {
         .select('*')
         .eq('role', 'reseller')
         .order('created_at', { ascending: false });
-
+      console.log(resellerList)
       if (resellerError) throw resellerError;
 
       const updatedResellers: Reseller[] = await Promise.all(
@@ -272,7 +272,8 @@ const AdminResellers: React.FC = () => {
 
       if (requestsError) throw requestsError;
       setResellerRequests(requests as Request[]);
-
+      console.log(requests)
+      
     } catch (error: any) {
       console.error('Error fetching reseller details:', error);
       toast({
@@ -656,10 +657,9 @@ const AdminResellers: React.FC = () => {
       </div>
     );
   }
-
   return (
     <div className="space-y-6 p-6">
-      ---
+  
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-3xl font-bold text-foreground">Reseller Management</h1>
@@ -676,9 +676,6 @@ const AdminResellers: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
-
-      ---
-
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
@@ -723,7 +720,6 @@ const AdminResellers: React.FC = () => {
         </Card>
       </div>
 
-      ---
 
       {/* Search and Resellers Table */}
       <Card>

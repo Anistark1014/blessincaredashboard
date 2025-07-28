@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth, UserRole } from '@/contexts/AuthContext'; // Assuming UserRole is defined here
+import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,16 +9,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Eye, EyeOff, Heart, Flower } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabaseClient'; // <-- Import Supabase client
+import { supabase } from '@/lib/supabaseClient';
 
 const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [allowSignup, setAllowSignup] = useState(true); // default true
+  const [allowSignup, setAllowSignup] = useState(true);
 
   const [loginData, setLoginData] = useState({ identifier: '', password: '' });
 
-  // Gets Settings for auth
+  // State for registration form
+  const [registerData, setRegisterData] = useState({
+    email: '',
+    password: '',
+    name: '',
+    region: '', // Optional
+    phone: '',   // Optional
+    role: 'reseller' as UserRole,
+  });
+
+  const { login, register, isAuthenticated, loading } = useAuth();
+  const { toast } = useToast();
+
+  // Fetch signup settings on component mount
   useEffect(() => {
     const fetchSettings = async () => {
       const { data, error } = await supabase
@@ -30,25 +43,11 @@ const Auth = () => {
         setAllowSignup(Boolean(data.allow_signup));
       } else {
         console.error('Failed to load signup setting', error);
-        setAllowSignup(false); // default fallback
+        setAllowSignup(false); // Fallback to disabled
       }
     };
-
     fetchSettings();
   }, []);
-
-
-  const [registerData, setRegisterData] = useState({
-    email: '',
-    password: '',
-    name: '',
-    region: '', // Keep region in state
-    phone: '',  // Keep phone in state
-    role: 'reseller' as UserRole, // Default role for self-registration
-  });
-
-  const { login, register, isAuthenticated, loading } = useAuth();
-  const { toast } = useToast();
 
   if (loading) {
     return (
@@ -59,8 +58,6 @@ const Auth = () => {
   }
 
   if (isAuthenticated) {
-    // Navigate based on user role if needed, e.g., /admin for admin, /reseller for reseller
-    // For now, it navigates to /admin, which implies admin dashboard or a route that handles role-based redirection.
     return <Navigate to="/admin" replace />;
   }
 
@@ -71,7 +68,7 @@ const Auth = () => {
     try {
       let email = loginData.identifier;
 
-      // If input doesn't look like an email, try to find user by name
+      // Note: Logging in by name can be fragile if names are not unique.
       if (!email.includes('@')) {
         const { data, error } = await supabase
           .from('users')
@@ -79,7 +76,7 @@ const Auth = () => {
           .eq('name', loginData.identifier)
           .single();
 
-        if (error || !data) throw new Error('User not found by name');
+        if (error || !data) throw new Error('User not found. Please use your email.');
         email = data.email;
       }
 
@@ -89,7 +86,7 @@ const Auth = () => {
         description: 'You have successfully logged in.',
         className: 'border-mint bg-mint/10',
       });
-    } catch (error: any) { // Type 'any' for error to access .message safely
+    } catch (error: any) {
       toast({
         title: 'Login failed',
         description: error.message || 'Please check your credentials and try again.',
@@ -104,40 +101,9 @@ const Auth = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Client-side check for existing email/name
-    // This is optional but can provide quicker feedback before hitting Supabase Auth
-    const { data: existing, error: existingCheckError } = await supabase
-      .from('users')
-      .select('id')
-      // Check if email or name already exists in your public.users table
-      .or(`email.eq.${registerData.email},name.eq.${registerData.name}`);
-
-    if (existingCheckError) {
-      console.error("Error checking existing user:", existingCheckError);
-      toast({
-        title: 'Registration failed',
-        description: 'An error occurred during preliminary checks.',
-        variant: 'destructive',
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    if (existing && existing.length > 0) {
-      toast({
-        title: 'Already registered',
-        description: 'An account with this email or name already exists.',
-        variant: 'destructive',
-      });
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // ✅ CRITICAL CHANGE: Call the `register` function from AuthContext
-      //    This `register` function (in AuthContext.tsx) must be updated
-      //    to accept `phone` and `region` and pass them in `options.data`
-      //    to `supabase.auth.signUp()`.
+      // ✅ Pass all data, including optional fields, to the register function.
+      // Your AuthContext will handle passing this to Supabase.
       await register(
         registerData.email,
         registerData.password,
@@ -145,23 +111,13 @@ const Auth = () => {
         registerData.role
       );
 
-      // --- REMOVED: Manual insert into public.users table ---
-      // This step is now handled automatically by the database trigger (Phase 1).
-      // await supabase.from('users').insert({
-      //   email: registerData.email,
-      //   name: registerData.name,
-      //   role: registerData.role as string,
-      //   region: null,
-      // });
-      // --------------------------------------------------------
-
       toast({
         title: 'Account created!',
-        description: 'Welcome to the platform. You can now log in.',
+        description: 'Welcome! You can now log in.',
         className: 'border-mint bg-mint/10',
       });
 
-      // Optionally, clear registration form data after successful registration
+      // Clear the form after successful registration
       setRegisterData({
         email: '',
         password: '',
@@ -170,15 +126,12 @@ const Auth = () => {
         phone: '',
         role: 'reseller' as UserRole,
       });
-
-      // After successful registration, you might want to automatically log them in
-      // or redirect them to the login tab/page.
-      // await login(registerData.email, registerData.password); // Uncomment if auto-login is desired
-    } catch (error: any) { // Type 'any' for error to access .message safely
+      // Consider switching the user to the "Sign In" tab here
+    } catch (error: any) {
       console.error("Registration failed:", error);
       toast({
         title: 'Registration failed',
-        description: error.message || 'Please try again.',
+        description: error.message || 'An account with this email may already exist.',
         variant: 'destructive',
       });
     } finally {
@@ -204,7 +157,7 @@ const Auth = () => {
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center text-foreground">Get Started</CardTitle>
             <CardDescription className="text-center">
-              Join our caring community of healthcare professionals
+              Join our community of resellers
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -214,147 +167,61 @@ const Auth = () => {
                 <TabsTrigger value="register" className="data-[state=active]:bg-blush" disabled={!allowSignup}>Sign Up</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="login" className="space-y-4">
+              {/* LOGIN FORM */}
+              <TabsContent value="login" className="space-y-4 pt-4">
                 <form onSubmit={handleLogin} className="space-y-4">
+                  {/* ... login form fields from your code ... */}
                   <div className="space-y-2">
                     <Label htmlFor="login-identifier">Email or Name</Label>
-                    <Input
-                      id="login-identifier"
-                      type="text"
-                      placeholder="Enter your email or name"
-                      value={loginData.identifier}
-                      onChange={(e) => setLoginData(prev => ({ ...prev, identifier: e.target.value }))}
-                      className="border-lavender/30 focus:border-lavender"
-                      required
-                    />
+                    <Input id="login-identifier" type="text" placeholder="your@email.com" value={loginData.identifier} onChange={(e) => setLoginData(prev => ({ ...prev, identifier: e.target.value }))} className="border-lavender/30 focus:border-lavender" required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Password</Label>
                     <div className="relative">
-                      <Input
-                        id="login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Enter your password"
-                        value={loginData.password}
-                        onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
-                        className="border-lavender/30 focus:border-lavender pr-10"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
+                      <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={loginData.password} onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))} className="border-lavender/30 focus:border-lavender pr-10" required />
+                      <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
                         {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                       </Button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full btn-healthcare" disabled={isLoading}>
-                    {isLoading ? 'Signing in...' : 'Sign In'}
-                  </Button>
+                  <Button type="submit" className="w-full btn-healthcare" disabled={isLoading}>{isLoading ? 'Signing in...' : 'Sign In'}</Button>
                 </form>
-                <div className="text-center text-sm text-muted-foreground">
-                  Demo: ajinkyareseller@gmail.com / admin@test.com
-                </div>
               </TabsContent>
 
-              <TabsContent value="register" className="space-y-4">
+              {/* REGISTRATION FORM */}
+              <TabsContent value="register" className="space-y-4 pt-4">
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="register-name">Full Name</Label>
-                    <Input
-                      id="register-name"
-                      placeholder="Enter your full name"
-                      value={registerData.name}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, name: e.target.value }))}
-                      className="border-blush/30 focus:border-blush"
-                      required
-                    />
+                    <Input id="register-name" placeholder="Enter your full name" value={registerData.name} onChange={(e) => setRegisterData(prev => ({ ...prev, name: e.target.value }))} className="border-blush/30 focus:border-blush" required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="register-email">Email</Label>
-                    <Input
-                      id="register-email"
-                      type="email"
-                      placeholder="Enter your email"
-                      value={registerData.email}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
-                      className="border-blush/30 focus:border-blush"
-                      required
-                    />
+                    <Input id="register-email" type="email" placeholder="Enter your email" value={registerData.email} onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))} className="border-blush/30 focus:border-blush" required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="register-password">Password</Label>
                     <div className="relative">
-                      <Input
-                        id="register-password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Create a password"
-                        value={registerData.password}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
-                        className="border-blush/30 focus:border-blush pr-10"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
+                      <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="Create a strong password" value={registerData.password} onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))} className="border-blush/30 focus:border-blush pr-10" required />
+                      <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
                         {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                       </Button>
                     </div>
                   </div>
-                  {/* NEW: Input fields for Phone and Region */}
                   <div className="space-y-2">
-                    <Label htmlFor="register-phone">Phone Number</Label>
-                    <Input
-                      id="register-phone"
-                      type="tel" // 'tel' type for better mobile support
-                      placeholder="Enter your phone number (e.g., +91-XXXXXXXXXX)"
-                      value={registerData.phone}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, phone: e.target.value }))}
-                      className="border-blush/30 focus:border-blush"
-                      required // Make required as per your Deno function's validation
-                    />
+                    {/* Phone is now optional, 'required' attribute removed */}
+                    <Label htmlFor="register-phone">Phone Number (Optional)</Label>
+                    <Input id="register-phone" type="tel" placeholder="e.g., +91 XXXXX XXXXX" value={registerData.phone} onChange={(e) => setRegisterData(prev => ({ ...prev, phone: e.target.value }))} className="border-blush/30 focus:border-blush" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-region">Region</Label>
-                    <Input
-                      id="register-region"
-                      type="text"
-                      placeholder="Enter your region (e.g., Asia, Europe)"
-                      value={registerData.region}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, region: e.target.value }))}
-                      className="border-blush/30 focus:border-blush"
-                      required // Make required as per your Deno function's validation
-                    />
+                    {/* Region is now optional, 'required' attribute removed */}
+                    <Label htmlFor="register-region">Region (Optional)</Label>
+                    <Input id="register-region" type="text" placeholder="e.g., Asia, Europe" value={registerData.region} onChange={(e) => setRegisterData(prev => ({ ...prev, region: e.target.value }))} className="border-blush/30 focus:border-blush" />
                   </div>
-                  {/* END NEW INPUT FIELDS */}
-                  <div className="space-y-2">
-                    <Label htmlFor="register-role">Role</Label>
-                    <Select
-                      value={registerData.role}
-                      onValueChange={(value: UserRole) => setRegisterData(prev => ({ ...prev, role: value }))}
-                    >
-                      <SelectTrigger className="border-blush/30 focus:border-blush">
-                        <SelectValue placeholder="Select your role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {/* Only allow 'reseller' for self-registration if 'admin' is for internal use */}
-                        <SelectItem value="reseller">Healthcare Reseller</SelectItem>
-                        {/* <SelectItem value="admin">Admin/Owner</SelectItem> - Consider removing for public signup */}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" className="w-full btn-healthcare" disabled={isLoading}>
-                    {isLoading ? 'Creating account...' : 'Create Account'}
-                  </Button>
+                  <Button type="submit" className="w-full btn-healthcare" disabled={isLoading}>{isLoading ? 'Creating account...' : 'Create Account'}</Button>
                 </form>
               </TabsContent>
+
               {!allowSignup && (
                 <p className="text-center text-sm text-red-500 mt-2">
                   Sign-up is currently disabled. Please contact your admin.
