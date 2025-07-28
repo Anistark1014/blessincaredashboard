@@ -27,7 +27,7 @@ import {
 } from 'recharts';
 
 // Date-fns for date manipulation
-import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear, addDays } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
 // Shadcn Popover and Calendar for date range picker
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -98,7 +98,8 @@ const SalesDashboard: React.FC<SalesDashboardProps> = ({ currentProductSearchTer
     // Filter states for graph
     const [metric, setMetric] = useState<'qty' | 'price' | 'total'>('total');
     const [lineMode, setLineMode] = useState<'combined' | 'perProduct'>('combined');
-    const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
+    interface DateRange { from: Date | undefined; to: Date | undefined; }
+    const [dateRange, setDateRange] = useState<DateRange>({
         from: subDays(new Date(), 30),
         to: new Date(),
     });
@@ -455,11 +456,11 @@ const processSalesData = useMemo(() => (
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Totla Units Sold </CardTitle>
+                        <CardTitle className="text-sm font-medium">Total Units Sold </CardTitle>
                         <Package className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{formatCurrency(kpiData.totalUnitsSold)}</div>
+                        <div className="text-2xl font-bold">{(kpiData.totalUnitsSold)}</div>
                         <p className="text-xs text-muted-foreground">Total Packs</p>
                     </CardContent>
                 </Card>
