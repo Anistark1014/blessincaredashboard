@@ -166,9 +166,12 @@ const navigate = useNavigate();
               )}
 
               {product.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {product.description}
-                </p>
+                  <div
+                      className="text-sm text-muted-foreground line-clamp-2"
+                      dangerouslySetInnerHTML={{
+                          __html: product.description ?? ""
+                      }}
+                  />
               )}
 
               <div className="space-y-1">
