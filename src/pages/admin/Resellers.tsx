@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient'; // Ensure this is your client-side Supabase instance
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'; // Added DialogClose
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Switch } from '@/components/ui/switch'; // Assuming you have this from shadcn/ui
-import { Label } from '@/components/ui/label'; // Assuming you have this from shadcn/ui
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -17,8 +17,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'; // Assuming you have this from shadcn/ui
-import { Eye, Flag, FlagOff, Search, Users, UserCheck,CheckCircle2, XCircle } from 'lucide-react';
+} from '@/components/ui/table';
+import { Eye, Flag, FlagOff, Search, Users, UserCheck, CheckCircle2, XCircle } from 'lucide-react';
+
+// --- IMPORTANT: Define your Deno Edge Function URL here ---
+const DENO_ADD_RESELLER_FUNCTION_URL = import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL || 'YOUR_DENO_FUNCTION_URL_HERE';
 
 // Define the interfaces based on your provided structure
 interface Reseller {
@@ -67,13 +70,11 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value }) => (
   </div>
 );
 
-// Define the return type for getTierInfo
 type TierInfo = {
   tier: string;
-  svg: string | null; // Path to SVG, e.g., 'bronze.svg'
+  svg: string | null;
 };
 
-// Function to convert number to Roman numeral
 const toRomanNumeral = (num: number): string => {
   const romanNumerals: { [key: number]: string } = {
     1: "I", 2: "II", 3: "III"
@@ -81,30 +82,26 @@ const toRomanNumeral = (num: number): string => {
   return romanNumerals[num] || "";
 };
 
-// Function to get tier info based on total sold (simplified for example)
-// You might want to adjust these thresholds and tier names based on your actual business logic
 const getTierInfo = (totalSold: number): TierInfo => {
   if (totalSold < 1000) return { tier: "Base", svg: "Base" };
   if (totalSold < 2000) return { tier: "Bronze", svg: "Bronze" };
-  if (totalSold < 4000) return { tier: "Silver I", svg: "Silver" }; // Changed to Roman for consistency
+  if (totalSold < 4000) return { tier: "Silver I", svg: "Silver" };
   if (totalSold < 6000) return { tier: "Silver II", svg: "Silver" };
   if (totalSold < 10000) return { tier: "Silver III", svg: "Silver" };
   if (totalSold < 15000) return { tier: "Gold I", svg: "Gold" };
   if (totalSold < 20000) return { tier: "Gold II", svg: "Gold" };
   if (totalSold < 26000) return { tier: "Gold III", svg: "Gold" };
-  if (totalSold < 32000) return { tier: "Crystal I", svg: "Crystal" }; // New tier name for clarity
+  if (totalSold < 32000) return { tier: "Crystal I", svg: "Crystal" };
   if (totalSold < 38000) return { tier: "Crystal II", svg: "Crystal" };
   if (totalSold < 45000) return { tier: "Crystal III", svg: "Crystal" };
   return { tier: "Diamond", svg: "Diamond" };
 };
 
-// Props for TierIcon component
 interface TierIconProps {
   svgName: string | null;
   tier: string;
 }
 
-// Component to render tier icon
 const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
   if (!svgName) return null;
 
@@ -115,9 +112,8 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
   return (
     <div className="flex flex-col items-center gap-1 relative" title={tier}>
       <div className='relative'>
-        {/* Make sure the SVG path is correct, e.g., /tier/Bronze.svg */}
         <img
-          src={`/tier/${mainTier}.svg`}
+          src={`/tier/${mainTier}.svg`} // Ensure your SVGs are in /public/tier/
           alt={`${tier} tier`}
           className="w-9 h-9"
         />
@@ -127,9 +123,6 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
           </span>
         )}
       </div>
-      {/* <span className="text-xs font-normal">
-        {tier}
-      </span> */}
     </div>
   );
 };
@@ -140,15 +133,14 @@ const AdminResellers: React.FC = () => {
   const [resellerRequests, setResellerRequests] = useState<Request[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false); // Controls the "View Details" dialog
 
-  // Editable fields for reseller details
+  // Editable fields for reseller details (within the details dialog)
   const [editableResellerName, setEditableResellerName] = useState('');
   const [editableRegion, setEditableRegion] = useState('');
-  const [editableTier, setEditableTier] = useState('');
   const [editableCoverage, setEditableCoverage] = useState<number | ''>('');
   const [exclusiveFeatures, setExclusiveFeatures] = useState('');
-  const [isLoginAccessEnabled, setIsLoginAccessEnabled] = useState(false); // For "Enable Login Access" toggle
+  const [isLoginAccessEnabled, setIsLoginAccessEnabled] = useState(false);
 
   const { toast } = useToast();
 
@@ -171,7 +163,7 @@ const AdminResellers: React.FC = () => {
             .eq('reseller_id', reseller.id);
 
           if (requestError) {
-            console.error(`Error fetching requests for ${reseller.name}`, requestError);
+            console.error(`Error fetching requests for ${reseller.name}:`, requestError);
             return {
               ...reseller,
               name: reseller.name ?? "Unnamed",
@@ -180,39 +172,30 @@ const AdminResellers: React.FC = () => {
               total_products_sold: reseller.total_products_sold ?? 0,
               payment_status: 'pending',
               payment_amount_remaining: 0,
-              total_revenue_generated: 0, // Default to 0 if no sales data
-              reward_points: 0, // Default to 0
-              is_active: reseller.is_active ?? false, // Ensure this is boolean
-              flagged_status: reseller.flagged_status ?? false, // Ensure this is boolean
+              total_revenue_generated: 0,
+              reward_points: 0,
+              is_active: reseller.is_active ?? false,
+              flagged_status: reseller.flagged_status ?? false,
+              exclusive_features: reseller.exclusive_features ?? '',
+              coverage: reseller.coverage ?? 0,
+              sub_active_resellers: 0,
+              sub_passive_resellers: 0,
             } as Reseller;
           }
 
           let totalRemaining = 0;
           let totalRevenue = 0;
-          let totalGrossProfit = 0; // For reward points calculation
-
           for (const req of requests) {
             const total = req.total_amount ?? 0;
             const paid = req.amount_paid ?? 0;
             totalRemaining += Math.max(0, total - paid);
             totalRevenue += total;
-
-            // Assuming 'products_ordered' in request contains info for gross profit
-            // This is a placeholder; you'd need to fetch actual product details (gross_profit)
-            // or have it denormalized in the request itself.
-            // For now, let's just make a dummy calculation or fetch if product data is available.
-            // Example: if `req.products_ordered` is an array of `{ product_id: string, qty: number, gross_profit_per_unit: number }`
-            // totalGrossProfit += req.products_ordered.reduce((sum: number, p: any) => sum + (p.gross_profit_per_unit * p.qty), 0);
           }
 
-          // Placeholder for RP calculation: (SUM(product.gross_profit * product.qty_sold_by_reseller)) / 5
-          // Since we don't have direct product gross profit here, we'll use a simplified example
-          // In a real scenario, you'd calculate this from detailed sales items
-          const rewardPoints = Math.floor(totalRevenue / 100); // Example: 1 RP for every $100 revenue
+          const rewardPoints = Math.floor(totalRevenue / 100);
 
-          // Placeholder for sub-hierarchy counts (would need additional database queries or pre-calculated fields)
-          const subActiveResellers = 0;
-          const subPassiveResellers = 0;
+          const subActiveResellers = 0; // Requires actual logic
+          const subPassiveResellers = 0; // Requires actual logic
 
           return {
             ...reseller,
@@ -229,7 +212,7 @@ const AdminResellers: React.FC = () => {
             is_active: reseller.is_active ?? false,
             flagged_status: reseller.flagged_status ?? false,
             exclusive_features: reseller.exclusive_features ?? '',
-            coverage: reseller.coverage ?? 0, // Assuming 'coverage' field exists in 'users' table
+            coverage: reseller.coverage ?? 0,
             sub_active_resellers: subActiveResellers,
             sub_passive_resellers: subPassiveResellers,
           } as Reseller;
@@ -258,7 +241,7 @@ const AdminResellers: React.FC = () => {
         { event: '*', schema: 'public', table: 'users', filter: 'role=eq.reseller' },
         (payload) => {
           console.log('Reseller change received!', payload);
-          fetchResellers(); // Re-fetch all data on any change
+          fetchResellers();
         }
       )
       .subscribe();
@@ -268,14 +251,10 @@ const AdminResellers: React.FC = () => {
     };
   }, [toast]);
 
-  // Update editable fields when a reseller is selected
   useEffect(() => {
     if (selectedReseller) {
       setEditableResellerName(selectedReseller.name || '');
       setEditableRegion(selectedReseller.region || '');
-      // Determine the current tier string based on total_products_sold
-      const currentTierInfo = getTierInfo(selectedReseller.total_products_sold);
-      setEditableTier(currentTierInfo.tier);
       setEditableCoverage(selectedReseller.coverage ?? '');
       setExclusiveFeatures(selectedReseller.exclusive_features || '');
       setIsLoginAccessEnabled(selectedReseller.is_active);
@@ -304,6 +283,7 @@ const AdminResellers: React.FC = () => {
     }
   };
 
+  // --- Add Reseller Form Component (within AdminResellers) ---
   const AddResellerForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { toast } = useToast();
     const [formData, setFormData] = useState({
@@ -311,85 +291,81 @@ const AdminResellers: React.FC = () => {
       email: '',
       phone: '',
       region: '',
+      coverage: 0,
     });
-    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
-    const handleAddReseller = async (
-      name: string,
-      email: string,
-      phone: string,
-      region: string
-    ) => {
-      const resellerData = {
-        name: name,
-        email: email,
-        phone: phone,
-        region: region
-      };
+    const handleAddResellerSubmit = async () => {
+      const { name, email, phone, region, coverage } = formData;
 
-      try {
-        const response = await fetch(`https://virbnugthhbunxxxsizw.functions.supabase.co/createReseller`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify(resellerData),
-        });
-
-        const result = await response.json();
-        console.log(result);
-
-        if (!response.ok) {
-          throw new Error(result.error || "Failed to add reseller via Edge Function.");
-        }
-        return true;
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-        return false;
-      }
-    };
-
-    const handleSubmit = async () => {
-      const { name, email, phone, region } = formData;
-
-      if (!name || !region) { // Region is now required
+      // --- MODIFICATION: Only 'name' is required here ---
+      if (!name) {
         toast({
           title: "Missing Information",
-          description: "Name and Region are required to add a reseller.",
+          description: "Reseller Name is required.",
           variant: "destructive",
         });
         return;
       }
 
-      setLoading(true);
+      setSubmitting(true);
+      setGeneratedPassword(null);
       try {
-        let status = await handleAddReseller(name, email, phone, region);
-
-        if (!status) {
-          setLoading(false);
-          return;
-        }
-
-        toast({
-          title: "Success",
-          description: "New reseller added successfully!",
+        const sessionResult = await supabase.auth.getSession();
+        const accessToken = sessionResult.data.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+        console.log("Triggers")
+        const response = await fetch(import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            name,
+            email: email === '' ? null : email,
+            phone: phone === '' ? null : phone, // Send null if phone is empty
+            region: region === '' ? null : region, // Send null if region is empty
+            coverage,
+          }),
         });
 
-        setFormData({ name: '', email: '', phone: '', region: '' });
-        onClose(); // Close the dialog on success
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to add reseller via backend service.");
+        }
+
+        if (result.generated_password) {
+          setGeneratedPassword(result.generated_password);
+          toast({
+            title: "Reseller Added!",
+            description: "A new reseller account has been created successfully. Please provide the following temporary password to the reseller:",
+            duration: 15000,
+            action: (
+              <Button onClick={() => navigator.clipboard.writeText(result.generated_password)}>
+                Copy Password
+              </Button>
+            ),
+          });
+        } else {
+          toast({
+            title: "Success",
+            description: "New reseller added successfully!",
+          });
+        }
+
+        setFormData({ name: '', email: '', phone: '', region: '', coverage: 0 });
+
       } catch (error: any) {
+        console.error('Error adding reseller:', error);
         toast({
           title: "Error",
-          description: error.message,
+          description: error.message || "Failed to add reseller.",
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
+        setSubmitting(false);
       }
     };
 
@@ -400,7 +376,7 @@ const AdminResellers: React.FC = () => {
     return (
       <div className="space-y-4 py-4">
         <Input
-          required
+          required // Only name is required now
           name="name"
           placeholder="Reseller Name"
           value={formData.name}
@@ -416,20 +392,55 @@ const AdminResellers: React.FC = () => {
         <Input
           name="phone"
           type="tel"
-          placeholder="Phone (optional)"
+          placeholder="Phone (optional)" // Explicitly optional
           value={formData.phone}
           onChange={handleChange}
         />
         <Input
-          required
           name="region"
-          placeholder="Region"
+          placeholder="Region (optional)" // Explicitly optional
           value={formData.region}
           onChange={handleChange}
         />
-        <Button onClick={handleSubmit} disabled={loading} className="w-full">
-          {loading ? "Adding..." : "Add Reseller"}
+        <Input
+          name="coverage"
+          type="number"
+          placeholder="Coverage (number of sub-resellers) (optional)" // Explicitly optional
+          value={formData.coverage}
+          onChange={(e) => setFormData(prev => ({ ...prev, coverage: parseInt(e.target.value) || 0 }))}
+        />
+        <Button onClick={handleAddResellerSubmit} disabled={submitting} className="w-full">
+          {submitting ? "Adding..." : "Add Reseller"}
         </Button>
+
+        {generatedPassword && (
+          <div className="mt-6 p-4 border-2 border-dashed border-primary/50 rounded-lg bg-primary-foreground/5 dark:bg-accent/10">
+            <p className="font-semibold text-lg text-primary mb-2">Initial Password:</p>
+            <div className="flex items-center justify-between gap-2 bg-muted p-3 rounded-md border text-foreground">
+              <span className="font-mono text-xl flex-grow break-all pr-2">{generatedPassword}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(generatedPassword);
+                  toast({ title: "Copied!", description: "Password copied to clipboard.", duration: 2000 });
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Please provide this password to the new reseller for their first login. They will be prompted to change it.
+            </p>
+          </div>
+        )}
+        {generatedPassword && (
+          <DialogClose asChild>
+            <Button variant="secondary" className="w-full mt-2" onClick={onClose}>
+              Done
+            </Button>
+          </DialogClose>
+        )}
       </div>
     );
   };
@@ -473,20 +484,20 @@ const AdminResellers: React.FC = () => {
 
   const handleToggleFlag = async (resellerId: string, currentStatus: boolean) => {
     try {
+      // It's generally better to only update the specific field.
+      // If region is null, updating it with null should be fine if DB allows.
       const { error } = await supabase
         .from('users')
-        .update({ flagged_status: !currentStatus }) // Toggle the status
+        .update({ flagged_status: !currentStatus })
         .eq('id', resellerId);
 
       if (error) throw error;
 
-      // Update the local state to reflect the change immediately
       setResellers(prev =>
         prev.map(r =>
           r.id === resellerId ? { ...r, flagged_status: !currentStatus } : r
         )
       );
-      // Also update selectedReseller if it's the one being flagged
       if (selectedReseller?.id === resellerId) {
         setSelectedReseller(prev => prev ? { ...prev, flagged_status: !currentStatus } : null);
       }
@@ -507,9 +518,10 @@ const AdminResellers: React.FC = () => {
 
   const handleToggleLoginAccess = async (resellerId: string, currentStatus: boolean) => {
     try {
+      // Similarly, only update is_active. Rely on the DB to handle other fields correctly.
       const { error } = await supabase
         .from('users')
-        .update({ is_active: !currentStatus }) // Toggle login access
+        .update({ is_active: !currentStatus })
         .eq('id', resellerId);
 
       if (error) throw error;
@@ -521,7 +533,7 @@ const AdminResellers: React.FC = () => {
       );
       if (selectedReseller?.id === resellerId) {
         setSelectedReseller(prev => prev ? { ...prev, is_active: !currentStatus } : null);
-        setIsLoginAccessEnabled(!currentStatus); // Update local state for toggle
+        setIsLoginAccessEnabled(!currentStatus);
       }
 
       toast({
@@ -546,35 +558,29 @@ const AdminResellers: React.FC = () => {
         .from('users')
         .update({
           name: editableResellerName,
-          region: editableRegion,
-          coverage: editableCoverage === '' ? null : editableCoverage, // Set to null if empty
-          // Tier is derived from total_products_sold, so it's not directly editable.
-          // If you *do* want to directly set tier, you'd need a separate field for it.
-          // Assuming here it's read-only based on sales performance.
+          region: editableRegion === '' ? null : editableRegion, // Send null if region is cleared
+          coverage: editableCoverage === '' ? null : editableCoverage,
         })
         .eq('id', selectedReseller.id);
 
       if (error) throw error;
 
-      // Update local state and trigger re-fetch for comprehensive data refresh
       setResellers(prev =>
         prev.map(r =>
           r.id === selectedReseller.id ? {
             ...r,
             name: editableResellerName,
-            region: editableRegion,
+            region: editableRegion === '' ? null : editableRegion,
             coverage: editableCoverage === '' ? null : editableCoverage,
           } : r
         )
       );
-      // Update selected reseller's local state immediately for UI refresh
       setSelectedReseller(prev => prev ? {
         ...prev,
         name: editableResellerName,
-        region: editableRegion,
+        region: editableRegion === '' ? null : editableRegion,
         coverage: editableCoverage === '' ? null : editableCoverage,
       } : null);
-
 
       toast({
         title: "Success",
@@ -598,7 +604,6 @@ const AdminResellers: React.FC = () => {
         .from('users')
         .update({
           exclusive_features: exclusiveFeatures,
-          region: selectedReseller.region ?? null,
         })
         .eq('id', selectedReseller.id);
 
@@ -610,7 +615,6 @@ const AdminResellers: React.FC = () => {
         )
       );
       setSelectedReseller(prev => prev ? { ...prev, exclusive_features: exclusiveFeatures } : null);
-
 
       toast({
         title: "Success",
@@ -639,7 +643,7 @@ const AdminResellers: React.FC = () => {
       'Approved': 'bg-green-100 text-green-800',
       'Rejected': 'bg-red-100 text-red-800',
       'Shipped': 'bg-blue-100 text-blue-800',
-      'Completed': 'bg-purple-100 text-purple-800', // Example for a new status
+      'Completed': 'bg-purple-100 text-purple-800',
     };
     return statusMap[status] || 'bg-gray-100 text-gray-800';
   };
@@ -655,6 +659,7 @@ const AdminResellers: React.FC = () => {
 
   return (
     <div className="space-y-6 p-6">
+      ---
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-3xl font-bold text-foreground">Reseller Management</h1>
@@ -666,12 +671,13 @@ const AdminResellers: React.FC = () => {
             <DialogHeader>
               <DialogTitle>Add New Reseller</DialogTitle>
             </DialogHeader>
-            <AddResellerForm onClose={() => setDetailsOpen(false)} /> {/* Pass onClose to close dialog */}
+            {/* Pass onClose prop to the AddResellerForm so it can close itself */}
+            <AddResellerForm onClose={() => setDetailsOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
 
-      
+      ---
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -690,8 +696,6 @@ const AdminResellers: React.FC = () => {
             <UserCheck className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* Active Resellers: A count of how many individual resellers have bought from you in the selected time frame. */}
-            {/* For this example, we'll count `is_active` status from `users` table. For a "bought in timeframe" KPI, you'd need to link to sales data with date filtering. */}
             <div className="text-3xl font-bold">{resellers.filter(r => r.is_active).length}</div>
           </CardContent>
         </Card>
@@ -701,8 +705,6 @@ const AdminResellers: React.FC = () => {
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* This formula SUM(resellers.coverage) WHERE resellers.id IN (SELECT DISTINCT sales.member_id FROM sales within the selected date range) requires more complex data.
-                For demonstration, we'll sum 'coverage' for all active resellers. You'd refine this with actual 'active within timeframe' logic. */}
             <div className="text-3xl font-bold">
               {resellers.filter(r => r.is_active).reduce((sum, r) => sum + (r.coverage || 0), 0)}
             </div>
@@ -721,9 +723,9 @@ const AdminResellers: React.FC = () => {
         </Card>
       </div>
 
-      
+      ---
 
-      {/* Search and Table */}
+      {/* Search and Resellers Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -761,9 +763,13 @@ const AdminResellers: React.FC = () => {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             {reseller.is_active ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              <span title="Verified (Login Enabled)">
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              </span>
                             ) : (
-                              <XCircle className="h-4 w-4 text-gray-400" />
+                              <span title="Not Verified (Login Disabled)">
+                                <XCircle className="h-4 w-4 text-gray-400" />
+                              </span>
                             )}
                             {reseller.name}
                           </div>
@@ -781,8 +787,8 @@ const AdminResellers: React.FC = () => {
                           <Badge
                             className={
                               reseller.payment_status === "clear"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
+                                ? "bg-green-100 text-green-800 hover:bg-green-100"
+                                : "bg-red-100 text-red-800 hover:bg-red-100"
                             }
                           >
                             ${reseller.payment_amount_remaining.toFixed(2)}
@@ -828,7 +834,7 @@ const AdminResellers: React.FC = () => {
                                   {/* Basic Information & Editing */}
                                   <div className="space-y-4 border rounded-lg p-4">
                                     <h3 className="text-lg font-semibold mb-2">Basic Information</h3>
-                                    <InfoItem label="Reseller ID" value={`${selectedReseller.name?.replace(/\s/g, '')}-${selectedReseller.region?.replace(/\s/g, '')}-${selectedReseller.id.slice(0, 4)}`} /> {/* Auto-generated ID */}
+                                    <InfoItem label="Reseller ID" value={`${selectedReseller.name?.replace(/\s/g, '') || ''}-${selectedReseller.region?.replace(/\s/g, '') || ''}-${selectedReseller.id.slice(0, 4)}`} />
 
                                     <div>
                                       <Label htmlFor="reseller-name">Name</Label>
@@ -842,7 +848,6 @@ const AdminResellers: React.FC = () => {
                                     <InfoItem label="Username" value="Set by reseller on first login" />
                                     <InfoItem label="Email" value={selectedReseller.email || "Initially empty; set by reseller on first login"} />
                                     <InfoItem label="Phone Number" value={selectedReseller.contact_info?.phone || "Initially empty; compulsory on first login"} />
-
 
                                     <div>
                                       <Label htmlFor="reseller-region">Region</Label>
@@ -858,7 +863,7 @@ const AdminResellers: React.FC = () => {
                                       <Input
                                         id="reseller-tier"
                                         value={getTierInfo(selectedReseller.total_products_sold).tier}
-                                        disabled // Tier is calculated, not directly editable
+                                        disabled
                                         className="mt-1 bg-muted"
                                       />
                                     </div>
@@ -874,7 +879,6 @@ const AdminResellers: React.FC = () => {
                                       />
                                     </div>
 
-                                    {/* Placeholder for sub-hierarchy data */}
                                     <InfoItem label="Active Resellers (Sub-hierarchy)" value={selectedReseller.sub_active_resellers || 0} />
                                     <InfoItem label="Passive Resellers (Sub-hierarchy)" value={selectedReseller.sub_passive_resellers || 0} />
 
@@ -892,12 +896,10 @@ const AdminResellers: React.FC = () => {
                                       <InfoItem label="Due/Outstanding Balance" value={`$${selectedReseller.payment_amount_remaining.toFixed(2)}`} />
                                       <InfoItem label="Reward Points (RP)" value={selectedReseller.reward_points || 0} />
 
-                                      {/* Placeholder for Revenue Progress Graph */}
                                       <div className="mt-4 p-4 border rounded-md bg-muted/20">
                                         <h4 className="text-md font-medium mb-2">Revenue Progress Graph</h4>
                                         <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
                                           [Revenue Graph Placeholder]
-                                          {/* Integrate a charting library here, e.g., Recharts or Chart.js */}
                                         </div>
                                       </div>
                                     </div>

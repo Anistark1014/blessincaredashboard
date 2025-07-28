@@ -1,161 +1,173 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"; // Corrected import
+
+// Define a generic CORS header object for reuse
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*", // Allow all origins for development
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 serve(async (req) => {
-  // Handle preflight (CORS) requests. This is crucial for web applications
-  // making requests from a different origin than the Deno function.
+  console.log("Deno Function: createReseller - Invoked!");
+  console.log(`Request Method: ${req.method}`);
+  console.log(`Request URL: ${req.url}`);
+
   if (req.method === "OPTIONS") {
+    console.log("Deno Function: Handling OPTIONS preflight.");
     return new Response("OK", {
       status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*", // Allow requests from any origin
-        "Access-Control-Allow-Headers": "Content-Type, Authorization", // Allowed headers
-        "Access-Control-Allow-Methods": "POST, OPTIONS", // Allowed HTTP methods
-      },
+      headers: CORS_HEADERS,
     });
   }
 
   try {
-    // Parse the request body as JSON to extract reseller details.
     const body = await req.json();
-    const { name, email, phone, region } = body;
+    const { name, email, phone, region, coverage } = body; // Keep destructuring for logs
+    console.log("Deno Function: Request body parsed:", { name, email, phone, region, coverage });
 
-    // Validate if all required fields are present in the request body.
-    if (!email || !name || !phone || !region) {
-      return new Response(JSON.stringify({ error: "Missing fields in request" }), {
-        status: 400, // Bad Request
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      console.warn("Deno Function: Validation failed - 'name' is missing or invalid.");
+      return new Response(JSON.stringify({ error: "Missing or invalid 'name' field. Name is required." }), {
+        status: 400,
         headers: {
-          "Access-Control-Allow-Origin": "*",
           "Content-Type": "application/json",
+          ...CORS_HEADERS
         },
       });
     }
 
-    // Initialize Supabase client with project URL and Service Role Key.
-    // The Service Role Key bypasses Row Level Security (RLS) and is necessary
-    // for admin operations like creating users.
-    // @ts-ignore - Supabase type definitions might not perfectly align with Deno.env.get
-    const supabase = createClient(
-      Deno.env.get("PROJECT_URL")!, // Your Supabase Project URL environment variable
-      Deno.env.get("SERVICE_ROLE_KEY")! // Your Supabase Service Role Key environment variable
-    );
+    const projectUrlEnv = Deno.env.get("PROJECT_URL");
+    const serviceRoleKeyEnv = Deno.env.get("SERVICE_ROLE_KEY");
 
-    // Check if a user with the given email already exists in your 'users' table.
-    // This prevents creating duplicate entries in your custom user profile table.
-    const { data: existingUser, error: fetchError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle(); // Use maybeSingle to get null if no row found, or the single row
+    console.log(`Deno Function: PROJECT_URL present: ${!!projectUrlEnv}`);
+    console.log(`Deno Function: SERVICE_ROLE_KEY present: ${!!serviceRoleKeyEnv}`);
 
-    if (fetchError) {
-      console.error("Database fetch error checking existing user:", fetchError);
-      return new Response(JSON.stringify({ error: "Failed to check existing user" }), {
+    if (!projectUrlEnv || !serviceRoleKeyEnv) {
+      console.error("Deno Function: CRITICAL - Missing environment variables!");
+      return new Response(JSON.stringify({
+        error: "Server configuration error: Missing environment variables.",
+        details: {
+          PROJECT_URL_present: !!projectUrlEnv,
+          SERVICE_ROLE_KEY_present: !!serviceRoleKeyEnv,
+        }
+      }), {
         status: 500,
         headers: {
-          "Access-Control-Allow-Origin": "*",
           "Content-Type": "application/json",
+          ...CORS_HEADERS
         },
       });
     }
 
-    if (existingUser) {
-      return new Response(JSON.stringify({ error: "User with this email already exists" }), {
-        status: 400, // Bad Request
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
-      });
-    }
+    const supabase = createClient(projectUrlEnv, serviceRoleKeyEnv);
+    console.log("Deno Function: Supabase client initialized.");
 
-    // --- IMPORTANT: Password Generation Improvement ---
-    // Generate a random, strong password for the Supabase Auth user.
-    // This password will be stored in the auth.users table.
-    // It's crucial that this password meets Supabase's complexity requirements.
-    // Using a longer slice of a UUID and removing hyphens makes it more robust.
-    const generatedPassword = crypto.randomUUID().replace(/-/g, '').substring(0, 16); // 16 alphanumeric characters
+    // --- Prepare Auth User Data ---
+    const uniqueSuffix = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
+    const authUserEmail = (email && typeof email === 'string' && email.trim() !== '')
+                          ? email.trim()
+                          : `${name.toLowerCase().replace(/\s/g, '.')}.${uniqueSuffix}@autogen.yourdomain.com`;
 
-    // Create a new user in Supabase's internal authentication system (auth.users table).
-    // `email_confirm: true` auto-confirms the user, bypassing the email verification step.
+    const cleanedNameForPass = name.trim().replace(/\s+/g, '').toLowerCase();
+    const generatedPassword = `${cleanedNameForPass.charAt(0).toUpperCase()}${cleanedNameForPass.slice(1)}@123`;
+
+    console.log(`Deno Function: Final Auth Email: ${authUserEmail}`);
+    console.log(`Deno Function: Generated Password (for Auth): ${generatedPassword}`); // Be careful with this log in production
+
+    // --- MODIFICATION: ONLY perform supabase.auth.admin.createUser ---
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password: generatedPassword, // Use the generated secure password
-      email_confirm: true, // Automatically confirm the user's email
+      email: authUserEmail,
+      password: generatedPassword,
+      email_confirm: true, // Auto-confirm for admin-added users
+      options: {
+        data: {
+          original_name: name.trim(),
+          is_autogenerated_email: !(email && typeof email === 'string' && email.trim() !== ''),
+          original_email: (email && typeof email === 'string' && email.trim() !== '') ? email.trim() : null,
+          original_phone: (phone && typeof phone === 'string' && phone.trim() !== '') ? phone.trim() : null,
+          original_region: (region && typeof region === 'string' && region.trim() !== '') ? region.trim() : null,
+        }
+      }
     });
 
     if (authError) {
-      console.error("Supabase Auth user creation error:", authError);
-      // Return the specific error message from Supabase Auth for better debugging.
-      return new Response(JSON.stringify({ error: authError.message || "Failed to create authentication user" }), {
-        status: 500, // Internal Server Error
+      console.error("Deno Function: Supabase Auth user creation error:", authError);
+      return new Response(JSON.stringify({ error: authError.message || "Failed to create authentication user." }), {
+        status: 500,
         headers: {
-          "Access-Control-Allow-Origin": "*",
           "Content-Type": "application/json",
+          ...CORS_HEADERS
         },
       });
     }
-
-    // Extract the newly created user's ID from the authentication response.
-    // This ID is crucial as it links the auth user to your 'users' profile table.
     const userId = authUser.user.id;
+    console.log(`Deno Function: Auth user created with ID: ${userId}`);
 
-    // Insert the reseller's detailed information into your custom 'users' table.
-    // This table holds additional profile data beyond what Supabase Auth stores.
+    // --- REMOVED: public.users table insertion logic ---
+    // This part is commented out for this diagnostic test.
+    /*
     const { error: insertError } = await supabase.from("users").insert([
       {
-        id: userId, // Link to the auth.users table
-        email,
-        name,
-        region,
-        role: "reseller", // Assign a specific role
-        is_active: true, // Set initial status
-        contact_info: { phone }, // Store phone as a JSON object (assuming jsonb column)
+        id: userId,
+        email: (email && typeof email === 'string' && email.trim() !== '') ? email.trim() : null,
+        name: name.trim(),
+        region: (region && typeof region === 'string' && region.trim() !== '') ? region.trim() : null,
+        role: "reseller",
+        is_active: true,
+        contact_info: (phone && typeof phone === 'string' && phone.trim() !== '') ? { phone: phone.trim() } : null,
         flagged_status: false,
-        exclusive_features: "", // Example empty string for features
+        exclusive_features: "",
+        coverage: coverage || 0,
+        total_products_sold: 0,
+        total_revenue_generated: 0.00,
+        payment_amount_remaining: 0.00,
+        reward_points: 0.00,
       },
     ]);
 
     if (insertError) {
-      console.error("Database insert error into 'users' table:", insertError);
-
-      // --- CRITICAL ERROR HANDLING: Rollback Auth User if DB Insert Fails ---
-      // If the profile insertion fails, we should ideally delete the user from Supabase Auth
-      // to prevent orphaned authentication records. This requires an additional step.
+      console.error("Deno Function: Database insert error into 'users' table:", insertError);
       const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(userId);
       if (deleteAuthError) {
-        console.error("Failed to delete auth user after 'users' table insert failure:", deleteAuthError);
-        // Log this, but the primary error returned is still the insertError.
+        console.error("Deno Function: Failed to delete auth user after 'users' table insert failure:", deleteAuthError);
       }
-      // --- End Rollback ---
-
-      return new Response(JSON.stringify({ error: insertError.message || "Failed to add reseller to database" }), {
-        status: 500, // Internal Server Error
+      return new Response(JSON.stringify({ error: insertError.message || "Failed to add reseller to database." }), {
+        status: 500,
         headers: {
-          "Access-Control-Allow-Origin": "*",
           "Content-Type": "application/json",
+          ...CORS_HEADERS
         },
       });
     }
+    console.log("Deno Function: User profile insertion skipped for this test.");
+    */
 
-    // If both Auth user creation and 'users' table insertion are successful,
-    // return a success response.
-    return new Response(JSON.stringify({ success: true, message: "Reseller added successfully!" }), {
-      status: 200, // OK
+    // --- Return success response after ONLY Auth user creation ---
+    return new Response(JSON.stringify({
+      success: true,
+      message: "Auth user created successfully! (Profile insertion skipped for test)",
+      userId: userId, // Return the Auth user ID
+      generated_password: generatedPassword
+    }), {
+      status: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",
         "Content-Type": "application/json",
+        ...CORS_HEADERS
       },
     });
 
-  } catch (err) {
-    // Catch any unexpected errors that occur during the function execution.
-    console.error("Unexpected Error:", err);
-    return new Response(JSON.stringify({ error: "Internal Server Error", detail: err.message }), {
-      status: 500, // Internal Server Error
+  } catch (err: any) {
+    console.error("Deno Function: Unexpected Error (caught in main try-catch):", err.message, err.stack);
+    return new Response(JSON.stringify({
+      error: "Internal Server Error",
+      detail: err.message,
+      stack: err.stack
+    }), {
+      status: 500,
       headers: {
-        "Access-Control-Allow-Origin": "*",
         "Content-Type": "application/json",
+        ...CORS_HEADERS
       },
     });
   }
