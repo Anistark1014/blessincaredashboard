@@ -34,6 +34,12 @@ import {
   Activity,
   PiggyBank,
   CreditCard,
+  TrendingDown,
+  Target,
+  Users,
+  BarChart3,
+  Calculator,
+  Zap,
 } from "lucide-react";
 import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
 
@@ -65,6 +71,21 @@ interface LoanPayment {
   payment_date: string;
 }
 
+interface Expense {
+  id: string;
+  amount: number;
+  category: string;
+  description: string | null;
+  date: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  cost_price: number | null;
+  mrp: number | null;
+}
+
 const Finance = () => {
   const { toast } = useToast();
   const [balance, setBalance] = useState(0);
@@ -73,6 +94,8 @@ const Finance = () => {
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
   const [loanAction, setLoanAction] = useState<"take" | "pay">("take");
   const [sales, setSales] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [date, setDate] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: addDays(new Date(), 0),
@@ -103,7 +126,36 @@ const Finance = () => {
 
   useEffect(() => {
     fetchSalesData();
+    fetchExpensesData();
+    fetchProductsData();
   }, [date]);
+
+  // Fetch expenses data filtered by date range
+  const fetchExpensesData = async () => {
+    if (!date?.from || !date?.to) return;
+    const startDate = date.from.toISOString();
+    const endDate = date.to.toISOString();
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*")
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: false });
+    if (!error && data) {
+      setExpenses(data);
+    }
+  };
+
+  // Fetch products data for COGS calculations
+  const fetchProductsData = async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, cost_price, mrp")
+      .order("name", { ascending: true });
+    if (!error && data) {
+      setProducts(data);
+    }
+  };
 
   // Fetch sales data with products for KPI calculations, filtered by date range
   const fetchSalesData = async () => {
@@ -231,6 +283,43 @@ const Finance = () => {
   const outstanding = salesStats.totalSales - salesStats.totalPaid;
   const revenue = salesStats.totalPaid;
   const gmv = salesStats.gmv;
+
+  // Calculate total expenses for the period
+  const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+
+  // Calculate COGS (Cost of Goods Sold)
+  const cogs = sales.reduce((sum, sale) => {
+    const product = sale.products;
+    if (product && product.cost_price) {
+      return sum + (Number(sale.qty || 0) * Number(product.cost_price));
+    }
+    return sum;
+  }, 0);
+
+  // Calculate new KPIs
+  const netProfit = revenue - totalExpenses;
+  const grossProfit = revenue - cogs;
+  const grossProfitMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+  const netProfitMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+  // EBITDA calculation (simplified - revenue - expenses excluding interest, taxes, depreciation, amortization)
+  // For now, we'll use a simplified version: revenue - operating expenses
+  const ebitda = revenue - totalExpenses;
+
+  // Burn Rate calculation (monthly cash outflow)
+  // For simplicity, we'll calculate it as (expenses - revenue) / number of months in the period
+  const getMonthsInPeriod = () => {
+    if (!date?.from || !date?.to) return 1;
+    const months = (date.to.getFullYear() - date.from.getFullYear()) * 12 +
+      (date.to.getMonth() - date.from.getMonth());
+    return Math.max(1, months + 1); // At least 1 month
+  };
+  const burnRate = (totalExpenses - revenue) / getMonthsInPeriod();
+
+  // Customer LTV calculation (simplified)
+  // For now, we'll calculate average revenue per customer
+  const uniqueCustomers = new Set(sales.map(sale => sale.member_id)).size;
+  const customerLTV = uniqueCustomers > 0 ? revenue / uniqueCustomers : 0;
 
   // Add investments and loans to the company balance
   const companyBalance =
@@ -368,10 +457,10 @@ const Finance = () => {
           prev.map((loan) =>
             loan.id === selectedLoan.id
               ? {
-                  ...loan,
-                  remaining_balance: Math.max(0, newRemainingBalance),
-                  status: newRemainingBalance <= 0 ? "paid" : "active",
-                }
+                ...loan,
+                remaining_balance: Math.max(0, newRemainingBalance),
+                status: newRemainingBalance <= 0 ? "paid" : "active",
+              }
               : loan
           )
         );
@@ -532,8 +621,8 @@ const Finance = () => {
                         prev && prev.from
                           ? { ...prev, to: newTo! }
                           : newTo
-                          ? { from: newTo, to: newTo }
-                          : prev
+                            ? { from: newTo, to: newTo }
+                            : prev
                       );
                     }}
                     className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
@@ -555,8 +644,7 @@ const Finance = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      {/* <EnhancedSalesDashboard data={sortedSales} /> */}
+      {/* Basic KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* 1. Company Balance (Sales Revenue + Investments + Loans) */}
         <Card>
@@ -615,6 +703,105 @@ const Finance = () => {
             <div className="text-2xl font-bold">${gmv.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               Total value at MRP (sales)
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Advanced KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* 1. Net Profit */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+            <Calculator className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${netProfit.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Revenue - Total Expenses
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 2. Gross Profit Margin % */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Gross Profit Margin</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${grossProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {grossProfitMargin.toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              (Revenue - COGS) / Revenue
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 3. Net Profit Margin % */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Net Profit Margin</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {netProfitMargin.toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Net Profit / Revenue
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 4. EBITDA */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">EBITDA</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${ebitda >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${ebitda.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Earnings Before Interest, Taxes, Depreciation, Amortization
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 5. Burn Rate */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Burn Rate</CardTitle>
+            <Zap className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${burnRate <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${burnRate.toLocaleString()}/month
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {burnRate <= 0 ? 'Cash-flow positive' : 'Monthly cash outflow'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 6. Customer LTV */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Customer LTV</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${customerLTV.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Average revenue per customer
             </p>
           </CardContent>
         </Card>
