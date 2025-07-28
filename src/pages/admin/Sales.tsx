@@ -1594,73 +1594,153 @@ const renderNewRecordRow = () => {
             </div>
             
             <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
-              <PopoverTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                id="date"
+                variant={"outline"}
+                className={cn(
+                  "w-[300px] justify-start text-left font-normal",
+                  !date && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date?.from
+                  ? date.to
+                    ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
+                    : date.from.toLocaleDateString()
+                  : "Pick a date range"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-auto p-0 flex"
+              side="bottom"
+              align="start"
+            >
+              <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
                 <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn("w-[300px] justify-start text-left font-normal", !date && "text-muted-foreground")}
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    const now = new Date();
+                    setDate({
+                      from: new Date(now.getFullYear(), now.getMonth(), 1),
+                      to: addDays(new Date(), 0),
+                    });
+                    setPopoverOpen(false);
+                  }}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date?.from ? (date.to ? (`${format(date.from, "LLL dd, y")} - ${format(date.to, "LLL dd, y")}`) : format(date.from, "LLL dd, y")) : (<span>Pick a date</span>)}
+                  This Month
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 flex" side="bottom" align="start">
-                <div className="flex flex-col space-y-1 p-2 border-r">
-                  <Button variant="ghost" onClick={() => { setDate({ from: new Date(), to: new Date() }); setPopoverOpen(false); }}>Today</Button>
-                  <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -7), to: new Date() }); setPopoverOpen(false); }}>Last 7 Days</Button>
-                  <Button variant="ghost" onClick={() => { setDate({ from: addDays(new Date(), -30), to: new Date() }); setPopoverOpen(false); }}>Last 30 Days</Button>
-                  <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 2), to: new Date() }); setPopoverOpen(false); }}>Last 2 Months</Button>
-                  <Button variant="ghost" onClick={() => { setDate({ from: subMonths(new Date(), 6), to: new Date() }); setPopoverOpen(false); }}>Last 6 Months</Button>
-                  <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 1), to: new Date() }); setPopoverOpen(false); }}>Last 1 Year</Button>
-                  <Button variant="ghost" onClick={() => { setDate({ from: subYears(new Date(), 50), to: new Date() }); setPopoverOpen(false); }}>All Time</Button>
-
-                  <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" className="text-blue-600 hover:text-blue-700 justify-start">Custom...</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>Select Custom Date Range</DialogTitle></DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.from && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {customDate?.from ? format(customDate.from, "dd-MM-yyyy") : <span>Start Date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={customDate?.from} onSelect={(day) => setCustomDate((prev) => ({ ...prev, from: day }))} /></PopoverContent>
-                        </Popover>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !customDate?.to && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {customDate?.to ? format(customDate.to, "dd-MM-yyyy") : <span>End Date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={customDate?.to}
-                              onSelect={(day) =>
-                                setCustomDate((prev) =>
-                                  prev
-                                    ? { from: prev.from ?? undefined, to: day }
-                                    : { from: undefined, to: day }
-                                )
-                              }
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <DialogFooter>
-                        <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                        <Button onClick={handleApplyCustomDate}>Apply</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    const now = new Date();
+                    const lastMonth = new Date(
+                      now.getFullYear(),
+                      now.getMonth() - 1,
+                      1
+                    );
+                    const lastMonthEnd = new Date(
+                      now.getFullYear(),
+                      now.getMonth(),
+                      0
+                    );
+                    setDate({
+                      from: lastMonth,
+                      to: lastMonthEnd,
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  Last Month
+                </Button>
+                <Button 
+                variant="ghost" 
+                className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                onClick={() => { 
+                  setDate({ from: subMonths(new Date(), 6), to: new Date() }); 
+                  setPopoverOpen(false); }}
+                  >Last 6 Months
+                  </Button>
+                
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    const now = new Date();
+                    setDate({
+                      from: new Date(now.getFullYear(), 0, 1),
+                      to: addDays(new Date(), 0),
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  This Year
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                  onClick={() => {
+                    setDate({
+                      from: new Date(2000, 0, 1),
+                      to: addDays(new Date(), 0),
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  All Time
+                </Button>
+              </div>
+              <div className="p-2 bg-muted/40 rounded-r-lg">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    value={
+                      date?.from ? date.from.toISOString().slice(0, 10) : ""
+                    }
+                    onChange={(e) => {
+                      const newFrom = e.target.value
+                        ? new Date(e.target.value)
+                        : undefined;
+                      setDate((prev) => ({ ...prev, from: newFrom! }));
+                    }}
+                    className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                  />
+                  <label className="text-xs font-medium text-muted-foreground">
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    value={date?.to ? date.to.toISOString().slice(0, 10) : ""}
+                    onChange={(e) => {
+                      const newTo = e.target.value
+                        ? new Date(e.target.value)
+                        : undefined;
+                      setDate((prev) =>
+                        prev && prev.from
+                          ? { ...prev, to: newTo! }
+                          : newTo
+                          ? { from: newTo, to: newTo }
+                          : prev
+                      );
+                    }}
+                    className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => setPopoverOpen(false)}
+                    className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                  >
+                    Apply
+                  </Button>
                 </div>
-              </PopoverContent>
-            </Popover>
+              </div>
+            </PopoverContent>
+          </Popover>
 
             <div className="flex items-center gap-2">
               <TooltipProvider delayDuration={0}>
