@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'; // Added DialogClose
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -17,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Eye, Flag, FlagOff, Search, Users, UserCheck, CheckCircle2, XCircle } from 'lucide-react';
+import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -31,7 +29,7 @@ import {
 
 
 // --- IMPORTANT: Define your Deno Edge Function URL here ---
-const DENO_ADD_RESELLER_FUNCTION_URL = import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL || 'YOUR_DENO_FUNCTION_URL_HERE';
+// const DENO_ADD_RESELLER_FUNCTION_URL = import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL || 'YOUR_DENO_FUNCTION_URL_HERE';
 
 // Define the interfaces based on your provided structure
 interface Reseller {
@@ -59,13 +57,16 @@ interface Request {
   id: string;
   reseller_id: string;
   products_ordered: any;
-  total_amount: number;
+  total: number;
   status: string;
+  paid:number;
   payment_status: string;
   request_date: string;
   special_instructions: string | null;
   admin_notes: string | null;
+  date:string
 }
+
 
 interface InfoItemProps {
   label: string;
@@ -151,12 +152,20 @@ const [editableEmail, setEditableEmail] = useState('');
 const [editableRegion, setEditableRegion] = useState('');
 const [editableCoverage, setEditableCoverage] = useState<number | ''>('');
 
-  const [exclusiveFeatures, setExclusiveFeatures] = useState('');
+  // const [exclusiveFeatures, setExclusiveFeatures] = useState('');
   const [isLoginAccessEnabled, setIsLoginAccessEnabled] = useState(false);
 
   //Graph data
   const [resellerSales, setResellerSales] = useState<Request[]>([]);
 const [chartData, setChartData] = useState<{ month: string; revenue: number }[]>([]);
+
+// Manages the currently selected time range option (e.g., 1M, 3M, Lifetime)
+const [timeRange, setTimeRange] = useState<'1m' | '3m' | 'lifetime' | 'custom'>('lifetime');
+// Manages the start date for the custom range
+const [customStartDate, setCustomStartDate] = useState<string>('');
+// Manages the end date for the custom range
+const [customEndDate, setCustomEndDate] = useState<string>('');
+
 
 
   const { toast } = useToast();
@@ -169,74 +178,73 @@ const [chartData, setChartData] = useState<{ month: string; revenue: number }[]>
         .select('*')
         .eq('role', 'reseller')
         .order('created_at', { ascending: false });
-      console.log(resellerList)
       if (resellerError) throw resellerError;
 
-      const updatedResellers: Reseller[] = await Promise.all(
-        (resellerList as any[]).map(async (reseller) => {
-          const { data: requests, error: requestError } = await supabase
-            .from('requests')
-            .select('total_amount, amount_paid')
-            .eq('reseller_id', reseller.id);
+      // const updatedResellers: Reseller[] = await Promise.all(
+      //   (resellerList as any[]).map(async (reseller) => {
+      //     const { data: requests, error: requestError } = await supabase
+      //       .from('requests')
+      //       .select('total_amount, paid')
+      //       .eq('reseller_id', reseller.id);
 
-          if (requestError) {
-            console.error(`Error fetching requests for ${reseller.name}:`, requestError);
-            return {
-              ...reseller,
-              name: reseller.name ?? "Unnamed",
-              region: reseller.region ?? "Unknown",
-              created_at: reseller.created_at ?? "",
-              total_products_sold: reseller.total_products_sold ?? 0,
-              payment_status: 'pending',
-              payment_amount_remaining: 0,
-              total_revenue_generated: 0,
-              reward_points: 0,
-              is_active: reseller.is_active ?? false,
-              flagged_status: reseller.flagged_status ?? false,
-              exclusive_features: reseller.exclusive_features ?? '',
-              coverage: reseller.coverage ?? 0,
-              sub_active_resellers: 0,
-              sub_passive_resellers: 0,
-            } as Reseller;
-          }
+      //     if (requestError) {
+      //       console.error(`Error fetching requests for ${reseller.name}:`, requestError);
+      //       return {
+      //         ...reseller,
+      //         name: reseller.name ?? "Unnamed",
+      //         region: reseller.region ?? "Unknown",
+      //         created_at: reseller.created_at ?? "",
+      //         total_products_sold: reseller.total_products_sold ?? 0,
+      //         payment_status: 'pending',
+      //         payment_amount_remaining: 0,
+      //         total_revenue_generated: 0,
+      //         reward_points: 0,
+      //         is_active: reseller.is_active ?? false,
+      //         flagged_status: reseller.flagged_status ?? false,
+      //         exclusive_features: reseller.exclusive_features ?? '',
+      //         coverage: reseller.coverage ?? 0,
+      //         sub_active_resellers: 0,
+      //         sub_passive_resellers: 0,
+      //       } as Reseller;
+      //     }
 
-          let totalRemaining = 0;
-          let totalRevenue = 0;
-          for (const req of requests) {
-            const total = req.total_amount ?? 0;
-            const paid = req.amount_paid ?? 0;
-            totalRemaining += Math.max(0, total - paid);
-            totalRevenue += total;
-          }
+      //     let totalRemaining = 0;
+      //     let totalRevenue = 0;
+      //     for (const req of requests) {
+      //       const total = req.total_amount ?? 0;
+      //       const paid = req.paid ?? 0;
+      //       totalRemaining += Math.max(0, total - paid);
+      //       totalRevenue += total;
+      //     }
 
-          const rewardPoints = Math.floor(totalRevenue / 100);
+      //     const rewardPoints = Math.floor(totalRevenue / 100);
 
-          const subActiveResellers = 0; // Requires actual logic
-          const subPassiveResellers = 0; // Requires actual logic
+      //     const subActiveResellers = 0; // Requires actual logic
+      //     const subPassiveResellers = 0; // Requires actual logic
 
-          return {
-            ...reseller,
-            name: reseller.name ?? "Unnamed",
-            email: reseller.email ?? null,
-            contact_info: reseller.contact_info ?? null,
-            region: reseller.region ?? "Unknown",
-            created_at: reseller.created_at ?? "",
-            total_products_sold: reseller.total_products_sold ?? 0,
-            payment_status: totalRemaining === 0 ? "clear" : "pending",
-            payment_amount_remaining: totalRemaining,
-            total_revenue_generated: totalRevenue,
-            reward_points: rewardPoints,
-            is_active: reseller.is_active ?? false,
-            flagged_status: reseller.flagged_status ?? false,
-            exclusive_features: reseller.exclusive_features ?? '',
-            coverage: reseller.coverage ?? 0,
-            sub_active_resellers: subActiveResellers,
-            sub_passive_resellers: subPassiveResellers,
-          } as Reseller;
-        })
-      );
+      //     return {
+      //       ...reseller,
+      //       name: reseller.name ?? "Unnamed",
+      //       email: reseller.email ?? null,
+      //       contact_info: reseller.contact_info ?? null,
+      //       region: reseller.region ?? "Unknown",
+      //       created_at: reseller.created_at ?? "",
+      //       total_products_sold: reseller.total_products_sold ?? 0,
+      //       payment_status: totalRemaining === 0 ? "clear" : "pending",
+      //       payment_amount_remaining: totalRemaining,
+      //       total_revenue_generated: totalRevenue,
+      //       reward_points: rewardPoints,
+      //       is_active: reseller.is_active ?? false,
+      //       flagged_status: reseller.flagged_status ?? false,
+      //       exclusive_features: reseller.exclusive_features ?? '',
+      //       coverage: reseller.coverage ?? 0,
+      //       sub_active_resellers: subActiveResellers,
+      //       sub_passive_resellers: subPassiveResellers,
+      //     } as Reseller;
+      //   })
+      // );
 
-      setResellers(updatedResellers);
+      setResellers(resellerList);
     } catch (error: any) {
       console.error('Error fetching resellers:', error);
       toast({
@@ -257,7 +265,6 @@ const [chartData, setChartData] = useState<{ month: string; revenue: number }[]>
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'users', filter: 'role=eq.reseller' },
         (payload) => {
-          console.log('Reseller change received!', payload);
           fetchResellers();
         }
       )
@@ -268,94 +275,150 @@ const [chartData, setChartData] = useState<{ month: string; revenue: number }[]>
     };
   }, [toast]);
 
+// Replace your old useEffect with this one
 useEffect(() => {
   if (selectedReseller) {
+    // Set editable fields (this part is fine)
     setEditableResellerName(selectedReseller.name || '');
     setEditableRegion(selectedReseller.region || '');
     setEditableCoverage(selectedReseller.coverage ?? '');
-    setExclusiveFeatures(selectedReseller.exclusive_features || '');
     setIsLoginAccessEnabled(selectedReseller.is_active);
-    fetchResellerDetails(selectedReseller.id);
+
+    // ✅ ADD THIS CHECK: Prevents fetching with incomplete custom dates
+    if (timeRange === 'custom' && (!customStartDate || !customEndDate)) {
+      setChartData([]); // Clear old data
+      setResellerSales([]);
+      return; // Stop here until both dates are selected
+    }
+
+    // This will now be called correctly on every filter change
     fetchResellerSalesData(selectedReseller.id);
   }
-}, [selectedReseller]);
+}, [selectedReseller, timeRange, customStartDate, customEndDate]); // ✅ CORRECTION: Added all filter dependencies
+
 
 const fetchResellerSalesData = async (resellerId: string) => {
+  // 1. Initial checks and query setup
   if (!resellerId) {
     console.warn("Missing resellerId");
     return;
   }
 
-  const { data: sales, error } = await supabase
+  let query = supabase
     .from('sales')
-    .select('date, total, paid') // ✅ match your column names exactly
-    .eq('reseller_id', resellerId)
-    .order('date', { ascending: false });
+    .select('date, total, paid')
+    .eq('member_id', resellerId);
+
+  // 2. Dynamically add date filters based on the state
+  const now = new Date();
+  if (timeRange === '7d') {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    query = query.gte('date', sevenDaysAgo.toISOString());
+  } else if (timeRange === '30d') {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    query = query.gte('date', thirtyDaysAgo.toISOString());
+  } else if (timeRange === '3m') {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(now.getMonth() - 3);
+    query = query.gte('date', threeMonthsAgo.toISOString());
+  } else if (timeRange === 'custom' && customStartDate && customEndDate) {
+    const endOfDay = new Date(customEndDate);
+    endOfDay.setHours(23, 59, 59, 999); // Include the entire end day
+    query = query.gte('date', customStartDate).lte('date', endOfDay.toISOString());
+  }
+  // For 'lifetime', no additional date filter is needed.
+
+  // 3. Execute the query, sorting ascending for chart processing
+  const { data: sales, error } = await query.order('date', { ascending: true });
 
   if (error) {
     console.error('Error fetching sales:', error);
+    setChartData([]);
+    setResellerSales([]);
     return;
   }
 
   if (!sales || sales.length === 0) {
-    console.warn('No sales found for reseller:', resellerId);
+    console.warn('No sales found for reseller in the selected range:', resellerId);
+    setChartData([]);
+    setResellerSales([]);
     return;
   }
 
-  console.log('Fetched sales:', sales);
-  setResellerSales(sales); // For the sales history table
+  // Set sales history for the table (in reverse chronological order)
+  setResellerSales([...sales].reverse());
 
-  // Build monthly revenue chart data
-  const monthlyRevenue: Record<string, number> = {};
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  // 4. Conditionally group data and format for the chart
+  let formattedChartData;
+  const isDailyView = ['7d', '30d'].includes(timeRange) || (timeRange === 'custom' && customStartDate && customEndDate);
 
-  sales.forEach(s => {
-    const d = new Date(s.date); // ✅ use 'date' column
-    if (isNaN(d.getTime())) return;
+  if (isDailyView) {
+    // --- Group by DAY for short or custom ranges ---
+    const dailyRevenue: Record<string, number> = {};
+    sales.forEach(sale => {
+      // Use toISOString and split to get a consistent 'YYYY-MM-DD' key
+      const dayKey = new Date(sale.date).toISOString().split('T')[0];
+      dailyRevenue[dayKey] = (dailyRevenue[dayKey] || 0) + (sale.total ?? 0);
+    });
 
-    const key = `${monthNames[d.getMonth()]} '${d.getFullYear().toString().slice(-2)}`;
-    monthlyRevenue[key] = (monthlyRevenue[key] || 0) + (s.total ?? 0);
-  });
+    formattedChartData = Object.entries(dailyRevenue).map(([date, revenue]) => ({
+      // Use toLocaleDateString for a user-friendly label like "Jul 29"
+      month: new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      revenue,
+    }));
 
-  const formatted = Object.entries(monthlyRevenue)
-    .map(([month, revenue]) => {
-      const [monStr, yearStr] = month.split(' ');
-      const monthIndex = monthNames.indexOf(monStr);
-      const fullYear = 2000 + parseInt(yearStr.replace("'", ''));
-      const date = new Date(fullYear, monthIndex);
-      return { month, revenue, date };
-    })
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .map(({ month, revenue }) => ({ month, revenue }));
+  } else {
+    // --- Group by MONTH for longer ranges (3M, Lifetime) ---
+    const monthlyRevenue: Record<string, number> = {};
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  setChartData(formatted); // ✅ chart-ready data
+    sales.forEach(sale => {
+      const d = new Date(sale.date);
+      if (isNaN(d.getTime())) return;
+      // Use a key like "Jul '25"
+      const key = `${monthNames[d.getMonth()]} '${d.getFullYear().toString().slice(-2)}`;
+      monthlyRevenue[key] = (monthlyRevenue[key] || 0) + (sale.total ?? 0);
+    });
+
+    formattedChartData = Object.entries(monthlyRevenue)
+      .map(([month, revenue]) => {
+        const [monStr, yearStr] = month.split(' ');
+        // Create a sortable date object from the month string
+        const date = new Date(`${monStr} 1, 20${yearStr.replace("'", "")}`);
+        return { month, revenue, date };
+      })
+      .sort((a, b) => a.date.getTime() - b.date.getTime()) // Sort chronologically
+      .map(({ month, revenue }) => ({ month, revenue })); // Remove temporary date object
+  }
+
+  // 5. Set the final chart data
+  setChartData(formattedChartData);
 };
 
+// const fetchResellerDetails = async (resellerId: string) => {
+//     try {
+//       const { data: requests, error: requestsError } = await supabase
+//         .from('requests')
+//         .select('*')
+//         .eq('reseller_id', resellerId)
+//         .order('request_date', { ascending: false });
 
-const fetchResellerDetails = async (resellerId: string) => {
-    try {
-      const { data: requests, error: requestsError } = await supabase
-        .from('requests')
-        .select('*')
-        .eq('reseller_id', resellerId)
-        .order('request_date', { ascending: false });
-
-      if (requestsError) throw requestsError;
-      setResellerRequests(requests as Request[]);
-      console.log(requests)
+//       if (requestsError) throw requestsError;
+//       setResellerRequests(requests as Request[]);
       
-    } catch (error: any) {
-      console.error('Error fetching reseller details:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch reseller details",
-        variant: "destructive",
-      });
-    }
-  };
+//     } catch (error: any) {
+//       console.error('Error fetching reseller details:', error);
+//       toast({
+//         title: "Error",
+//         description: "Failed to fetch reseller details",
+//         variant: "destructive",
+//       });
+//     }   };
 
   // --- Add Reseller Form Component (within AdminResellers) ---
+  
   const AddResellerForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { toast } = useToast();
     const [formData, setFormData] = useState({
@@ -386,7 +449,6 @@ const fetchResellerDetails = async (resellerId: string) => {
       try {
         const sessionResult = await supabase.auth.getSession();
         const accessToken = sessionResult.data.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
-        console.log("Triggers")
         const response = await fetch(import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL, {
           method: "POST",
           headers: {
@@ -536,9 +598,9 @@ const fetchResellerDetails = async (resellerId: string) => {
           role: 'reseller'
         });
 
-      if (selectedReseller) {
-        fetchResellerDetails(selectedReseller.id);
-      }
+      // if (selectedReseller) {
+      //   fetchResellerDetails(selectedReseller.id);
+      // }
 
       toast({
         title: "Success",
@@ -554,39 +616,39 @@ const fetchResellerDetails = async (resellerId: string) => {
     }
   };
 
-  const handleToggleFlag = async (resellerId: string, currentStatus: boolean) => {
-    try {
-      // It's generally better to only update the specific field.
-      // If region is null, updating it with null should be fine if DB allows.
-      const { error } = await supabase
-        .from('users')
-        .update({ flagged_status: !currentStatus })
-        .eq('id', resellerId);
+  // const handleToggleFlag = async (resellerId: string, currentStatus: boolean) => {
+  //   try {
+  //     // It's generally better to only update the specific field.
+  //     // If region is null, updating it with null should be fine if DB allows.
+  //     const { error } = await supabase
+  //       .from('users')
+  //       .update({ flagged_status: !currentStatus })
+  //       .eq('id', resellerId);
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      setResellers(prev =>
-        prev.map(r =>
-          r.id === resellerId ? { ...r, flagged_status: !currentStatus } : r
-        )
-      );
-      if (selectedReseller?.id === resellerId) {
-        setSelectedReseller(prev => prev ? { ...prev, flagged_status: !currentStatus } : null);
-      }
+  //     setResellers(prev =>
+  //       prev.map(r =>
+  //         r.id === resellerId ? { ...r, flagged_status: !currentStatus } : r
+  //       )
+  //     );
+  //     if (selectedReseller?.id === resellerId) {
+  //       setSelectedReseller(prev => prev ? { ...prev, flagged_status: !currentStatus } : null);
+  //     }
 
-      toast({
-        title: "Success",
-        description: `Reseller ${!currentStatus ? 'flagged' : 'unflagged'} successfully.`,
-      });
-    } catch (error: any) {
-      console.error('Error toggling flag:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update flag status",
-        variant: "destructive",
-      });
-    }
-  };
+  //     toast({
+  //       title: "Success",
+  //       description: `Reseller ${!currentStatus ? 'flagged' : 'unflagged'} successfully.`,
+  //     });
+  //   } catch (error: any) {
+  //     console.error('Error toggling flag:', error);
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to update flag status",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
 
   const handleToggleLoginAccess = async (resellerId: string, currentStatus: boolean) => {
     try {
@@ -782,9 +844,9 @@ const handleUpdateResellerDetails = async () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Tier</TableHead>
                   <TableHead className="w-[150px]">Name</TableHead>
                   <TableHead>Region</TableHead>
-                  <TableHead>Tier</TableHead>
                   <TableHead>Total Packages Sold</TableHead>
                   <TableHead>Total Revenue Generated</TableHead>
                   <TableHead>Total Outstanding</TableHead>
@@ -799,8 +861,15 @@ const handleUpdateResellerDetails = async () => {
                     const tierInfo = getTierInfo(reseller.total_products_sold);
                     return (
                       <TableRow key={reseller.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <TierIcon svgName={tierInfo.svg} tier={tierInfo.tier} />
+                            <span className="text-sm">{tierInfo.tier}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
+                            {reseller.name}
                             {reseller.is_active ? (
                               <span title="Verified (Login Enabled)">
                                 <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -810,18 +879,12 @@ const handleUpdateResellerDetails = async () => {
                                 <XCircle className="h-4 w-4 text-gray-400" />
                               </span>
                             )}
-                            {reseller.name}
                           </div>
                         </TableCell>
                         <TableCell>{reseller.region}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <TierIcon svgName={tierInfo.svg} tier={tierInfo.tier} />
-                            <span className="text-sm">{tierInfo.tier}</span>
-                          </div>
-                        </TableCell>
+
                         <TableCell>{reseller.total_products_sold}</TableCell>
-                        <TableCell>${reseller.total_revenue_generated?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell>${reseller.total_revenue_generated?.toFixed(2) ?? '0.00'}</TableCell>
                         <TableCell>
                           <Badge
                             className={
@@ -830,7 +893,7 @@ const handleUpdateResellerDetails = async () => {
                                 : "bg-red-100 text-red-800 hover:bg-red-100"
                             }
                           >
-                            ${reseller.payment_amount_remaining.toFixed(2)}
+                            ${reseller.payment_amount_remaining.toFixed(2) ?? '0.00'}
                           </Badge>
                         </TableCell>
                         <TableCell>{reseller.reward_points || 0}</TableCell>
@@ -926,62 +989,136 @@ const handleUpdateResellerDetails = async () => {
                                     </Button>
                                   </div>
 
-                                    {/* Financial & Performance Section */}
-                                    <div className="space-y-4 border rounded-lg p-4">
-                                      <h3 className="text-lg font-semibold mb-2">Financial & Performance</h3>
-                                      <InfoItem label="Total Packages Sold" value={selectedReseller.total_products_sold} />
-                                      <InfoItem label="Total Revenue Generated" value={`$${selectedReseller.total_revenue_generated?.toFixed(2) ?? '0.00'}`} />
-                                      <InfoItem label="Due/Outstanding Balance" value={`$${selectedReseller.payment_amount_remaining.toFixed(2)}`} />
-                                      <InfoItem label="Reward Points (RP)" value={selectedReseller.reward_points ?? 0} />
+                                      {/* Financial & Performance Section */}
+                                      <div className="space-y-4 h-min border rounded-lg p-4">
+                                        <h3 className="text-lg font-semibold mb-2">Financial & Performance</h3>
+                                        <div className="mt-4 p-4  rounded-md">
 
-                                      <div className="mt-4 p-4 border rounded-md">
-                                        <h4 className="text-md font-medium mb-2">Revenue Progress (last months)</h4>
-                                        {chartData.length > 0 ? (
-                                          <ResponsiveContainer width="100%" height={200}>
-                                            <LineChart data={chartData}>
-                                              <CartesianGrid strokeDasharray="3 3" />
-                                              <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-                                              <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
-                                              <Tooltip />
-                                              <Legend />
-                                              <Line type="monotone" dataKey="revenue" stroke="#8884d8" activeDot={{ r: 6 }} />
-                                            </LineChart>
-                                          </ResponsiveContainer>
-                                        ) : (
-                                          <div className="h-32 flex items-center justify-center text-muted-foreground">
-                                            No sales data.
+                                          {/* ✅ START: Time Range UI */}
+                                          <div className="flex flex-col gap-4 mb-4">
+                                            {/* Button Toggle Group */}
+                                            <div className="flex items-center flex-wrap gap-2">
+                                              <Button
+                                                variant={timeRange === '7d' ? 'secondary' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setTimeRange('7d')}
+                                              >
+                                                7D
+                                              </Button>
+                                              <Button
+                                                variant={timeRange === '30d' ? 'secondary' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setTimeRange('30d')}
+                                              >
+                                                30D
+                                              </Button>
+                                              <Button
+                                                variant={timeRange === '3m' ? 'secondary' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setTimeRange('3m')}
+                                              >
+                                                3M
+                                              </Button>
+                                              <Button
+                                                variant={timeRange === 'lifetime' ? 'secondary' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setTimeRange('lifetime')}
+                                              >
+                                                Lifetime
+                                              </Button>
+                                              <Button
+                                                variant={timeRange === 'custom' ? 'secondary' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setTimeRange('custom')}
+                                              >
+                                                Custom
+                                              </Button>
+                                            </div>
+
+                                            {/* Conditionally Rendered Custom Date Picker */}
+                                            {timeRange === 'custom' && (
+                                              <div className="flex flex-wrap items-center gap-4 p-3 border rounded-md bg-muted/50">
+                                                <div className="flex items-center gap-2">
+                                                  <Label htmlFor="start-date" className="font-normal">From</Label>
+                                                  <Input
+                                                    id="start-date"
+                                                    type="date"
+                                                    value={customStartDate}
+                                                    onChange={(e) => setCustomStartDate(e.target.value)}
+                                                    className="h-9"
+                                                  />
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <Label htmlFor="end-date" className="font-normal">To</Label>
+                                                  <Input
+                                                    id="end-date"
+                                                    type="date"
+                                                    value={customEndDate}
+                                                    onChange={(e) => setCustomEndDate(e.target.value)}
+                                                    className="h-9"
+                                                  />
+                                                </div>
+                                              </div>
+                                            )}
                                           </div>
-                                        )}
+                                          {/* ✅ END: Time Range UI */}
+                                          
+                                          {/* Chart Display Logic (your existing code) */}
+                                          {chartData.length > 0 ? (
+                                            <ResponsiveContainer width="100%" height={200}>
+                                              <LineChart data={chartData}>
+                                                <CartesianGrid strokeDasharray="3 3" />
+                                                <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
+                                                <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
+                                                <Tooltip />
+                                                <Legend />
+                                                <Line type="monotone" dataKey="revenue" stroke="#8884d8" activeDot={{ r: 6 }} />
+                                              </LineChart>
+                                            </ResponsiveContainer>
+                                          ) : (
+                                            <div className="h-32 flex items-center justify-center text-muted-foreground">
+                                              No sales data for the selected period.
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
 
                                     {/* Recent Sales Table */}
-                                    <div className="mt-6">
+                                    <div className="space-y-4 border md:col-span-2 rounded-lg p-4">
                                       <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
+                                      
                                       <Card>
                                         <CardContent className="p-0">
                                           <Table>
                                             <TableHeader>
                                               <TableRow>
                                                 <TableHead>Date</TableHead>
-                                                <TableHead>Status</TableHead>
                                                 <TableHead className="text-right">Total</TableHead>
                                                 <TableHead className="text-right">Paid</TableHead>
                                                 <TableHead className="text-right">Balance</TableHead>
                                               </TableRow>
                                             </TableHeader>
+
                                             <TableBody>
-                                              {resellerSales.length > 0 ? resellerSales.map((sale) => (
-                                                <TableRow key={sale.id}>
-                                                  <TableCell>{new Date(sale.request_date).toLocaleDateString()}</TableCell>
-                                                  <TableCell><Badge>{sale.status}</Badge></TableCell>
-                                                  <TableCell className="text-right">${sale.total_amount.toFixed(2)}</TableCell>
-                                                  <TableCell className="text-right">${sale.amount_paid.toFixed(2)}</TableCell>
-                                                  <TableCell className="text-right font-medium">${(sale.total_amount - sale.amount_paid).toFixed(2)}</TableCell>
-                                                </TableRow>
-                                              )) : (
+                                              {resellerSales.length > 0 ? (
+                                                resellerSales.map((sale) => {
+                                                  const total = typeof sale.total === 'number' ? sale.total : 0;
+                                                  const paid = typeof sale.paid === 'number' ? sale.paid : 0;
+                                                  const balance = total - paid;
+                                                  return (
+                                                    <TableRow key={sale.id}>
+                                                      <TableCell><p>{sale.date}</p></TableCell>
+                                                      <TableCell className="text-right">${total.toFixed(2)}</TableCell>
+                                                      <TableCell className="text-right">${paid.toFixed(2)}</TableCell>
+                                                      <TableCell className="text-right font-medium">${balance.toFixed(2)}</TableCell>
+                                                    </TableRow>
+                                                  );
+                                                })
+                                              ) : (
                                                 <TableRow>
-                                                  <TableCell colSpan={5} className="text-center h-24">No sales found.</TableCell>
+                                                  <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                                    No sales found.
+                                                  </TableCell>
                                                 </TableRow>
                                               )}
                                             </TableBody>
@@ -990,11 +1127,12 @@ const handleUpdateResellerDetails = async () => {
                                       </Card>
                                     </div>
 
+
                                 </div>
                               )}
 
-                              {/* Requests */}
-                              <div className="mt-6 border rounded-lg p-4">
+                              {/* Requests Currently not involved  */}
+                              {/* <div className="mt-6 border rounded-lg p-4">
                                 <h3 className="text-lg font-semibold mb-3">
                                   Recent Requests ({resellerRequests.length})
                                 </h3>
@@ -1059,7 +1197,7 @@ const handleUpdateResellerDetails = async () => {
                                     </p>
                                   )}
                                 </div>
-                              </div>
+                              </div> */}
                             </DialogContent>
                           </Dialog>
                         </TableCell>
