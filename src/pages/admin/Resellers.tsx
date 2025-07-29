@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'; // Added DialogClose
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Switch } from '@/components/ui/switch';
@@ -19,6 +18,17 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Eye, Flag, FlagOff, Search, Users, UserCheck, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+
 
 // --- IMPORTANT: Define your Deno Edge Function URL here ---
 const DENO_ADD_RESELLER_FUNCTION_URL = import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL || 'YOUR_DENO_FUNCTION_URL_HERE';
@@ -136,11 +146,18 @@ const AdminResellers: React.FC = () => {
   const [detailsOpen, setDetailsOpen] = useState(false); // Controls the "View Details" dialog
 
   // Editable fields for reseller details (within the details dialog)
-  const [editableResellerName, setEditableResellerName] = useState('');
-  const [editableRegion, setEditableRegion] = useState('');
-  const [editableCoverage, setEditableCoverage] = useState<number | ''>('');
+const [editableResellerName, setEditableResellerName] = useState('');
+const [editableEmail, setEditableEmail] = useState('');
+const [editableRegion, setEditableRegion] = useState('');
+const [editableCoverage, setEditableCoverage] = useState<number | ''>('');
+
   const [exclusiveFeatures, setExclusiveFeatures] = useState('');
   const [isLoginAccessEnabled, setIsLoginAccessEnabled] = useState(false);
+
+  //Graph data
+  const [resellerSales, setResellerSales] = useState<Request[]>([]);
+const [chartData, setChartData] = useState<{ month: string; revenue: number }[]>([]);
+
 
   const { toast } = useToast();
 
@@ -251,18 +268,72 @@ const AdminResellers: React.FC = () => {
     };
   }, [toast]);
 
-  useEffect(() => {
-    if (selectedReseller) {
-      setEditableResellerName(selectedReseller.name || '');
-      setEditableRegion(selectedReseller.region || '');
-      setEditableCoverage(selectedReseller.coverage ?? '');
-      setExclusiveFeatures(selectedReseller.exclusive_features || '');
-      setIsLoginAccessEnabled(selectedReseller.is_active);
-      fetchResellerDetails(selectedReseller.id);
-    }
-  }, [selectedReseller]);
+useEffect(() => {
+  if (selectedReseller) {
+    setEditableResellerName(selectedReseller.name || '');
+    setEditableRegion(selectedReseller.region || '');
+    setEditableCoverage(selectedReseller.coverage ?? '');
+    setExclusiveFeatures(selectedReseller.exclusive_features || '');
+    setIsLoginAccessEnabled(selectedReseller.is_active);
+    fetchResellerDetails(selectedReseller.id);
+    fetchResellerSalesData(selectedReseller.id);
+  }
+}, [selectedReseller]);
 
-  const fetchResellerDetails = async (resellerId: string) => {
+const fetchResellerSalesData = async (resellerId: string) => {
+  if (!resellerId) {
+    console.warn("Missing resellerId");
+    return;
+  }
+
+  const { data: sales, error } = await supabase
+    .from('sales')
+    .select('date, total, paid') // ✅ match your column names exactly
+    .eq('reseller_id', resellerId)
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching sales:', error);
+    return;
+  }
+
+  if (!sales || sales.length === 0) {
+    console.warn('No sales found for reseller:', resellerId);
+    return;
+  }
+
+  console.log('Fetched sales:', sales);
+  setResellerSales(sales); // For the sales history table
+
+  // Build monthly revenue chart data
+  const monthlyRevenue: Record<string, number> = {};
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  sales.forEach(s => {
+    const d = new Date(s.date); // ✅ use 'date' column
+    if (isNaN(d.getTime())) return;
+
+    const key = `${monthNames[d.getMonth()]} '${d.getFullYear().toString().slice(-2)}`;
+    monthlyRevenue[key] = (monthlyRevenue[key] || 0) + (s.total ?? 0);
+  });
+
+  const formatted = Object.entries(monthlyRevenue)
+    .map(([month, revenue]) => {
+      const [monStr, yearStr] = month.split(' ');
+      const monthIndex = monthNames.indexOf(monStr);
+      const fullYear = 2000 + parseInt(yearStr.replace("'", ''));
+      const date = new Date(fullYear, monthIndex);
+      return { month, revenue, date };
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .map(({ month, revenue }) => ({ month, revenue }));
+
+  setChartData(formatted); // ✅ chart-ready data
+};
+
+
+const fetchResellerDetails = async (resellerId: string) => {
     try {
       const { data: requests, error: requestsError } = await supabase
         .from('requests')
@@ -551,85 +622,57 @@ const AdminResellers: React.FC = () => {
     }
   };
 
-  const handleUpdateResellerDetails = async () => {
-    if (!selectedReseller) return;
+//New update reseller
+const handleUpdateResellerDetails = async () => {
+  if (!selectedReseller) return;
 
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          name: editableResellerName,
-          region: editableRegion === '' ? null : editableRegion, // Send null if region is cleared
-          coverage: editableCoverage === '' ? null : editableCoverage,
-        })
-        .eq('id', selectedReseller.id);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) throw new Error("Not authenticated");
 
-      if (error) throw error;
+    const updatesPayload: any = {
+      name: editableResellerName,
+      region: editableRegion,
+      coverage: editableCoverage === '' ? 0 : editableCoverage,
+    };
 
-      setResellers(prev =>
-        prev.map(r =>
-          r.id === selectedReseller.id ? {
-            ...r,
-            name: editableResellerName,
-            region: editableRegion === '' ? null : editableRegion,
-            coverage: editableCoverage === '' ? null : editableCoverage,
-          } : r
-        )
-      );
-      setSelectedReseller(prev => prev ? {
-        ...prev,
-        name: editableResellerName,
-        region: editableRegion === '' ? null : editableRegion,
-        coverage: editableCoverage === '' ? null : editableCoverage,
-      } : null);
-
-      toast({
-        title: "Success",
-        description: "Reseller details updated successfully.",
-      });
-    } catch (error: any) {
-      console.error('Error updating reseller details:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update reseller details.",
-        variant: "destructive",
-      });
+    if (editableEmail !== selectedReseller.email) {
+      updatesPayload.email = editableEmail;
     }
-  };
 
-  const handleUpdateExclusiveFeatures = async () => {
-    if (!selectedReseller) return;
+    const response = await fetch(import.meta.env.VITE_UPDATE_RESELLER_FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        userId: selectedReseller.id,
+        updates: updatesPayload,
+      }),
+    });
 
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          exclusive_features: exclusiveFeatures,
-        })
-        .eq('id', selectedReseller.id);
-
-      if (error) throw error;
-
-      setResellers(prev =>
-        prev.map(r =>
-          r.id === selectedReseller.id ? { ...r, exclusive_features: exclusiveFeatures } : r
-        )
-      );
-      setSelectedReseller(prev => prev ? { ...prev, exclusive_features: exclusiveFeatures } : null);
-
-      toast({
-        title: "Success",
-        description: "Exclusive features updated successfully.",
-      });
-    } catch (error: any) {
-      console.error('Error updating exclusive features:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update exclusive features.",
-        variant: "destructive",
-      });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to update reseller.");
     }
-  };
+
+    toast({
+      title: "Success",
+      description: "Reseller details updated successfully.",
+    });
+
+    setDetailsOpen(false);
+  } catch (error: any) {
+    console.error('Error updating reseller details:', error);
+    toast({
+      title: "Error",
+      description: error.message || "Failed to update reseller details.",
+      variant: "destructive",
+    });
+  }
+};
 
   const filteredResellers = resellers.filter(reseller =>
     reseller.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -883,108 +926,70 @@ const AdminResellers: React.FC = () => {
                                     </Button>
                                   </div>
 
-                                  {/* Financial & Performance Data / Actions */}
-                                  <div className="space-y-4">
+                                    {/* Financial & Performance Section */}
                                     <div className="space-y-4 border rounded-lg p-4">
                                       <h3 className="text-lg font-semibold mb-2">Financial & Performance</h3>
                                       <InfoItem label="Total Packages Sold" value={selectedReseller.total_products_sold} />
-                                      <InfoItem label="Total Revenue Generated" value={`$${selectedReseller.total_revenue_generated?.toFixed(2) || '0.00'}`} />
+                                      <InfoItem label="Total Revenue Generated" value={`$${selectedReseller.total_revenue_generated?.toFixed(2) ?? '0.00'}`} />
                                       <InfoItem label="Due/Outstanding Balance" value={`$${selectedReseller.payment_amount_remaining.toFixed(2)}`} />
-                                      <InfoItem label="Reward Points (RP)" value={selectedReseller.reward_points || 0} />
+                                      <InfoItem label="Reward Points (RP)" value={selectedReseller.reward_points ?? 0} />
 
-                                      <div className="mt-4 p-4 border rounded-md bg-muted/20">
-                                        <h4 className="text-md font-medium mb-2">Revenue Progress Graph</h4>
-                                        <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
-                                          [Revenue Graph Placeholder]
-                                        </div>
+                                      <div className="mt-4 p-4 border rounded-md">
+                                        <h4 className="text-md font-medium mb-2">Revenue Progress (last months)</h4>
+                                        {chartData.length > 0 ? (
+                                          <ResponsiveContainer width="100%" height={200}>
+                                            <LineChart data={chartData}>
+                                              <CartesianGrid strokeDasharray="3 3" />
+                                              <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
+                                              <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
+                                              <Tooltip />
+                                              <Legend />
+                                              <Line type="monotone" dataKey="revenue" stroke="#8884d8" activeDot={{ r: 6 }} />
+                                            </LineChart>
+                                          </ResponsiveContainer>
+                                        ) : (
+                                          <div className="h-32 flex items-center justify-center text-muted-foreground">
+                                            No sales data.
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
-                                    {/* Exclusive Features */}
-                                    <div className="space-y-2 border rounded-lg p-4">
-                                      <h3 className="text-lg font-semibold mb-2">Exclusive Features</h3>
-                                      <Textarea
-                                        value={exclusiveFeatures}
-                                        onChange={(e) => setExclusiveFeatures(e.target.value)}
-                                        placeholder="Enter exclusive features for this reseller..."
-                                        className="min-h-[100px]"
-                                      />
-                                      <Button onClick={handleUpdateExclusiveFeatures} size="sm" className="w-full">
-                                        Save Features
-                                      </Button>
+                                    {/* Recent Sales Table */}
+                                    <div className="mt-6">
+                                      <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
+                                      <Card>
+                                        <CardContent className="p-0">
+                                          <Table>
+                                            <TableHeader>
+                                              <TableRow>
+                                                <TableHead>Date</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">Total</TableHead>
+                                                <TableHead className="text-right">Paid</TableHead>
+                                                <TableHead className="text-right">Balance</TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {resellerSales.length > 0 ? resellerSales.map((sale) => (
+                                                <TableRow key={sale.id}>
+                                                  <TableCell>{new Date(sale.request_date).toLocaleDateString()}</TableCell>
+                                                  <TableCell><Badge>{sale.status}</Badge></TableCell>
+                                                  <TableCell className="text-right">${sale.total_amount.toFixed(2)}</TableCell>
+                                                  <TableCell className="text-right">${sale.amount_paid.toFixed(2)}</TableCell>
+                                                  <TableCell className="text-right font-medium">${(sale.total_amount - sale.amount_paid).toFixed(2)}</TableCell>
+                                                </TableRow>
+                                              )) : (
+                                                <TableRow>
+                                                  <TableCell colSpan={5} className="text-center h-24">No sales found.</TableCell>
+                                                </TableRow>
+                                              )}
+                                            </TableBody>
+                                          </Table>
+                                        </CardContent>
+                                      </Card>
                                     </div>
 
-                                    {/* Login Access & Verification */}
-                                    <div className="space-y-2 border rounded-lg p-4">
-                                      <h3 className="text-lg font-semibold mb-2">Login Access & Verification</h3>
-                                      <div className="flex items-center justify-between">
-                                        <Label htmlFor="login-access" className="text-base">
-                                          Enable Login Access (Verified)
-                                        </Label>
-                                        <Switch
-                                          id="login-access"
-                                          checked={isLoginAccessEnabled}
-                                          onCheckedChange={() => handleToggleLoginAccess(selectedReseller.id, isLoginAccessEnabled)}
-                                        />
-                                      </div>
-                                      <p className="text-sm text-muted-foreground mt-1">
-                                        {isLoginAccessEnabled ? "Reseller account is enabled for login." : "Reseller cannot log in. First-time login process will apply if enabled."}
-                                      </p>
-                                      {/* Flag Action */}
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button
-                                            variant={
-                                              selectedReseller.flagged_status
-                                                ? "destructive"
-                                                : "outline"
-                                            }
-                                            size="sm"
-                                            className="w-full mt-4"
-                                          >
-                                            {selectedReseller.flagged_status ? (
-                                              <FlagOff className="h-4 w-4 mr-1" />
-                                            ) : (
-                                              <Flag className="h-4 w-4 mr-1" />
-                                            )}
-                                            {selectedReseller.flagged_status
-                                              ? "Unflag Reseller"
-                                              : "Flag Reseller"}
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>
-                                              {selectedReseller.flagged_status
-                                                ? "Unflag"
-                                                : "Flag"}{" "}
-                                              Reseller
-                                            </AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Are you sure you want to{" "}
-                                              <span className="font-bold">
-                                                {selectedReseller.flagged_status ? "unflag" : "flag"}
-                                              </span>{" "}
-                                              {selectedReseller.name}? This action can be reversed.
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                              onClick={() =>
-                                                handleToggleFlag(
-                                                  selectedReseller.id,
-                                                  selectedReseller.flagged_status
-                                                )
-                                              }
-                                            >
-                                              Confirm
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
-                                    </div>
-                                  </div>
                                 </div>
                               )}
 
