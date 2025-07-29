@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { addDays } from "date-fns";
-import { Calendar as CalendarIcon, Search, Wallet } from "lucide-react";
+import { ArrowDownCircle, ArrowDownSquare, ArrowUpCircle, Calendar as CalendarIcon, Search, Wallet } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -25,6 +25,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -42,6 +48,7 @@ import {
   Zap,
 } from "lucide-react";
 import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Investment {
   id: string;
@@ -88,11 +95,19 @@ interface Product {
 
 const Finance = () => {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [balance, setBalance] = useState(0);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
   const [investmentPop, setInvestmentPop] = useState(false);
+  const [hideKpi, setHideKpi] = useState(() => {
+    if (isMobile) {
+      return true;
+    } else {
+      return false;
+    }
+  });
   const [loanPop, setLoanPop] = useState(false);
   const [loanAction, setLoanAction] = useState<"take" | "pay">("take");
   const [sales, setSales] = useState<any[]>([]);
@@ -382,6 +397,7 @@ const Finance = () => {
       setBalance((prev) => prev + Number(investmentForm.amount));
 
       setInvestmentForm({ investor_name: "", amount: "", note: "" });
+      setInvestmentPop(false);
 
       toast({
         title: "Success",
@@ -426,6 +442,7 @@ const Finance = () => {
           title: "Success",
           description: "Loan taken successfully",
         });
+        setLoanPop(false);
       } else {
         // Pay loan
         const selectedLoan = loans.find(
@@ -494,6 +511,7 @@ const Finance = () => {
           title: "Success",
           description: "Loan payment recorded successfully",
         });
+        setLoanPop(false);
       }
 
       setLoanForm({
@@ -505,6 +523,7 @@ const Finance = () => {
         selected_loan_id: "",
         note: "",
       });
+      setLoanPop(false);
     } catch (error) {
       console.error("Error processing loan:", error);
       toast({
@@ -693,11 +712,14 @@ const Finance = () => {
           {displayDate && (
             <span className="text-muted-foreground text-sm">{displayDate}</span>
           )}
+          <button title={hideKpi ? "Show KPI" : "Hide KPI"} onClick={() => setHideKpi(!hideKpi)} className="ml-auto duration-300">{hideKpi ? <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" /> : <ArrowUpCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />}</button>
+
         </div>
+
       </div>
 
       {/* Basic KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-4 ${hideKpi ? "hidden" : ""}`}>
         {/* 1. Company Balance (Sales Revenue + Investments + Loans) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -857,13 +879,13 @@ const Finance = () => {
           </CardContent>
         </Card>
         {/* 10. Total Loans */}
-        <Card>
+        <Card className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-300 group" onClick={() => setLoanPop(true)}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Loan Outstanding</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium transition-colors">Total Loan Outstanding</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground transition-colors" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${outstandingLoans > 0 ? 'text-red-600' : 'text-green-600'}`}>
+            <div className={`text-2xl font-bold ${outstandingLoans > 0 ? 'text-red-600' : 'text-green-600'} group-hover:animate-bounce-subtle`}>
               ₹{outstandingLoans.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -872,13 +894,13 @@ const Finance = () => {
           </CardContent>
         </Card>
         {/* 11. Total Investment */}
-        <Card>
+        <Card className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-300 group" onClick={() => setInvestmentPop(true)}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Investment</CardTitle>
             <PiggyBank className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold text-green-600`}>
+            <div className={`text-2xl font-bold text-green-600 group-hover:animate-bounce-subtle`}>
               ₹{totalInvestments.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -903,16 +925,265 @@ const Finance = () => {
         </Card>
       </div>
 
-      {/* Advanced KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div>THis is data</div>
 
+      {/* Investment Popup Dialog */}
+      <Dialog open={investmentPop} onOpenChange={setInvestmentPop}>
+        <DialogContent className="w-[95vw] max-w-[425px] mx-auto p-4 sm:p-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <PiggyBank className="w-5 h-5" />
+              Add Investment
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleInvestmentSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="popup_investor_name" className="text-sm font-medium">Investor Name</Label>
+              <Input
+                id="popup_investor_name"
+                value={investmentForm.investor_name}
+                onChange={(e) =>
+                  setInvestmentForm((prev) => ({
+                    ...prev,
+                    investor_name: e.target.value,
+                  }))
+                }
+                className="border-lavender/30 focus:border-lavender h-10 sm:h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="popup_investment_amount" className="text-sm font-medium">Amount</Label>
+              <Input
+                id="popup_investment_amount"
+                type="number"
+                step="0.01"
+                value={investmentForm.amount}
+                onChange={(e) =>
+                  setInvestmentForm((prev) => ({
+                    ...prev,
+                    amount: e.target.value,
+                  }))
+                }
+                className="border-lavender/30 focus:border-lavender h-10 sm:h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="popup_investment_note" className="text-sm font-medium">Note</Label>
+              <Textarea
+                id="popup_investment_note"
+                value={investmentForm.note}
+                onChange={(e) =>
+                  setInvestmentForm((prev) => ({
+                    ...prev,
+                    note: e.target.value,
+                  }))
+                }
+                placeholder="Optional note about the investment"
+                className="border-lavender/30 focus:border-lavender min-h-[80px] sm:min-h-[100px]"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setInvestmentPop(false)}
+                className="flex-1 h-10 sm:h-11"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1 btn-healthcare h-10 sm:h-11">
+                Add Investment
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-
-
-      </div>
+      {/* Loan Popup Dialog */}
+      <Dialog open={loanPop} onOpenChange={setLoanPop}>
+        <DialogContent className="w-[95vw] max-w-[425px] mx-auto p-4 sm:p-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <CreditCard className="w-5 h-5" />
+              Loan Management
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Action</Label>
+              <Select
+                value={loanAction}
+                onValueChange={(value: "take" | "pay") =>
+                  setLoanAction(value)
+                }
+              >
+                <SelectTrigger className="border-blush/30 focus:border-blush h-10 sm:h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="take">Take a Loan</SelectItem>
+                  <SelectItem value="pay">Pay a Loan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <form onSubmit={handleLoanSubmit} className="space-y-4">
+              {loanAction === "take" ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="popup_loan_amount" className="text-sm font-medium">Amount</Label>
+                    <Input
+                      id="popup_loan_amount"
+                      type="number"
+                      step="0.01"
+                      value={loanForm.amount}
+                      onChange={(e) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          amount: e.target.value,
+                        }))
+                      }
+                      className="border-blush/30 focus:border-blush h-10 sm:h-11"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="popup_loan_issuer" className="text-sm font-medium">Issuer</Label>
+                    <Input
+                      id="popup_loan_issuer"
+                      value={loanForm.issuer}
+                      onChange={(e) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          issuer: e.target.value,
+                        }))
+                      }
+                      className="border-blush/30 focus:border-blush h-10 sm:h-11"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="popup_interest_rate" className="text-sm font-medium">Interest %</Label>
+                    <Input
+                      id="popup_interest_rate"
+                      type="number"
+                      step="0.01"
+                      value={loanForm.interest_rate}
+                      onChange={(e) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          interest_rate: e.target.value,
+                        }))
+                      }
+                      className="border-blush/30 focus:border-blush h-10 sm:h-11"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="popup_duration" className="text-sm font-medium">Duration (months)</Label>
+                    <Input
+                      id="popup_duration"
+                      type="number"
+                      value={loanForm.duration_months}
+                      onChange={(e) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          duration_months: e.target.value,
+                        }))
+                      }
+                      className="border-blush/30 focus:border-blush h-10 sm:h-11"
+                      required
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Select Loan/Issuer</Label>
+                    <Select
+                      value={loanForm.selected_loan_id}
+                      onValueChange={(value) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          selected_loan_id: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="border-blush/30 focus:border-blush h-10 sm:h-11">
+                        <SelectValue placeholder="Select a loan to pay" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loans
+                          .filter(
+                            (loan) =>
+                              loan.status === "active" &&
+                              loan.remaining_balance > 0
+                          )
+                          .map((loan) => (
+                            <SelectItem key={loan.id} value={loan.id}>
+                              {loan.issuer} - ₹
+                              {loan.remaining_balance.toLocaleString()}{" "}
+                              remaining
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="popup_payment_amount" className="text-sm font-medium">Amount</Label>
+                    <Input
+                      id="popup_payment_amount"
+                      type="number"
+                      step="0.01"
+                      value={loanForm.amount}
+                      onChange={(e) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          amount: e.target.value,
+                        }))
+                      }
+                      className="border-blush/30 focus:border-blush h-10 sm:h-11"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="popup_payment_note" className="text-sm font-medium">Note</Label>
+                    <Textarea
+                      id="popup_payment_note"
+                      value={loanForm.note}
+                      onChange={(e) =>
+                        setLoanForm((prev) => ({
+                          ...prev,
+                          note: e.target.value,
+                        }))
+                      }
+                      placeholder="Optional note about the payment"
+                      className="border-blush/30 focus:border-blush min-h-[80px] sm:min-h-[100px]"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setLoanPop(false)}
+                  className="flex-1 h-10 sm:h-11"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1 btn-healthcare h-10 sm:h-11">
+                  {loanAction === "take" ? "Take Loan" : "Make Payment"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Financial Management Section */}
-      <div className="flex flex-col md:flex-row gap-4 items-start md:gap-y-6">
+      {/* <div className="flex flex-col md:flex-row gap-4 items-start md:gap-y-6">
         <div className="w-full md:w-2/3 mx-auto fixed top-[12%] left-1/2 -translate-x-1/2 z-10">
           <Card>
             <CardHeader>
@@ -1157,7 +1428,7 @@ const Finance = () => {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </div> */}
 
       {/* Investments Table */}
     </div>
