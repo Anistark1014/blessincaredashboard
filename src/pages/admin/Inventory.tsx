@@ -23,6 +23,13 @@ interface Product {
   inventory: number;
   min_stock_alert: number;
   image_url: string;
+  price_ranges?: PriceRange[];
+}
+
+interface PriceRange {
+  min: number;
+  max: number;
+  price: number;
 }
 
 interface InventoryTransaction {
@@ -52,14 +59,14 @@ const Inventory: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [products, setProducts] = useState<Product[]>([]);
   const [productSummaries, setProductSummaries] = useState<ProductSummary[]>([]);
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   // KPI states
   const [totalStockNumber, setTotalStockNumber] = useState(0);
   const [totalStockValue, setTotalStockValue] = useState(0);
@@ -72,13 +79,13 @@ const Inventory: React.FC = () => {
   const [costPerUnit, setCostPerUnit] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
-  
+
   // Filter and sort states
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [sortField, setSortField] = useState<keyof ProductSummary>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  
+
   // Time range filter states
   const [timeRange, setTimeRange] = useState('30'); // Default to 30 days
   const [customStartDate, setCustomStartDate] = useState('');
@@ -108,32 +115,32 @@ const Inventory: React.FC = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch products
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*');
-      
+
       if (productsError) throw productsError;
       setProducts(productsData as any[]);
-      
+
       // Fetch transactions
       const { data: transactionsData, error: transactionsError } = await supabase
         .from('inventory_transactions')
         .select('*')
         .order('transaction_date', { ascending: false });
-      
+
       if (transactionsError) throw transactionsError;
       setTransactions(transactionsData as any[]);
-      
+
       // Fetch requests
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
         .select('*');
-      
+
       if (requestsError) throw requestsError;
       setRequests(requestsData as any[]);
-      
+
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -222,9 +229,34 @@ const Inventory: React.FC = () => {
   useEffect(() => {
     if (products.length > 0) {
       // Calculate total stock number and value
-      const stockNumber = products.reduce((sum, product) => sum + product.inventory, 0);
-      const stockValue = products.reduce((sum, product) => sum + (product.inventory * product.price), 0);
-      
+      const stockNumber = products.reduce((sum, product) => sum + (Number(product.inventory) || 0), 0);
+      console.log(stockNumber);
+
+      // Calculate global average price from all price ranges
+      let globalAveragePrice = 0;
+      let totalPrices = 0;
+      let priceCount = 0;
+
+      products.forEach(product => {
+        if (product.price_ranges && product.price_ranges.length > 0) {
+          // To know how many price entries are in price_ranges for this product:
+          // const priceEntriesCount = product.price_ranges.length;
+          // console.log(`Product ${product.name} has ${priceEntriesCount} price entries`);
+
+          product.price_ranges.forEach((range: PriceRange) => {
+
+            totalPrices += range.price;
+            priceCount++;
+          });
+        }
+      });
+
+      if (priceCount > 0) {
+        globalAveragePrice = totalPrices / priceCount;
+      }
+
+      const stockValue = stockNumber * globalAveragePrice;
+
       setTotalStockNumber(stockNumber);
       setTotalStockValue(stockValue);
 
@@ -261,9 +293,9 @@ const Inventory: React.FC = () => {
           .filter(t => {
             const transactionDate = new Date(t.transaction_date);
             return t.product_id === product.id &&
-                   t.type === 'purchase' &&
-                   transactionDate >= startDate &&
-                   transactionDate <= endDate;
+              t.type === 'purchase' &&
+              transactionDate >= startDate &&
+              transactionDate <= endDate;
           })
           .reduce((sum, t) => sum + t.quantity, 0);
 
@@ -272,12 +304,12 @@ const Inventory: React.FC = () => {
           .filter(r => {
             const requestDate = new Date(r.request_date);
             return (r.status === 'Shipped' || r.status === 'Delivered') &&
-                   requestDate >= startDate &&
-                   requestDate <= endDate;
+              requestDate >= startDate &&
+              requestDate <= endDate;
           })
           .reduce((sum, request) => {
             if (!request.products_ordered || !Array.isArray(request.products_ordered)) return sum;
-            
+
             // Try multiple ways to match the product
             const productInOrder = request.products_ordered.find((p: any) => {
               // Check for productId first (if it exists)
@@ -288,7 +320,7 @@ const Inventory: React.FC = () => {
               if (p.name && p.name.toLowerCase() === product.name.toLowerCase()) return true;
               return false;
             });
-            
+
             return sum + (productInOrder?.quantity || 0);
           }, 0);
 
@@ -298,7 +330,7 @@ const Inventory: React.FC = () => {
           sold_this_month: soldInRange,
         };
       });
-      
+
       setProductSummaries(summaries);
     }
   }, [products, transactions, requests, timeRange, customStartDate, customEndDate]);
@@ -335,9 +367,9 @@ const Inventory: React.FC = () => {
       // Update product inventory
       const { error: updateError } = await supabase
         .from('products')
-        .update({ 
+        .update({
           // @ts-expect-error: inventory field exists in the database but not in the generated types
-          inventory: selectedProduct.inventory + parseInt(quantity) 
+          inventory: selectedProduct.inventory + parseInt(quantity)
         })
         .eq('id', selectedProductId);
 
@@ -376,33 +408,33 @@ const Inventory: React.FC = () => {
 
   const getFilteredAndSortedProducts = () => {
     let filtered = productSummaries;
-    
+
     // Apply filters
     if (categoryFilter && categoryFilter !== 'all') {
       filtered = filtered.filter(p => p.category === categoryFilter);
     }
-    
+
     if (lowStockOnly) {
       filtered = filtered.filter(p => p.inventory <= p.min_stock_alert);
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
-      let aValue = a[sortField];
-      let bValue = b[sortField];
-      
+      let aValue: any = a[sortField];
+      let bValue: any = b[sortField];
+
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = (bValue as string).toLowerCase();
       }
-      
+
       if (sortDirection === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+        return (aValue ?? 0) < (bValue ?? 0) ? -1 : (aValue ?? 0) > (bValue ?? 0) ? 1 : 0;
       } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+        return (aValue ?? 0) > (bValue ?? 0) ? -1 : (aValue ?? 0) < (bValue ?? 0) ? 1 : 0;
       }
     });
-    
+
     return filtered;
   };
 
@@ -415,7 +447,7 @@ const Inventory: React.FC = () => {
           <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
           <h1 className="text-2xl sm:text-3xl font-bold">Inventory Management</h1>
         </div>
-        
+
         {/* Loading KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           {Array.from({ length: 4 }, (_, i) => (
@@ -431,7 +463,7 @@ const Inventory: React.FC = () => {
             </Card>
           ))}
         </div>
-        
+
         {/* Loading Table */}
         <Card>
           <div className="p-6">
@@ -454,7 +486,7 @@ const Inventory: React.FC = () => {
           <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
           <h1 className="text-2xl sm:text-3xl font-bold">Inventory Management</h1>
         </div>
-        
+
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2 w-full sm:w-auto">
@@ -482,7 +514,7 @@ const Inventory: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input
@@ -494,7 +526,7 @@ const Inventory: React.FC = () => {
                   min="1"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="cost">Cost Per Unit (Optional)</Label>
                 <Input
@@ -506,7 +538,7 @@ const Inventory: React.FC = () => {
                   placeholder="Enter cost per unit"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="date">Purchase Date</Label>
                 <Input
@@ -516,7 +548,7 @@ const Inventory: React.FC = () => {
                   onChange={(e) => setPurchaseDate(e.target.value)}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="notes">Notes (Optional)</Label>
                 <Textarea
@@ -526,7 +558,7 @@ const Inventory: React.FC = () => {
                   placeholder="Enter any notes about this purchase"
                 />
               </div>
-              
+
               <Button onClick={handleStockPurchase} className="w-full">
                 Record Purchase
               </Button>
@@ -583,7 +615,7 @@ const Inventory: React.FC = () => {
         <Card className="bg-gradient-to-r from-mint/20 to-sage/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Sold Units</CardTitle>
-             <Package className="h-4 w-4 text-muted-foreground" />
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">{totalStockSold.toLocaleString()}</div>
@@ -635,7 +667,7 @@ const Inventory: React.FC = () => {
       <div>
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
           <h2 className="text-xl font-semibold">Inventory Details</h2>
-          
+
           {/* Filters */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             {/* Time Range Filter */}
@@ -658,7 +690,7 @@ const Inventory: React.FC = () => {
                   <SelectItem value="custom">Custom Range</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               {/* Custom Range Button */}
               {timeRange === 'custom' && (
                 <Button
@@ -683,7 +715,7 @@ const Inventory: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            
+
             <Button
               variant={lowStockOnly ? "default" : "outline"}
               size="sm"
@@ -738,7 +770,7 @@ const Inventory: React.FC = () => {
                     if (customStartDate && customEndDate) {
                       const startDate = new Date(customStartDate);
                       const endDate = new Date(customEndDate);
-                      
+
                       if (endDate < startDate) {
                         toast({
                           title: "Invalid Date Range",
@@ -747,7 +779,7 @@ const Inventory: React.FC = () => {
                         });
                         return;
                       }
-                      
+
                       setShowCustomDatePicker(false);
                     } else {
                       toast({
@@ -770,7 +802,7 @@ const Inventory: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer"
                     onClick={() => {
                       if (sortField === 'name') {
@@ -788,7 +820,7 @@ const Inventory: React.FC = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer"
                     onClick={() => {
                       if (sortField === 'category') {
@@ -806,7 +838,7 @@ const Inventory: React.FC = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer"
                     onClick={() => {
                       if (sortField === 'purchased_this_month') {
@@ -829,7 +861,7 @@ const Inventory: React.FC = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer"
                     onClick={() => {
                       if (sortField === 'inventory') {
@@ -847,7 +879,7 @@ const Inventory: React.FC = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer"
                     onClick={() => {
                       if (sortField === 'sold_this_month') {
@@ -870,7 +902,7 @@ const Inventory: React.FC = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer"
                     onClick={() => {
                       if (sortField === 'min_stock_alert') {
@@ -901,8 +933,8 @@ const Inventory: React.FC = () => {
                   getFilteredAndSortedProducts().map((product) => {
                     const isLowStock = product.inventory <= product.min_stock_alert;
                     return (
-                      <TableRow 
-                        key={product.id} 
+                      <TableRow
+                        key={product.id}
                         className={`cursor-pointer hover:bg-muted/50 ${isLowStock ? 'bg-destructive/5' : ''}`}
                         onClick={() => navigate('/admin/products')}
                       >
