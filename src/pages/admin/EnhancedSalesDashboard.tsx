@@ -76,7 +76,7 @@ const EnhancedSalesDashboard: React.FC<DashboardProps> = ({ data }) => {
   const clearanceCount = data.filter(sale => sale.transaction_type === 'Clearance').length;
 
   return (
-    <Card>
+    <div>
       <CardContent className="pt-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
@@ -127,7 +127,7 @@ const EnhancedSalesDashboard: React.FC<DashboardProps> = ({ data }) => {
           </Card>
         </div>
       </CardContent>
-    </Card>
+    </div>
   );
 };
 
