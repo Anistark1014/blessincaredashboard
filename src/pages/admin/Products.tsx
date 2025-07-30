@@ -425,7 +425,7 @@ interface ProductFormData {
                             </div>
 
                             {/* Availability Filter */}
-                            <div className="w-full md:w-auto">
+                            {/* <div className="w-full md:w-auto">
                                 <Select
                                     value={availabilityFilter}
                                     onValueChange={setAvailabilityFilter}
@@ -442,7 +442,7 @@ interface ProductFormData {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                            </div>
+                            </div> */}
 
                             <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                                 <DialogTrigger asChild>
