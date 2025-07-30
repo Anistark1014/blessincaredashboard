@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,11 @@ import {
   Settings,
   Flower2,
   DollarSign,
-  IndianRupee
+  IndianRupee,
+  TrendingUp,
+  TrendingDown,
+  RefreshCw,
+  Wallet
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import ToggleTheme from './ToggleTheme';
@@ -22,6 +26,185 @@ import ToggleTheme from './ToggleTheme';
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+// Cash Balance Hook - Replace with actual Supabase implementation
+const useCashBalance = () => {
+  const [balance, setBalance] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchBalance();
+  }, []);
+
+  const fetchBalance = async () => {
+    setLoading(true);
+    // Simulate API call - Replace with actual Supabase query
+    setTimeout(() => {
+      setBalance({
+        availableCashBalance: 8561579,
+        totalInflow: 573070,
+        totalOutflow: 1011491,
+        salesRevenue: 173070,
+        investmentsReceived: 400000,
+        expensesPaid: 164530,
+        loanRepayments: 1120,
+        inventoryPurchases: 845841,
+        netCashFlow: 573070 - 1011491
+      });
+      setLoading(false);
+    }, 1000);
+  };
+  
+  return { balance, loading, refetch: fetchBalance };
+};
+
+// Cash Balance Component for Navbar
+const CashBalanceNavbar = () => {
+  const { balance, loading, refetch } = useCashBalance();
+  
+  const formatCompactCurrency = (amount) => {
+    if (amount >= 10000000) {
+      return `₹${(amount / 10000000).toFixed(1)}Cr`;
+    } else if (amount >= 100000) {
+      return `₹${(amount / 100000).toFixed(1)}L`;
+    } else if (amount >= 1000) {
+      return `₹${(amount / 1000).toFixed(1)}K`;
+    }
+    return `₹${amount}`;
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-lg border border-lavender/20">
+        <Wallet className="w-4 h-4 text-muted-foreground" />
+        <div className="flex flex-col">
+          <span className="text-xs text-muted-foreground">Cash Balance</span>
+          <div className="w-16 h-3 bg-muted rounded animate-pulse"></div>
+        </div>
+      </div>
+    );
+  }
+
+  const isPositive = balance?.availableCashBalance >= 0;
+  const isNetPositive = balance?.netCashFlow >= 0;
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Main Cash Balance Display */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-lg border border-lavender/20 backdrop-blur-sm">
+        <Wallet className={`w-4 h-4 ${isPositive ? 'text-green-500' : 'text-red-500'}`} />
+        <div className="flex flex-col">
+          <span className="text-xs text-muted-foreground">Available Cash</span>
+          <span className={`text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCompactCurrency(balance?.availableCashBalance || 0)}
+          </span>
+        </div>
+        <button
+          onClick={refetch}
+          className="ml-1 p-1 hover:bg-muted rounded transition-colors"
+          title="Refresh balance"
+        >
+          <RefreshCw className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+        </button>
+      </div>
+
+      {/* Quick Summary Tooltip/Dropdown */}
+      <div className="relative group hidden lg:block">
+        <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <span>Details</span>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        {/* Dropdown Content */}
+        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-lavender/20 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 backdrop-blur-sm">
+          <div className="p-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Cash Flow Summary</h3>
+            
+            <div className="space-y-2">
+              {/* Inflows */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-3 h-3 text-green-500" />
+                  <span className="text-xs text-muted-foreground">Sales Revenue</span>
+                </div>
+                <span className="text-xs text-green-600">
+                  +{formatCurrency(balance?.salesRevenue || 0)}
+                </span>
+              </div>
+              
+              {balance?.investmentsReceived > 0 && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-3 h-3 text-green-500" />
+                    <span className="text-xs text-muted-foreground">Investments</span>
+                  </div>
+                  <span className="text-xs text-green-600">
+                    +{formatCurrency(balance.investmentsReceived)}
+                  </span>
+                </div>
+              )}
+
+              <hr className="border-lavender/20" />
+
+              {/* Outflows */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-3 h-3 text-red-500" />
+                  <span className="text-xs text-muted-foreground">Operating Expenses</span>
+                </div>
+                <span className="text-xs text-red-600">
+                  -{formatCurrency(balance?.expensesPaid || 0)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-3 h-3 text-red-500" />
+                  <span className="text-xs text-muted-foreground">Inventory Purchases</span>
+                </div>
+                <span className="text-xs text-red-600">
+                  -{formatCurrency(balance?.inventoryPurchases || 0)}
+                </span>
+              </div>
+
+              <hr className="border-lavender/20" />
+
+              {/* Net Flow */}
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-semibold text-foreground">Net Cash Flow</span>
+                <span className={`text-xs font-semibold ${isNetPositive ? 'text-green-600' : 'text-red-600'}`}>
+                  {isNetPositive ? '+' : ''}
+                  {formatCurrency(balance?.netCashFlow || 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* View Full Report Link */}
+            <div className="mt-3 pt-3 border-t border-lavender/20">
+              <NavLink 
+                to="/admin/cash-balance" 
+                className="text-xs text-primary hover:text-primary/80 font-medium"
+              >
+                View Full Cash Balance Report →
+              </NavLink>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
@@ -43,6 +226,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/expenses', icon: Settings, label: 'Expense Tracker' },
     { to: '/admin/inventory', icon: Users, label: 'Inventory Management' },
     { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
+    { to: '/admin/cash-balance', icon: Wallet, label: 'Cash Balance' },
+    { to: '/admin/GrossProfitAnalysis', icon: IndianRupee, label: 'GrossProfitAnalysis' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
@@ -88,6 +273,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <h1 className="text-sm md:text-lg font-semibold text-foreground">Blessin Care</h1>
                 <p className="text-xs text-muted-foreground capitalize">{user?.role} Portal</p>
               </div>
+            </div>
+
+            {/* Middle Section - Cash Balance (only for admin) */}
+            <div className="flex-1 flex justify-center">
+              {user?.role === 'admin' && (
+                <CashBalanceNavbar />
+              )}
             </div>
 
             {/* User Actions */}

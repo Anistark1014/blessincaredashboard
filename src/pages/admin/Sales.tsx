@@ -13,16 +13,16 @@ import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import EnhancedSalesDashboard from './EnhancedSalesDashboard';
 import ExcelImport from './ExcelImport';
-import { Search, Upload, Trash2, Plus, Undo, Redo, Calendar as CalendarIcon, Badge, Copy } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from "@/components/ui/dialog";
+import { Search, Upload, Trash2, Plus, Undo, Redo, Calendar as CalendarIcon, Copy, Badge } from 'lucide-react';
+// import {
+//   Dialog,
+//   DialogContent,
+//   DialogFooter,
+//   DialogHeader,
+//   DialogTitle,
+//   DialogTrigger,
+//   DialogClose,
+// } from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -53,7 +53,7 @@ type PaymentStatus = "Fully Paid" | "Partially Paid" | "Pending" | "Partial Clea
 
 interface Sale {
   id: string;
-  date: Date;
+  date: string;
   qty: number;
   price: number;
   total: number;
@@ -83,17 +83,6 @@ interface UndoOperation {
     userBalanceChanges?: { userId: string; oldBalance: number; newBalance: number }[];
   };
 }
-
-interface DuplicateFormData {
-  date: Date;
-  qty: number;
-  price: number;
-  paid: number;
-  member_id: string;
-  product_id: string;
-  transaction_type: TransactionType;
-}
-
 
 // --- HELPER FUNCTIONS ---
 
@@ -173,8 +162,6 @@ const SalesTable: React.FC = () => {
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
   const [redoStack, setRedoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
-  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
-  const [duplicateFormData, setDuplicateFormData] = useState<DuplicateFormData[]>([]);
 
   const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'ascending' | 'descending' }>({
     key: 'date',
@@ -185,7 +172,7 @@ const SalesTable: React.FC = () => {
   userId: string; 
   userName: string; 
   totalDue: number; 
-  pendingSales: { productName: string; outstanding: number; date: Date }[] 
+  pendingSales: { productName: string; outstanding: number; date: string }[] 
 }[]>([]);
 
 const fetchMembersWithDues = async () => {
@@ -386,8 +373,8 @@ const getPendingSalesForMember = (memberId: string) => {
       if (paid > 0) return 'Partially Paid';
       return 'Pending';
     } else { // Clearance
-      if (paid >= userBalance) return 'Complete Clearance';
-      if (paid > 0) return 'Partial Clearance';
+      const newBalance = userBalance - paid;
+      if (newBalance <= 0) return 'Complete Clearance';
       return 'Partial Clearance';
     }
   };
@@ -415,7 +402,7 @@ const getPendingSalesForMember = (memberId: string) => {
     setRedoStack([]);
   };
 
-const updateSalesRecordsForClearance = async (userId: string, clearanceAmount: number) => {
+  const updateSalesRecordsForClearance = async (userId: string, clearanceAmount: number) => {
   // Get all pending/partially paid sales for this user, ordered by date (oldest first)
   const { data: pendingSales, error } = await supabase
     .from('sales')
@@ -511,12 +498,10 @@ const handleAddNew = async () => {
     }
 
     const paidAmount = Number(newSale.paid);
-    const availableBalance = memberWithDues?.totalDue || 0;
-    
-    // if (paidAmount > memberWithDues.totalDue) {
-    //   alert(`Payment amount (₹${paidAmount}) cannot exceed member's total due balance (₹${memberWithDues.totalDue})`);
-    //   return;
-    // }
+    if (paidAmount > memberWithDues.totalDue) {
+      alert(`Payment amount (₹${paidAmount}) cannot exceed member's total due balance (₹${memberWithDues.totalDue})`);
+      return;
+    }
 
     if (paidAmount <= 0) {
       alert('Payment amount must be greater than zero.');
@@ -556,7 +541,7 @@ const handleAddNew = async () => {
       const payment_status = calculatePaymentStatus(transactionType, total, paid, 0);
 
       recordToInsert = {
-        date: Date(newSale.date),
+        date: String(newSale.date),
         member_id: String(newSale.member_id),
         product_id: String(newSale.product_id),
         qty,
@@ -571,11 +556,11 @@ const handleAddNew = async () => {
       const paid = Number(newSale.paid);
       const currentUserBalance = user.due_balance || 0;
       
-      // // Double-check against current database balance (in case of concurrent updates)
-      // if (paid > currentUserBalance) {
-      //   alert(`Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentUserBalance}). Please refresh and try again.`);
-      //   return;
-      // }
+      // Double-check against current database balance (in case of concurrent updates)
+      if (paid > currentUserBalance) {
+        alert(`Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentUserBalance}). Please refresh and try again.`);
+        return;
+      }
 
       // Update sales records first to apply the clearance payment
       updatedSalesRecords = await updateSalesRecordsForClearance(newSale.member_id!, paid);
@@ -586,14 +571,14 @@ const handleAddNew = async () => {
       const payment_status = calculatePaymentStatus(transactionType, 0, paid, currentUserBalance);
 
       recordToInsert = {
-        date: Date(newSale.date),
+        date: String(newSale.date),
         member_id: String(newSale.member_id),
         product_id: null, // Clearance records don't have products
         qty: 0,
         price: 0,
         total: 0, // For clearance, total is 0
         paid,
-        outstanding: paid > currentUserBalance ? -(paid - currentUserBalance) : 0, // Outstanding is always 0 for clearance
+        outstanding: 0, // Outstanding is always 0 for clearance
         payment_status,
         transaction_type: transactionType,
       };
@@ -660,197 +645,131 @@ const handleAddNew = async () => {
 };
 
 
-const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
-  const originalSale = sales.find(sale => sale.id === id);
-  if (!originalSale) return;
+  const handleEditChange = async (id: string, field: keyof Sale, value: any) => {
+    const originalSale = sales.find(sale => sale.id === id);
+    if (!originalSale) return;
 
-  // Prevent editing of Clearance records except for date and member
-  if (originalSale.transaction_type === 'Clearance' && !['date', 'member_id', 'paid'].includes(field)) {
-    alert('Clearance records can only have date, member, or paid amount edited. To make other changes, delete this record and create a new one.');
-    return;
-  }
+    // Prevent editing of Clearance records except for date and member
+    if (originalSale.transaction_type === 'Clearance' && !['date', 'member_id', 'paid'].includes(field)) {
+      alert('Clearance records can only have date, member, or paid amount edited. To make other changes, delete this record and create a new one.');
+      return;
+    }
 
-  let updatePayload: { [key: string]: any } = { [field]: value };
-  let updatedRecordForUI = { ...originalSale, [field]: value };
-  let userBalanceChange = 0;
-  let oldUserBalance = 0;
-  let salesRecordChanges: any[] = [];
+    let updatePayload: { [key: string]: any } = { [field]: value };
+    let updatedRecordForUI = { ...originalSale, [field]: value };
+    let userBalanceChange = 0;
+    let oldUserBalance = 0;
 
-  try {
-    if (originalSale.transaction_type === 'Sale') {
-      // Handle Sale record edits (existing logic)
-      if (field === 'qty') {
-        const product = originalSale.products;
-        const newQty = Number(value);
+    try {
+      if (originalSale.transaction_type === 'Sale') {
+        // Handle Sale record edits
+        if (field === 'qty') {
+          const product = originalSale.products;
+          const newQty = Number(value);
 
-        if (product && product.price_ranges && product.price_ranges.length > 0) {
-          const priceRange = product.price_ranges.find(range => newQty >= range.min && newQty <= range.max);
-          const newPrice = priceRange ? priceRange.price : product.mrp || 0;
-          
-          updatePayload.price = newPrice;
-          updatedRecordForUI.price = newPrice;
-        }
-      }
-
-      const qty = Number(updatedRecordForUI.qty);
-      const price = Number(updatedRecordForUI.price);
-      const paid = Number(updatedRecordForUI.paid);
-      const total = qty * price;
-      const outstanding = total - paid;
-      const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
-      
-      // Calculate balance change for user
-      const oldOutstanding = originalSale.outstanding;
-      userBalanceChange = outstanding - oldOutstanding;
-      
-      if (userBalanceChange !== 0) {
-        oldUserBalance = await updateUserBalance(originalSale.member_id, userBalanceChange);
-      }
-
-      const calculatedFields = { total, outstanding, payment_status };
-      
-      updatePayload = { 
-        ...updatePayload, 
-        ...calculatedFields,
-        product_id: updatedRecordForUI.product_id,
-        member_id: updatedRecordForUI.member_id,
-        payment_status: calculatedFields.payment_status
-      };
-      updatedRecordForUI = { 
-        ...updatedRecordForUI, 
-        ...calculatedFields, 
-        payment_status: calculatedFields.payment_status as PaymentStatus
-      };
-    } else {
-      // Handle Clearance record edits
-      if (field === 'paid') {
-        const user = users.find(u => u.id === originalSale.member_id);
-        const oldPaid = originalSale.paid;
-        const newPaid = Number(value);
-        
-        // Step 1: Reverse the original clearance effect
-        // First, restore user balance by the old paid amount
-        await updateUserBalance(originalSale.member_id, oldPaid);
-        
-        // Then reverse the sales record updates that were made by the original clearance
-        const { data: currentSales, error: fetchError } = await supabase
-          .from('sales')
-          .select('*')
-          .eq('member_id', originalSale.member_id)
-          .eq('transaction_type', 'Sale')
-          .order('date', { ascending: true });
-
-        if (fetchError) throw fetchError;
-
-        // Reverse the clearance effect on sales records
-        if (currentSales) {
-          let remainingToReverse = oldPaid;
-          for (const sale of currentSales) {
-            if (remainingToReverse <= 0) break;
+          if (product && product.price_ranges && product.price_ranges.length > 0) {
+            const priceRange = product.price_ranges.find(range => newQty >= range.min && newQty <= range.max);
+            const newPrice = priceRange ? priceRange.price : product.mrp || 0;
             
-            // Calculate how much of this sale's payment came from the clearance being edited
-            const maxReversible = Math.min(remainingToReverse, sale.paid);
-            if (maxReversible > 0) {
-              const newSalePaid = sale.paid - maxReversible;
-              const newSaleOutstanding = sale.total - newSalePaid;
-              let newSaleStatus: PaymentStatus;
-              
-              if (newSalePaid >= sale.total) {
-                newSaleStatus = 'Fully Paid';
-              } else if (newSalePaid > 0) {
-                newSaleStatus = 'Partially Paid';
-              } else {
-                newSaleStatus = 'Pending';
-              }
-
-              await supabase
-                .from('sales')
-                .update({
-                  paid: newSalePaid,
-                  outstanding: newSaleOutstanding,
-                  payment_status: newSaleStatus
-                })
-                .eq('id', sale.id);
-
-              // Also update user's due balance
-              await updateUserBalance(originalSale.member_id, maxReversible);
-              
-              remainingToReverse -= maxReversible;
-            }
+            updatePayload.price = newPrice;
+            updatedRecordForUI.price = newPrice;
           }
         }
 
-        // Step 2: Apply the new clearance amount
-        if (newPaid > 0) {
-          // Apply new clearance to sales records
-          salesRecordChanges = await updateSalesRecordsForClearance(originalSale.member_id, newPaid);
-          
-          // Update user balance by the new paid amount (negative because it reduces dues)
-          await updateUserBalance(originalSale.member_id, -newPaid);
+        const qty = Number(updatedRecordForUI.qty);
+        const price = Number(updatedRecordForUI.price);
+        const paid = Number(updatedRecordForUI.paid);
+        const total = qty * price;
+        const outstanding = total - paid;
+        const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+        
+        // Calculate balance change for user
+        const oldOutstanding = originalSale.outstanding;
+        userBalanceChange = outstanding - oldOutstanding;
+        
+        if (userBalanceChange !== 0) {
+          oldUserBalance = await updateUserBalance(originalSale.member_id, userBalanceChange);
         }
 
-        // Get updated user balance for payment status calculation
-        const { data: updatedUser, error: userError } = await supabase
-          .from('users')
-          .select('due_balance')
-          .eq('id', originalSale.member_id)
-          .single();
-
-        if (userError) throw userError;
-
-        const currentBalance = updatedUser.due_balance || 0;
-        const payment_status = calculatePaymentStatus('Clearance', 0, newPaid, currentBalance + newPaid);
+        const calculatedFields = { total, outstanding, payment_status };
         
-        updatePayload.payment_status = payment_status;
-        updatedRecordForUI.payment_status = payment_status as PaymentStatus;
+        updatePayload = { 
+          ...updatePayload, 
+          ...calculatedFields,
+          product_id: updatedRecordForUI.product_id,
+          member_id: updatedRecordForUI.member_id,
+          payment_status: calculatedFields.payment_status
+        };
+        updatedRecordForUI = { 
+          ...updatedRecordForUI, 
+          ...calculatedFields, 
+          payment_status: calculatedFields.payment_status as PaymentStatus
+        };
+      } else {
+        // Handle Clearance record edits
+        if (field === 'paid') {
+          const user = users.find(u => u.id === originalSale.member_id);
+          const currentBalance = user?.due_balance || 0;
+          const oldPaid = originalSale.paid;
+          const newPaid = Number(value);
+          
+          // Calculate the effective change in payment
+          const paymentChange = newPaid - oldPaid;
+          
+          if (currentBalance + paymentChange < 0) {
+            alert(`Payment amount would exceed user's available balance`);
+            return;
+          }
 
-        // Net user balance change for undo tracking
-        userBalanceChange = newPaid - oldPaid; // This represents the net change
-        oldUserBalance = (user?.due_balance || 0) + oldPaid; // Original balance before any changes
+          userBalanceChange = -paymentChange; // Opposite of payment change
+          if (userBalanceChange !== 0) {
+            oldUserBalance = await updateUserBalance(originalSale.member_id, userBalanceChange);
+          }
+
+          const payment_status = calculatePaymentStatus('Clearance', 0, newPaid, currentBalance + paymentChange);
+          updatePayload.payment_status = payment_status;
+          updatedRecordForUI.payment_status = payment_status as PaymentStatus;
+
+          // Check if we need to update pending sales
+          await updatePendingSalesStatus(originalSale.member_id);
+        }
       }
-    }
 
-    addToUndoStack({ 
-      type: 'edit', 
-      timestamp: Date.now(), 
-      data: { 
-        recordId: id, 
-        field, 
-        oldValue: originalSale[field], 
-        record: originalSale,
-        userBalanceChanges: userBalanceChange !== 0 ? 
-          [{ userId: originalSale.member_id, oldBalance: oldUserBalance, newBalance: oldUserBalance - userBalanceChange }] : 
-          undefined,
-        salesRecordChanges // Track the sales record changes for potential undo
-      } 
-    });
-    
-    setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
-    setEditingCell(null);
+      addToUndoStack({ 
+        type: 'edit', 
+        timestamp: Date.now(), 
+        data: { 
+          recordId: id, 
+          field, 
+          oldValue: originalSale[field], 
+          record: originalSale,
+          userBalanceChanges: userBalanceChange !== 0 ? 
+            [{ userId: originalSale.member_id, oldBalance: oldUserBalance, newBalance: oldUserBalance + userBalanceChange }] : 
+            undefined
+        } 
+      });
+      
+      setSales(sales.map(s => s.id === id ? updatedRecordForUI : s));
+      setEditingCell(null);
 
-    const { error } = await supabase.from('sales').update(updatePayload).eq('id', id);
-    if (error) {
-      console.error('Update failed:', error.message);
-      alert('Update failed: ' + error.message);
-      // Refresh data to show current state
-      fetchSales();
-      fetchDropdownData();
-      fetchMembersWithDues();
-    } else {
-      // Refresh all data to show updated records and balances
-      fetchSales();
-      fetchDropdownData();
-      fetchMembersWithDues();
+      const { error } = await supabase.from('sales').update(updatePayload).eq('id', id);
+      if (error) {
+        console.error('Update failed:', error.message);
+        // Revert user balance if update fails
+        if (userBalanceChange !== 0) {
+          await updateUserBalance(originalSale.member_id, -userBalanceChange);
+        }
+        setSales(sales);
+      } else {
+        // Refresh user data to show updated balances
+        fetchDropdownData();
+      }
+    } catch (error: any) {
+      console.error('Edit failed:', error.message);
+      alert('Edit failed: ' + error.message);
+      setSales(sales);
     }
-  } catch (error: any) {
-    console.error('Edit failed:', error.message);
-    alert('Edit failed: ' + error.message);
-    // Refresh data to show current state
-    fetchSales();
-    fetchDropdownData();
-    fetchMembersWithDues();
-  }
-};
+  };
 
 const deleteSelectedRows = async () => {
   if (selectedRows.length === 0 || !window.confirm(`Delete ${selectedRows.length} record(s)?`)) return;
@@ -1001,12 +920,12 @@ const deleteSelectedRows = async () => {
             await supabase.from('sales').update(recordData).eq('id', lastOperation.data.originalRecord.id);
           }
           break;
-                  case 'duplicate':
-          if (lastOperation.data.duplicatedRecords) {
-            const idsToDelete = lastOperation.data.duplicatedRecords.map(r => r.id);
-            await supabase.from('sales').delete().in('id', idsToDelete);
-          }
-          break;
+               case 'duplicate':
+                    if (lastOperation.data.duplicatedRecords) {
+                      const idsToDelete = lastOperation.data.duplicatedRecords.map(r => r.id);
+                      await supabase.from('sales').delete().in('id', idsToDelete);
+                    }
+                    break;
       }
       
       setUndoStack(prev => prev.slice(0, -1));
@@ -1043,12 +962,12 @@ const deleteSelectedRows = async () => {
             await supabase.from('sales').update(recordData).eq('id', operationToRedo.data.updatedRecord.id);
           }
           break;
-              case 'duplicate':
-      if (operationToRedo.data.duplicatedRecords) {
-        const recordsToRestore = operationToRedo.data.duplicatedRecords.map(({ users, products, ...rec }) => rec);
-        await supabase.from('sales').insert(recordsToRestore);
-      }
-      break;
+            case 'duplicate':
+                if (operationToRedo.data.duplicatedRecords) {
+                  const recordsToRestore = operationToRedo.data.duplicatedRecords.map(({ users, products, ...rec }) => rec);
+                  await supabase.from('sales').insert(recordsToRestore);
+                }
+                break;
       }
 
       // Reapply user balance changes
@@ -1242,194 +1161,6 @@ const deleteSelectedRows = async () => {
     setPopoverOpen(false);
   };
 
-  // Initialize duplicate form with selected records
-const initializeDuplicateForm = () => {
-  const selectedSales = sales.filter(sale => selectedRows.includes(sale.id));
-  const formData = selectedSales.map(sale => ({
-    date: new Date().toISOString().split('T')[0], // Default to today
-    qty: sale.qty,
-    price: sale.price,
-    paid: 0, // Default paid to 0 for new records
-    member_id: sale.member_id,
-    product_id: sale.product_id,
-    transaction_type: sale.transaction_type
-  }));
-  setDuplicateFormData(formData);
-  setIsDuplicateDialogOpen(true);
-};
-
-// Handle duplicate form field changes
-const handleDuplicateFormChange = (index: number, field: keyof DuplicateFormData, value: any) => {
-  setDuplicateFormData(prev => 
-    prev.map((item, i) => {
-      if (i !== index) return item;
-      
-      const updated = { ...item, [field]: value };
-      
-      // Auto-calculate price based on quantity for sales
-      if (updated.transaction_type === 'Sale' && field === 'qty' && updated.product_id) {
-        const product = products.find(p => p.id === updated.product_id);
-        if (product && product.price_ranges && product.price_ranges.length > 0) {
-          const priceRange = product.price_ranges.find(range => 
-            Number(value) >= range.min && Number(value) <= range.max
-          );
-          updated.price = priceRange ? priceRange.price : product.mrp || 0;
-        }
-      }
-      
-      return updated;
-    })
-  );
-};
-
-// Handle duplicate form submission
-const handleDuplicateSubmit = async () => {
-  if (duplicateFormData.length === 0) return;
-
-  try {
-    const recordsToInsert = [];
-    const userBalanceChanges: { userId: string; oldBalance: number; newBalance: number }[] = [];
-
-    for (const formData of duplicateFormData) {
-      if (formData.transaction_type === 'Sale') {
-        // Validate required fields for Sale
-        if (!formData.date || !formData.member_id || !formData.product_id || !formData.qty || !formData.price) {
-          alert('Please fill all required fields for Sale records');
-          return;
-        }
-
-        const qty = Number(formData.qty);
-        const price = Number(formData.price);
-        const paid = Number(formData.paid);
-        const total = qty * price;
-        const outstanding = total - paid;
-        const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
-
-        // Update user balance
-        const userBalanceChange = outstanding;
-        if (userBalanceChange !== 0) {
-          const oldBalance = await updateUserBalance(formData.member_id, userBalanceChange);
-          userBalanceChanges.push({ 
-            userId: formData.member_id, 
-            oldBalance, 
-            newBalance: oldBalance + userBalanceChange 
-          });
-        }
-
-        recordsToInsert.push({
-          date: formData.date,
-          member_id: formData.member_id,
-          product_id: formData.product_id,
-          qty,
-          price,
-          total,
-          paid,
-          outstanding,
-          payment_status,
-          transaction_type: 'Sale'
-        });
-      } else {
-        // Handle Clearance duplication
-        if (!formData.date || !formData.member_id || !formData.paid) {
-          alert('Please fill all required fields for Clearance records');
-          return;
-        }
-
-        const paid = Number(formData.paid);
-        const user = users.find(u => u.id === formData.member_id);
-        const currentBalance = user?.due_balance || 0;
-        
-        if (paid > currentBalance) {
-          alert(`Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentBalance})`);
-          return;
-        }
-
-        // Update sales records for clearance
-        await updateSalesRecordsForClearance(formData.member_id, paid);
-        
-        const userBalanceChange = -paid;
-        if (userBalanceChange !== 0) {
-          const oldBalance = await updateUserBalance(formData.member_id, userBalanceChange);
-          userBalanceChanges.push({ 
-            userId: formData.member_id, 
-            oldBalance, 
-            newBalance: oldBalance + userBalanceChange 
-          });
-        }
-
-        const payment_status = calculatePaymentStatus('Clearance', 0, paid, currentBalance);
-
-        recordsToInsert.push({
-          date: formData.date,
-          member_id: formData.member_id,
-          product_id: null,
-          qty: 0,
-          price: 0,
-          total: 0,
-          paid,
-          outstanding: 0,
-          payment_status,
-          transaction_type: 'Clearance'
-        });
-      }
-    }
-
-    // Insert all records
-    const { data, error } = await supabase
-      .from('sales')
-      .insert(recordsToInsert)
-      .select('*, users(*), products(*)');
-    
-    if (error) {
-      // Revert balance changes if insert fails
-      for (const change of userBalanceChanges) {
-        await updateUserBalance(change.userId, change.oldBalance - change.newBalance);
-      }
-      alert('Duplication failed: ' + error.message);
-    } else if (data) {
-      const duplicatedRecords: Sale[] = data.map((rawRecord: any) => ({
-        id: rawRecord.id,
-        date: rawRecord.date,
-        qty: rawRecord.qty || 0,
-        price: rawRecord.price || 0,
-        total: rawRecord.total,
-        paid: rawRecord.paid,
-        outstanding: rawRecord.outstanding,
-        payment_status: rawRecord.payment_status as PaymentStatus,
-        member_id: rawRecord.member_id,
-        product_id: rawRecord.product_id || '',
-        transaction_type: rawRecord.transaction_type as TransactionType,
-        users: (rawRecord.users && typeof rawRecord.users === 'object') ? rawRecord.users : null,
-        products: (rawRecord.products && typeof rawRecord.products === 'object') ? rawRecord.products : null,
-      }));
-
-      addToUndoStack({ 
-        type: 'duplicate', 
-        timestamp: Date.now(), 
-        data: { 
-          duplicatedRecords,
-          userBalanceChanges
-        } 
-      });
-
-      setSales([...duplicatedRecords, ...sales]);
-      setSelectedRows([]);
-      setIsDuplicateDialogOpen(false);
-      setDuplicateFormData([]);
-      
-      // Refresh data
-      fetchSales();
-      fetchDropdownData();
-      fetchMembersWithDues();
-      
-      alert(`${duplicatedRecords.length} record(s) duplicated successfully!`);
-    }
-  } catch (error: any) {
-    alert('Duplication failed: ' + error.message);
-    console.error('Duplication error:', error);
-  }
-};
-
   // --- UI HANDLERS & MEMOS ---
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale(prev => {
@@ -1454,54 +1185,46 @@ const handleDuplicateSubmit = async () => {
     });
   };
 
- // In useEffect for newSale calculation:
-// Replace the existing useEffect for newSale calculation with this complete version:
+  useEffect(() => {
+    if (newSale.transaction_type === 'Clearance') {
+      // For clearance, only calculate payment status
+      const paid = newSale.paid || 0;
+      const user = users.find(u => u.id === newSale.member_id);
+      const userBalance = user?.due_balance || 0;
+      const payment_status = calculatePaymentStatus('Clearance', 0, paid, userBalance);
+      
+      setNewSale(prev => ({ 
+        ...prev, 
+        qty: 0, 
+        price: 0, 
+        total: 0, 
+        outstanding: 0, 
+        product_id: '',
+        payment_status 
+      }));
+    } else {
+      // Sale transaction logic
+      const qty = newSale.qty || 0;
+      let price = newSale.price || 0;
 
-useEffect(() => {
-  if (newSale.transaction_type === 'Clearance') {
-    const paid = Number(newSale.paid || 0);
-    const memberWithDues = membersWithDues.find(m => m.userId === newSale.member_id);
-    const memberDueBalance = memberWithDues?.totalDue || 0;
-    
-    // For clearance, outstanding should show the remaining due balance after payment
-    // Initially shows negative due balance, then updates as payment is entered
-    let outstanding = 0;
-    if (memberDueBalance > 0) {
-      outstanding = -(memberDueBalance - paid); // Negative indicates what they still owe
-      // If paid exceeds due balance, outstanding becomes positive (overpayment)
-      if (paid > memberDueBalance) {
-        outstanding = paid - memberDueBalance; // Positive overpayment
+      if (newSale.product_id && qty > 0) {
+        const product = products.find(p => p.id === newSale.product_id);
+        if (product && product.price_ranges && product.price_ranges.length > 0) {
+          const priceRange = product.price_ranges.find(range => qty >= range.min && qty <= range.max);
+          price = priceRange ? priceRange.price : product.mrp || 0;
+        } else if (product) {
+          price = product.mrp || 0;
+        }
       }
+
+      const paid = newSale.paid || 0;
+      const total = qty * price;
+      const outstanding = total - paid;
+      const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+      
+      setNewSale(prev => ({ ...prev, price, total, outstanding, payment_status }));
     }
-    
-    const payment_status = calculatePaymentStatus('Clearance', 0, paid, memberDueBalance);
-    
-    setNewSale(prev => ({ 
-      ...prev, 
-      qty: 0, 
-      price: 0, 
-      total: 0, 
-      outstanding: outstanding, 
-      product_id: '',
-      payment_status 
-    }));
-  } else if (newSale.transaction_type === 'Sale') {
-    // Sale transaction logic - calculate total, outstanding, and payment status
-    const qty = Number(newSale.qty || 0);
-    const price = Number(newSale.price || 0);
-    const paid = Number(newSale.paid || 0);
-    const total = qty * price;
-    const outstanding = total - paid;
-    const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
-    
-    setNewSale(prev => ({
-      ...prev,
-      total,
-      outstanding,
-      payment_status
-    }));
-  }
-}, [newSale.qty, newSale.product_id, newSale.paid, newSale.price, newSale.transaction_type, newSale.member_id, products, users, membersWithDues]);
+  }, [newSale.qty, newSale.product_id, newSale.paid, newSale.transaction_type, newSale.member_id, products, users]);
 
   const sortedSales = useMemo(() => {
     let sortableItems = sales.filter(s => {
@@ -1840,37 +1563,31 @@ const renderNewRecordRow = () => {
         )}
       </TableCell>
       <TableCell className="p-1 text-right">
-  {transactionType === 'Sale' ? 
-    formatCurrency(newSale.outstanding ?? 0) : 
-    formatCurrency(newSale.outstanding ?? 0) // Use the calculated outstanding for clearance too
-  }
-</TableCell>
-     <TableCell className="p-1">
-  <div className="space-y-1">
-    <Input 
-      type="number" 
-      step="0.01" 
-      className="h-8 w-24 text-right" 
-      value={newSale.paid ?? ''} 
-      onChange={(e) => handleNewChange('paid' as keyof Sale, Number(e.target.value))} 
-      placeholder={transactionType === 'Clearance' ? 'Amount to clear' : '0'}
-    />
-    {/* Remove the max amount display for clearance */}
-  </div>
-</TableCell>
-     <TableCell className="p-1 text-right">
-  {transactionType === 'Sale' ? 
-    formatCurrency(newSale.outstanding ?? 0) : 
-    // For clearance, calculate outstanding as negative of paid amount beyond due balance
-    (() => {
-      const paid = Number(newSale.paid || 0);
-      const memberWithDues = membersWithDues.find(m => m.userId === newSale.member_id);
-      const dueBalance = memberWithDues?.totalDue || 0;
-      const outstanding = paid > dueBalance ? -(paid - dueBalance) : 0;
-      return formatCurrency(outstanding);
-    })()
-  }
-</TableCell>
+        {transactionType === 'Sale' ? formatCurrency(newSale.total ?? 0) : '₹0.00'}
+      </TableCell>
+      <TableCell className="p-1">
+        <div className="space-y-1">
+          <Input 
+            type="number" 
+            step="0.01" 
+            className="h-8 w-24 text-right" 
+            value={newSale.paid ?? ''} 
+            onChange={(e) => handleNewChange('paid' as keyof Sale, Number(e.target.value))} 
+            placeholder={transactionType === 'Clearance' ? 'Amount to clear' : '0'}
+            max={transactionType === 'Clearance' && newSale.member_id ? 
+              membersWithDues.find(m => m.userId === newSale.member_id)?.totalDue : undefined}
+          />
+          {/* Show maximum clearable amount */}
+          {transactionType === 'Clearance' && newSale.member_id && (
+            <div className="text-xs text-gray-500">
+              Max: ₹{membersWithDues.find(m => m.userId === newSale.member_id)?.totalDue.toFixed(2) || '0.00'}
+            </div>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="p-1 text-right">
+        {transactionType === 'Sale' ? formatCurrency(newSale.outstanding ?? 0) : '₹0.00'}
+      </TableCell>
       <TableCell className="p-1">
         <div className={cn("font-semibold", statusColors[newSale.payment_status || 'Pending'])}>
           {newSale.payment_status || 'Pending'}
@@ -1897,6 +1614,117 @@ const renderNewRecordRow = () => {
       </TableCell>
     </TableRow>
   );
+};
+
+const handleSimpleDuplicate = async () => {
+  if (selectedRows.length === 0) {
+    alert('Please select records to duplicate');
+    return;
+  }
+
+  const selectedSales = sales.filter(sale => selectedRows.includes(sale.id));
+  
+  try {
+    const recordsToInsert = [];
+    const userBalanceChanges: { userId: string; oldBalance: number; newBalance: number }[] = [];
+
+    for (const sale of selectedSales) {
+      if (sale.transaction_type === 'Sale') {
+        // For sales, duplicate with today's date and 0 paid amount
+        const qty = sale.qty;
+        const price = sale.price;
+        const total = qty * price;
+        const paid = 0; // Default to 0 for duplicated records
+        const outstanding = total - paid;
+        const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+
+        // Update user balance
+        const userBalanceChange = outstanding;
+        if (userBalanceChange !== 0) {
+          const oldBalance = await updateUserBalance(sale.member_id, userBalanceChange);
+          userBalanceChanges.push({ 
+            userId: sale.member_id, 
+            oldBalance, 
+            newBalance: oldBalance + userBalanceChange 
+          });
+        }
+
+        recordsToInsert.push({
+          date: new Date().toISOString(),
+          member_id: sale.member_id,
+          product_id: sale.product_id,
+          qty,
+          price,
+          total,
+          paid,
+          outstanding,
+          payment_status,
+          transaction_type: 'Sale'
+        });
+      } else {
+        // For clearance, we won't duplicate as it doesn't make business sense
+        alert('Clearance records cannot be duplicated. Only Sale records will be duplicated.');
+        continue;
+      }
+    }
+
+    if (recordsToInsert.length === 0) {
+      alert('No valid records to duplicate');
+      return;
+    }
+
+    // Insert all records
+    const { data, error } = await supabase
+      .from('sales')
+      .insert(recordsToInsert)
+      .select('*, users(*), products(*)');
+    
+    if (error) {
+      // Revert balance changes if insert fails
+      for (const change of userBalanceChanges) {
+        await updateUserBalance(change.userId, change.oldBalance - change.newBalance);
+      }
+      alert('Duplication failed: ' + error.message);
+    } else if (data) {
+      const duplicatedRecords: Sale[] = data.map((rawRecord: any) => ({
+        id: rawRecord.id,
+        date: rawRecord.date,
+        qty: rawRecord.qty || 0,
+        price: rawRecord.price || 0,
+        total: rawRecord.total,
+        paid: rawRecord.paid,
+        outstanding: rawRecord.outstanding,
+        payment_status: rawRecord.payment_status as PaymentStatus,
+        member_id: rawRecord.member_id,
+        product_id: rawRecord.product_id || '',
+        transaction_type: rawRecord.transaction_type as TransactionType,
+        users: (rawRecord.users && typeof rawRecord.users === 'object') ? rawRecord.users : null,
+        products: (rawRecord.products && typeof rawRecord.products === 'object') ? rawRecord.products : null,
+      }));
+
+      addToUndoStack({ 
+        type: 'duplicate', 
+        timestamp: Date.now(), 
+        data: { 
+          duplicatedRecords,
+          userBalanceChanges
+        } 
+      });
+
+      setSales([...duplicatedRecords, ...sales]);
+      setSelectedRows([]);
+      
+      // Refresh data
+      fetchSales();
+      fetchDropdownData();
+      fetchMembersWithDues();
+      
+      alert(`${duplicatedRecords.length} record(s) duplicated successfully with today's date!`);
+    }
+  } catch (error: any) {
+    alert('Duplication failed: ' + error.message);
+    console.error('Duplication error:', error);
+  }
 };
 
   return (
@@ -2120,18 +1948,15 @@ const renderNewRecordRow = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px] px-4">
-                    <div
-                      onClick={handleSelectAll}
-                      className={cn(
-                        "w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all",
-                        (sortedSales.length > 0 && selectedRows.length === sortedSales.length)
-                          ? "bg-indigo-600 border-2 border-indigo-600"
-                          : "border-2 border-gray-400 dark:border-gray-500 hover:border-indigo-500"
-                      )}
-                    >
-                      {(selectedRows.length === sortedSales.length && sortedSales.length > 0) && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                    </div>
-                  </TableHead>
+  <Button
+    variant="ghost"
+    size="sm"
+    onClick={handleSelectAll}
+    className="text-xs font-medium"
+  >
+    {(selectedRows.length === sortedSales.length && sortedSales.length > 0) ? "Deselect All" : "Select All"}
+  </Button>
+</TableHead>
                   <TableHead onClick={() => requestSort('date')} className="cursor-pointer">Date</TableHead>
                   <TableHead onClick={() => requestSort('transaction_type')} className="cursor-pointer">Type</TableHead>
                   <TableHead onClick={() => requestSort('user')} className="cursor-pointer">Member</TableHead>
@@ -2142,16 +1967,17 @@ const renderNewRecordRow = () => {
                   <TableHead onClick={() => requestSort('paid')} className="text-right cursor-pointer">Paid</TableHead>
                   <TableHead onClick={() => requestSort('outstanding')} className="text-right cursor-pointer">Outstanding</TableHead>
                   <TableHead onClick={() => requestSort('payment_status')} className="cursor-pointer">Status</TableHead>
-                                 <TableHead className="text-right pr-4">
-        <Button 
-          onClick={initializeDuplicateForm} 
-          variant="outline" 
-          size="sm" 
-          disabled={selectedRows.length === 0}
-        >
-          <Copy className="h-4 w-4"/>
-        </Button>
-    </TableHead>
+                  <TableHead className="text-right pr-4">
+                    <Button 
+                      onClick={handleSimpleDuplicate} 
+                      variant="outline" 
+                      size="sm" 
+                      disabled={selectedRows.length === 0}
+                      title="Duplicate selected records with today's date"
+                    >
+                      <Copy className="h-4 w-4"/>
+                    </Button>
+                  </TableHead>
                   <TableHead className="text-right pr-4">
                     <Button variant="ghost" size="icon" onClick={deleteSelectedRows} disabled={selectedRows.length === 0}>
                       <Trash2 className="h-4 w-4" />
@@ -2164,18 +1990,18 @@ const renderNewRecordRow = () => {
                 {sortedSales.length > 0 ? sortedSales.map((sale) => (
                   <TableRow key={sale.id} data-state={selectedRows.includes(sale.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
-                      <div
-                        onClick={() => handleRowSelect(sale.id)}
-                        className={cn(
-                          "w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all",
-                          selectedRows.includes(sale.id)
-                            ? "bg-indigo-600 border-2 border-indigo-600"
-                            : "border-2 border-gray-400 dark:border-gray-500 hover:border-indigo-500"
-                        )}
-                      >
-                        {selectedRows.includes(sale.id) && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                      </div>
-                    </TableCell>
+  <div
+    onClick={() => handleRowSelect(sale.id)}
+    className={cn(
+      "w-8 h-8 flex items-center justify-center cursor-pointer transition-all rounded-md font-medium text-sm",
+      selectedRows.includes(sale.id)
+        ? "bg-indigo-600 text-white"
+        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-indigo-100 dark:hover:bg-indigo-900"
+    )}
+  >
+    {sortedSales.findIndex(s => s.id === sale.id) + 1}
+  </div>
+</TableCell>
                     {renderEditableCell(sale, 'date')}
                     {renderEditableCell(sale, 'transaction_type')}
                     {renderEditableCell(sale, 'member_id')}
@@ -2200,147 +2026,6 @@ const renderNewRecordRow = () => {
           </div>
         </CardContent>
       </Card>
-       {/* Duplicate Dialog - This was missing from the main return statement */}
-    <Dialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
-      <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Duplicate Selected Records ({duplicateFormData.length})</DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {duplicateFormData.map((formData, index) => {
-            const originalSale = sales.find(s => selectedRows.includes(s.id));
-            const selectedProduct = products.find(p => p.id === formData.product_id);
-            const selectedUser = users.find(u => u.id === formData.member_id);
-            const calculatedTotal = formData.transaction_type === 'Sale' ? formData.qty * formData.price : 0;
-            const calculatedOutstanding = formData.transaction_type === 'Sale' ? calculatedTotal - formData.paid : 0;
-            
-            return (
-              <Card key={index} className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  
-                  {/* Date */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Date</label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => handleDuplicateFormChange(index, 'date', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Transaction Type */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Type</label>
-                    <Select
-                      options={transactionTypeOptions}
-                      value={transactionTypeOptions.find(opt => opt.value === formData.transaction_type)}
-                      onChange={(selected: any) => handleDuplicateFormChange(index, 'transaction_type', selected?.value)}
-                      styles={getSelectStyles(isDarkMode)}
-                    />
-                  </div>
-
-                  {/* Member */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Member</label>
-                    <Select
-                      options={userOptions}
-                      value={userOptions.find(opt => opt.value === formData.member_id)}
-                      onChange={(selected: any) => handleDuplicateFormChange(index, 'member_id', selected?.value)}
-                      styles={getSelectStyles(isDarkMode)}
-                    />
-                  </div>
-
-                  {/* Product (only for Sales) */}
-                  {formData.transaction_type === 'Sale' && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Product</label>
-                      <Select
-                        options={productOptions}
-                        value={productOptions.find(opt => opt.value === formData.product_id)}
-                        onChange={(selected: any) => handleDuplicateFormChange(index, 'product_id', selected?.value)}
-                        styles={getSelectStyles(isDarkMode)}
-                      />
-                    </div>
-                  )}
-
-                  {/* Quantity (only for Sales) */}
-                  {formData.transaction_type === 'Sale' && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Quantity</label>
-                      <Input
-                        type="number"
-                        value={formData.qty}
-                        onChange={(e) => handleDuplicateFormChange(index, 'qty', Number(e.target.value))}
-                      />
-                    </div>
-                  )}
-
-                  {/* Price (only for Sales) */}
-                  {formData.transaction_type === 'Sale' && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Price</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.price}
-                        onChange={(e) => handleDuplicateFormChange(index, 'price', Number(e.target.value))}
-                      />
-                    </div>
-                  )}
-
-                  {/* Paid Amount */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      {formData.transaction_type === 'Sale' ? 'Paid Amount' : 'Clearance Amount'}
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.paid}
-                      onChange={(e) => handleDuplicateFormChange(index, 'paid', Number(e.target.value))}
-                    />
-                  </div>
-
-                  {/* Calculated Fields Display (only for Sales) */}
-                  {formData.transaction_type === 'Sale' && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Total</label>
-                        <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded border">
-                          {formatCurrency(calculatedTotal)}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Outstanding</label>
-                        <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded border">
-                          {formatCurrency(calculatedOutstanding)}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Original Record Info */}
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Original:</span> {selectedUser?.name} - {selectedProduct?.name || 'N/A'} 
-                  {formData.transaction_type === 'Sale' && ` (${originalSale?.qty} × ₹${originalSale?.price})`}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsDuplicateDialogOpen(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleDuplicateSubmit} className="bg-blue-600 hover:bg-blue-700">
-            Duplicate {duplicateFormData.length} Record(s)
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
     </div>
   );
 };

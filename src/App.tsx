@@ -20,6 +20,7 @@ import AdminFinance from "./pages/admin/Finances";
 import ProductDetails from "./pages/publicView/ProductDetails";
 import ViewProducts from "./pages/publicView/ViewProducts";
 import PublicLayout from "./components/PublicLayout"; // <-- import this if not already
+import AdminProfit from "./pages/admin/GrossProfitAnalysis";
 
 
 const queryClient = new QueryClient();
@@ -148,6 +149,11 @@ const App = () => (
           <Route path="/admin/finance" element={
             <ProtectedRoute allowedRole="admin">
               <AdminFinance />
+            </ProtectedRoute>
+          } />
+           <Route path="/admin/GrossProfitAnalysis" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminProfit />
             </ProtectedRoute>
           } />
 
