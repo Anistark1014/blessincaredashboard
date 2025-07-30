@@ -9,27 +9,30 @@ export default function ToggleTheme() {
     const storedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    if (storedTheme === "dark" || (!storedTheme && prefersDark)) {
+    // Invert the initial theme logic
+    if (storedTheme === "light" || (!storedTheme && !prefersDark)) { // Changed 'dark' to 'light' and !prefersDark
+      document.documentElement.classList.remove("dark"); // Ensure 'dark' class is removed for light theme
+      setTheme("light");
+    } else {
       document.documentElement.classList.add("dark");
       setTheme("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      setTheme("light");
     }
   }, []);
 
   const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
+    // Invert the toggle logic: if current theme is light, new theme is dark, and vice versa.
+    // The visual state (checked) now represents the 'light' theme.
+    const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
+    document.documentElement.classList.toggle("dark", newTheme === "dark"); // This remains the same as 'dark' class means dark theme
   };
 
   return (
     <label className="switch" title="Toggle Theme">
       <input
         type="checkbox"
-        checked={theme === "dark"}
+        checked={theme === "light"} // Invert this: checkbox is checked when theme is LIGHT
         onChange={toggleTheme}
         id="checkbox"
       />
