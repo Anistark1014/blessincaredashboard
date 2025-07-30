@@ -158,7 +158,7 @@ const SalesTable: React.FC = () => {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+  const [showMoreProducts, setShowMoreProducts] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
   const [redoStack, setRedoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -236,9 +236,9 @@ const getClearanceUserOptions = useMemo(() => {
     return userOptions; // Return all users for non-clearance transactions
   }
   
-  // For clearance transactions, only show members with outstanding dues
+  // For clearance transactions, only show members with outstanding dues (without due amounts)
   return membersWithDues.map(member => ({
-    label: `${member.userName} (₹${member.totalDue.toFixed(2)} due - ${member.pendingSales.length} pending sales)`,
+    label: member.userName, // Removed the due amount display
     value: member.userId
   }));
 }, [newSale.transaction_type, userOptions, membersWithDues]);
@@ -307,7 +307,7 @@ const getPendingSalesForMember = (memberId: string) => {
       const userOpts = (usersResult.data || [])
         .filter(u => u.name)
         .map(u => ({ 
-          label: `${u.name}${u.due_balance ? ` (₹${u.due_balance.toFixed(2)} due)` : ''}`, 
+          label: u.name, 
           value: u.id 
         }));
       setUserOptions(userOpts);
@@ -373,8 +373,8 @@ const getPendingSalesForMember = (memberId: string) => {
       if (paid > 0) return 'Partially Paid';
       return 'Pending';
     } else { // Clearance
-      const newBalance = userBalance - paid;
-      if (newBalance <= 0) return 'Complete Clearance';
+      if (paid >= userBalance) return 'Complete Clearance';
+      if (paid > 0) return 'Partial Clearance';
       return 'Partial Clearance';
     }
   };
@@ -498,6 +498,8 @@ const handleAddNew = async () => {
     }
 
     const paidAmount = Number(newSale.paid);
+    const availableBalance = memberWithDues?.totalDue || 0;
+    
     if (paidAmount > memberWithDues.totalDue) {
       alert(`Payment amount (₹${paidAmount}) cannot exceed member's total due balance (₹${memberWithDues.totalDue})`);
       return;
@@ -1173,46 +1175,42 @@ const deleteSelectedRows = async () => {
     });
   };
 
-  useEffect(() => {
-    if (newSale.transaction_type === 'Clearance') {
-      // For clearance, only calculate payment status
-      const paid = newSale.paid || 0;
-      const user = users.find(u => u.id === newSale.member_id);
-      const userBalance = user?.due_balance || 0;
-      const payment_status = calculatePaymentStatus('Clearance', 0, paid, userBalance);
-      
-      setNewSale(prev => ({ 
-        ...prev, 
-        qty: 0, 
-        price: 0, 
-        total: 0, 
-        outstanding: 0, 
-        product_id: '',
-        payment_status 
-      }));
-    } else {
-      // Sale transaction logic
-      const qty = newSale.qty || 0;
-      let price = newSale.price || 0;
+ // In useEffect for newSale calculation:
+// Replace the existing useEffect for newSale calculation with this complete version:
 
-      if (newSale.product_id && qty > 0) {
-        const product = products.find(p => p.id === newSale.product_id);
-        if (product && product.price_ranges && product.price_ranges.length > 0) {
-          const priceRange = product.price_ranges.find(range => qty >= range.min && qty <= range.max);
-          price = priceRange ? priceRange.price : product.mrp || 0;
-        } else if (product) {
-          price = product.mrp || 0;
-        }
-      }
-
-      const paid = newSale.paid || 0;
-      const total = qty * price;
-      const outstanding = total - paid;
-      const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
-      
-      setNewSale(prev => ({ ...prev, price, total, outstanding, payment_status }));
-    }
-  }, [newSale.qty, newSale.product_id, newSale.paid, newSale.transaction_type, newSale.member_id, products, users]);
+useEffect(() => {
+  if (newSale.transaction_type === 'Clearance') {
+    const paid = Number(newSale.paid || 0);
+    const memberWithDues = membersWithDues.find(m => m.userId === newSale.member_id);
+    const availableBalance = memberWithDues?.totalDue || 0;
+    const payment_status = calculatePaymentStatus('Clearance', 0, paid, availableBalance);
+    
+    setNewSale(prev => ({ 
+      ...prev, 
+      qty: 0, 
+      price: 0, 
+      total: 0, 
+      outstanding: 0, 
+      product_id: '',
+      payment_status 
+    }));
+  } else if (newSale.transaction_type === 'Sale') {
+    // Sale transaction logic - calculate total, outstanding, and payment status
+    const qty = Number(newSale.qty || 0);
+    const price = Number(newSale.price || 0);
+    const paid = Number(newSale.paid || 0);
+    const total = qty * price;
+    const outstanding = total - paid;
+    const payment_status = calculatePaymentStatus('Sale', total, paid, 0);
+    
+    setNewSale(prev => ({
+      ...prev,
+      total,
+      outstanding,
+      payment_status
+    }));
+  }
+}, [newSale.qty, newSale.product_id, newSale.paid, newSale.price, newSale.transaction_type, newSale.member_id, products, users, membersWithDues]);
 
   const sortedSales = useMemo(() => {
     let sortableItems = sales.filter(s => {
@@ -1383,6 +1381,77 @@ const deleteSelectedRows = async () => {
     );
   };
 
+  const renderProductSection = () => {
+  const transactionType = newSale.transaction_type || 'Sale';
+  const selectedMemberPendingSales = newSale.member_id ? getPendingSalesForMember(newSale.member_id) : [];
+  
+  if (transactionType === 'Sale') {
+    return (
+      <Select 
+        options={productOptions} 
+        onChange={(s: any) => handleNewChange("product_id" as keyof Sale, s?.value || "")} 
+        styles={getSelectStyles(isDarkMode)} 
+        placeholder="Select product..."
+      />
+    );
+  } else {
+    // For clearance, show the products that have pending amounts
+    if (newSale.member_id && selectedMemberPendingSales.length > 0) {
+      const maxVisible = 3;
+      const isExpanded = showMoreProducts === newSale.member_id;
+      const visibleProducts = isExpanded ? selectedMemberPendingSales : selectedMemberPendingSales.slice(0, maxVisible);
+      const hasMore = selectedMemberPendingSales.length > maxVisible;
+
+      return (
+        <div className="space-y-1">
+          {selectedMemberPendingSales.length === 1 ? (
+            // If only one pending sale, show the product name directly
+            <div className="text-gray-700 dark:text-gray-300 font-medium">
+              {selectedMemberPendingSales[0].productName}
+            </div>
+          ) : (
+            // If multiple pending sales, show limited list with show more option
+            <div className="text-gray-700 dark:text-gray-300">
+              <div className="font-medium mb-1">Multiple Products:</div>
+              <div className="text-xs space-y-1">
+                {visibleProducts.map((sale, index) => (
+                  <div key={index} className="text-gray-600 dark:text-gray-400">
+                    • {sale.productName}
+                  </div>
+                ))}
+                {hasMore && !isExpanded && (
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreProducts(newSale.member_id!)}
+                    className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 text-xs font-medium underline"
+                  >
+                    Show {selectedMemberPendingSales.length - maxVisible} more...
+                  </button>
+                )}
+                {isExpanded && hasMore && (
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreProducts(null)}
+                    className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 text-xs font-medium underline"
+                  >
+                    Show less
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    } else {
+      return (
+        <span className="text-gray-400 text-sm">
+          {newSale.member_id ? 'No pending sales' : 'Select member first'}
+        </span>
+      );
+    }
+  }
+};
+
 const renderNewRecordRow = () => {
   const transactionType = newSale.transaction_type || 'Sale';
   const selectedMemberPendingSales = newSale.member_id ? getPendingSalesForMember(newSale.member_id) : [];
@@ -1452,40 +1521,7 @@ const renderNewRecordRow = () => {
         </div>
       </TableCell>
       <TableCell className="p-1 min-w-[150px]">
-  {transactionType === 'Sale' ? (
-    <Select 
-      options={productOptions} 
-      onChange={(s: any) => handleNewChange("product_id" as keyof Sale, s?.value || "")} 
-      styles={getSelectStyles(isDarkMode)} 
-      placeholder="Select product..."
-    />
-  ) : (
-    // For clearance, show the products that have pending amounts
-    <div className="text-sm">
-      {newSale.member_id && selectedMemberPendingSales.length > 0 ? (
-        <div className="space-y-1">
-          {selectedMemberPendingSales.length === 1 ? (
-            // If only one pending sale, show the product name directly
-            <div className="text-gray-700 dark:text-gray-300 font-medium">
-              {selectedMemberPendingSales[0].productName}
-            </div>
-          ) : (
-            // If multiple pending sales, show a summary
-            <div className="text-gray-700 dark:text-gray-300">
-              <div className="font-medium">Multiple Products:</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {selectedMemberPendingSales.map(sale => sale.productName).join(', ')}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <span className="text-gray-400 text-sm">
-          {newSale.member_id ? 'No pending sales' : 'Select member first'}
-        </span>
-      )}
-    </div>
-  )}
+  {renderProductSection()}
 </TableCell>
       <TableCell className="p-1">
         {transactionType === 'Sale' ? (
