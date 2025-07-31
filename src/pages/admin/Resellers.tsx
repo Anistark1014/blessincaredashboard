@@ -71,6 +71,7 @@ interface Sale {
   product_id: string | null;
   qty: number;
   total: number;
+  gross_profit: number;
   transaction_type: string | null;
   type: string;
 }
@@ -203,6 +204,34 @@ const AdminResellers: React.FC = () => {
 
   const { toast } = useToast();
 
+  // Helper function to handle toggle login access
+  const handleToggleLoginAccess = async (resellerId: string, currentStatus: boolean) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ is_active: !currentStatus })
+        .eq('id', resellerId)
+        .select();
+
+      if (error) throw error;
+
+      setIsLoginAccessEnabled(!currentStatus);
+      toast({
+        title: "Success",
+        description: `Login access has been ${!currentStatus ? 'enabled' : 'disabled'}.`,
+      });
+      fetchResellers();
+    } catch (error: any) {
+      console.error('Error toggling login access:', error);
+      toast({
+        title: "Error",
+        description: `Failed to toggle login access: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+
   // Helper functions to fetch sales and clearance data for a specific member
   const fetchSalesByMemberId = useCallback(async (memberId: string): Promise<Sale[]> => {
     const { data, error } = await supabase
@@ -252,7 +281,7 @@ const AdminResellers: React.FC = () => {
           let totalProductsSold = 0;
 
           // Sum paid from sales
-          totalRevenue += salesData.reduce((sum, sale) => sum + (sale.paid ?? 0), 0);
+          totalRevenue += salesData.reduce((sum, sale) => sum + (sale.gross_profit ?? 0), 0);
           totalOutstanding += salesData.reduce((sum, sale) => sum + (sale.outstanding ?? 0), 0);
           totalProductsSold += salesData.reduce((sum, sale) => sum + (sale.qty ?? 0), 0);
 
@@ -350,6 +379,14 @@ const AdminResellers: React.FC = () => {
     };
   }, [fetchResellers, selectedReseller]); // Added selectedReseller and fetchResellers to dependency array for clarity and correctness
 
+useEffect(() => {
+  console.log('TRIGGER FETCH: ', timeRange, selectedReseller?.id);
+  if (selectedReseller?.id) {
+    fetchResellerSalesData(selectedReseller.id);
+  }
+}, [timeRange, customStartDate, customEndDate, selectedReseller?.id]);
+
+
   // Sales chart data fetching for selected reseller
   const fetchResellerSalesData = useCallback(async (resellerId: string) => {
     if (!resellerId) {
@@ -378,6 +415,7 @@ const AdminResellers: React.FC = () => {
     } else if (timeRange === 'custom' && customStartDate && customEndDate) {
       chartQueryStartDate = new Date(customStartDate);
       chartQueryEndDate = new Date(customEndDate);
+      // Ensure end date is inclusive of the whole day
       chartQueryEndDate.setHours(23, 59, 59, 999);
     }
     // For 'lifetime', no date filter needed for query
@@ -385,7 +423,7 @@ const AdminResellers: React.FC = () => {
     if (chartQueryStartDate) {
       query = query.gte('date', chartQueryStartDate.toISOString().split('T')[0]); // Only date part
     }
-    if (timeRange !== 'lifetime') { // Apply end date filter only if not lifetime
+    if (timeRange !== 'lifetime' && chartQueryEndDate) { // Apply end date filter only if not lifetime
         query = query.lte('date', chartQueryEndDate.toISOString().split('T')[0]); // Only date part
     }
 
@@ -420,12 +458,12 @@ const AdminResellers: React.FC = () => {
 
       // Ensure all dates in range are present, even if no sales
       const datesInRange: string[] = [];
-      let current = chartQueryStartDate ? new Date(chartQueryStartDate) : new Date(sales[0].date);
+      let start = chartQueryStartDate ? new Date(chartQueryStartDate) : new Date(sales[0].date);
       const end = chartQueryEndDate;
 
-      while (current <= end) {
-        datesInRange.push(current.toISOString().split('T')[0]);
-        current.setDate(current.getDate() + 1);
+      while (start.getTime() <= end.getTime()) {
+        datesInRange.push(start.toISOString().split('T')[0]);
+        start.setDate(start.getDate() + 1);
       }
 
       formattedChartData = datesInRange.map(dateKey => ({
@@ -467,7 +505,7 @@ const AdminResellers: React.FC = () => {
       setIsLoginAccessEnabled(selectedReseller.is_active);
 
       // Reset chart filters when a new reseller is selected
-      setTimeRange('lifetime');
+      // setTimeRange('lifetime');
       setCustomStartDate('');
       setCustomEndDate('');
       setSalesTableMonth((new Date().getMonth() + 1).toString());
@@ -682,6 +720,7 @@ const AdminResellers: React.FC = () => {
         coverage: editableCoverage === '' ? 0 : editableCoverage,
       };
 
+      // Only include email in the payload if it has changed
       if (editableEmail !== selectedReseller.email) {
         updatesPayload.email = editableEmail;
       }
@@ -724,57 +763,82 @@ const AdminResellers: React.FC = () => {
     }
   };
 
-  // Filtered resellers for the main table (combining search and date range)
-  const filteredResellers = useMemo(() => {
-    let currentFiltered = resellers.filter(reseller =>
-      reseller.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reseller.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reseller.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reseller.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+const filteredResellers = useMemo(() => {
+  let currentFiltered = resellers.filter(reseller =>
+    reseller.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    reseller.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    reseller.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    reseller.id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-    // Apply main table date filter
-    if (mainTableTimeRange !== 'lifetime' && (mainTableStartDate || mainTableEndDate)) {
-        let filterStartDate: Date | null = null;
-        let filterEndDate: Date | null = null;
+  if (mainTableTimeRange !== 'lifetime') {
+    let filterStartDate: Date | null = null;
+    let filterEndDate: Date | null = null;
 
-        const now = new Date();
-        if (mainTableTimeRange === '7d') {
-            filterStartDate = new Date();
-            filterStartDate.setDate(now.getDate() - 7);
-        } else if (mainTableTimeRange === '30d') {
-            filterStartDate = new Date();
-            filterStartDate.setDate(now.getDate() - 30);
-        } else if (mainTableTimeRange === '3m') {
-            filterStartDate = new Date();
-            filterStartDate.setMonth(now.getMonth() - 3);
-        } else if (mainTableTimeRange === 'custom' && mainTableStartDate && mainTableEndDate) {
-            filterStartDate = new Date(mainTableStartDate);
-            filterEndDate = new Date(mainTableEndDate);
-            filterEndDate.setHours(23, 59, 59, 999); // Include the entire end day
-        }
+    const now = new Date();
+    const today = new Date(now.toISOString().split('T')[0]);
 
-        if (filterStartDate || filterEndDate) {
-            currentFiltered = currentFiltered.filter(reseller => {
-                const hasSalesInRange = (reseller.all_sales_data || []).some(sale => {
-                    const saleDate = new Date(sale.date);
-                    return (!filterStartDate || saleDate >= filterStartDate) &&
-                           (!filterEndDate || saleDate <= filterEndDate);
-                });
-
-                const hasClearanceInRange = (reseller.all_clearance_data || []).some(clearance => {
-                    const clearanceDate = new Date(clearance.date);
-                    return (!filterStartDate || clearanceDate >= filterStartDate) &&
-                           (!filterEndDate || clearanceDate <= filterEndDate);
-                });
-
-                return hasSalesInRange || hasClearanceInRange;
-            });
-        }
+    if (mainTableTimeRange === '7d') {
+      filterStartDate = new Date(today);
+      filterStartDate.setDate(today.getDate() - 7);
+    } else if (mainTableTimeRange === '30d') {
+      filterStartDate = new Date(today);
+      filterStartDate.setDate(today.getDate() - 30);
+    } else if (mainTableTimeRange === '3m') {
+      filterStartDate = new Date(today);
+      filterStartDate.setMonth(today.getMonth() - 3);
+    } else if (
+      mainTableTimeRange === 'custom' &&
+      mainTableStartDate &&
+      mainTableEndDate
+    ) {
+      filterStartDate = new Date(`${mainTableStartDate}T00:00:00Z`);
+      filterEndDate = new Date(`${mainTableEndDate}T23:59:59.999Z`);
     }
 
-    return currentFiltered;
-  }, [resellers, searchTerm, mainTableTimeRange, mainTableStartDate, mainTableEndDate]);
+    const isInRange = (dateStr: string) => {
+      const date = new Date(`${dateStr}T00:00:00Z`);
+      return (!filterStartDate || date >= filterStartDate) &&
+             (!filterEndDate || date <= filterEndDate);
+    };
+
+    currentFiltered = currentFiltered
+      .map(reseller => {
+        const filteredSales = (reseller.all_sales_data || []).filter(sale => isInRange(sale.date));
+        const filteredClearance = (reseller.all_clearance_data || []).filter(clearance => isInRange(clearance.date));
+
+        const totalRevenue = 
+          filteredSales.reduce((sum, sale) => sum + (sale.paid ?? 0), 0) +
+          filteredClearance.reduce((sum, c) => sum + (c.paid_amount ?? 0), 0);
+
+        const totalOutstanding = filteredSales.reduce((sum, sale) => sum + (sale.outstanding ?? 0), 0);
+        const totalProductsSold = filteredSales.reduce((sum, sale) => sum + (sale.qty ?? 0), 0);
+        const rewardPoints = Math.floor(totalRevenue / 100);
+
+        console.log({totalRevenue,totalOutstanding})
+
+        return {
+          ...reseller,
+          total_revenue_generated: totalRevenue,
+          payment_amount_remaining: totalOutstanding,
+          total_products_sold: totalProductsSold,
+          reward_points:rewardPoints,
+        };
+      })
+      .filter(reseller => {
+        // keep only those with some sales or clearance in range
+        return reseller.total_revenue_generated > 0 || reseller.payment_amount_remaining > 0;
+      });
+  }
+
+  return currentFiltered;
+}, [
+  resellers,
+  searchTerm,
+  mainTableTimeRange,
+  mainTableStartDate,
+  mainTableEndDate,
+]);
 
 
   const getMonthOptions = () => {
@@ -801,6 +865,7 @@ const AdminResellers: React.FC = () => {
       </div>
     );
   }
+
 
   return (
     <div className="space-y-6 p-6">
@@ -962,7 +1027,7 @@ const AdminResellers: React.FC = () => {
               <TableBody>
                 {filteredResellers.length > 0 ? (
                   filteredResellers.map((reseller) => {
-                    const tierInfo = getTierInfo(reseller.total_products_sold);
+                    const tierInfo = getTierInfo(reseller.reward_points);
                     return (
                       <TableRow key={reseller.id}>
                         <TableCell>
@@ -1100,28 +1165,28 @@ const AdminResellers: React.FC = () => {
                                           <Button
                                             variant={timeRange === '7d' ? 'secondary' : 'outline'}
                                             size="sm"
-                                            onClick={() => setTimeRange('7d')}
+                                            onClick={() => { setTimeRange('7d')}}
                                           >
                                             7D
                                           </Button>
                                           <Button
                                             variant={timeRange === '30d' ? 'secondary' : 'outline'}
                                             size="sm"
-                                            onClick={() => setTimeRange('30d')}
+                                            onClick={() => { setTimeRange('30d') }}
                                           >
                                             30D
                                           </Button>
                                           <Button
                                             variant={timeRange === '3m' ? 'secondary' : 'outline'}
                                             size="sm"
-                                            onClick={() => setTimeRange('3m')}
+                                            onClick={() => { setTimeRange('3m')}}
                                           >
                                             3M
                                           </Button>
                                           <Button
                                             variant={timeRange === 'lifetime' ? 'secondary' : 'outline'}
                                             size="sm"
-                                            onClick={() => setTimeRange('lifetime')}
+                                            onClick={() => { setTimeRange('lifetime')}}
                                           >
                                             Lifetime
                                           </Button>
@@ -1142,6 +1207,7 @@ const AdminResellers: React.FC = () => {
                                                 type="date"
                                                 value={customStartDate}
                                                 onChange={(e) => setCustomStartDate(e.target.value)}
+                                                onBlur={() => fetchResellerSalesData(selectedReseller.id)} // Fetch on blur
                                                 className="h-9 w-[150px]"
                                               />
                                             </div>
@@ -1152,6 +1218,7 @@ const AdminResellers: React.FC = () => {
                                                 type="date"
                                                 value={customEndDate}
                                                 onChange={(e) => setCustomEndDate(e.target.value)}
+                                                onBlur={() => fetchResellerSalesData(selectedReseller.id)} // Fetch on blur
                                                 className="h-9 w-[150px]"
                                               />
                                             </div>
@@ -1199,72 +1266,72 @@ const AdminResellers: React.FC = () => {
 
 
                                   </div>
-                                    {/* Recent Sales Table (with Month/Year Filter) */}
-                                    <div className="space-y-4 border rounded-lg col-span-3 p-4">
-                                      <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
-                                      <div className="flex flex-wrap items-center gap-4 mb-4">
-                                        <Label htmlFor="sales-month" className="min-w-[40px]">Month:</Label>
-                                        <Select value={salesTableMonth} onValueChange={setSalesTableMonth}>
-                                          <SelectTrigger id="sales-month" className="w-[150px]">
-                                            <SelectValue placeholder="Select Month" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {getMonthOptions().map(option => (
-                                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
+                                  {/* Recent Sales Table (with Month/Year Filter) */}
+                                  <div className="space-y-4 border rounded-lg col-span-3 p-4">
+                                    <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
+                                    <div className="flex flex-wrap items-center gap-4 mb-4">
+                                      <Label htmlFor="sales-month" className="min-w-[40px]">Month:</Label>
+                                      <Select value={salesTableMonth} onValueChange={setSalesTableMonth}>
+                                        <SelectTrigger id="sales-month" className="w-[150px]">
+                                          <SelectValue placeholder="Select Month" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {getMonthOptions().map(option => (
+                                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
 
-                                        <Label htmlFor="sales-year" className="min-w-[30px]">Year:</Label>
-                                        <Select value={salesTableYear} onValueChange={setSalesTableYear}>
-                                          <SelectTrigger id="sales-year" className="w-[100px]">
-                                            <SelectValue placeholder="Select Year" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {getYearOptions().map(option => (
-                                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <Card>
-                                        <CardContent className="p-0">
-                                          <Table>
-                                            <TableHeader>
-                                              <TableRow>
-                                                <TableHead>Date</TableHead>
-                                                <TableHead className="text-right">Total</TableHead>
-                                                <TableHead className="text-right">Paid</TableHead>
-                                                <TableHead className="text-right">Balance</TableHead>
-                                              </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                              {filteredResellerSalesForTable.length > 0 ? (
-                                                filteredResellerSalesForTable.map((sale) => {
-                                                  const total = typeof sale.total === 'number' ? sale.total : 0;
-                                                  const paid = typeof sale.paid === 'number' ? sale.paid : 0;
-                                                  const balance = total - paid;
-                                                  return (
-                                                    <TableRow key={sale.id}>
-                                                      <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
-                                                      <TableCell className="text-right">${total.toFixed(2)}</TableCell>
-                                                      <TableCell className="text-right">${paid.toFixed(2)}</TableCell>
-                                                      <TableCell className="text-right font-medium">${balance.toFixed(2)}</TableCell>
-                                                    </TableRow>
-                                                  );
-                                                })
-                                              ) : (
-                                                <TableRow>
-                                                  <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
-                                                    No sales found for the selected month/year.
-                                                  </TableCell>
-                                                </TableRow>
-                                              )}
-                                            </TableBody>
-                                          </Table>
-                                        </CardContent>
-                                      </Card>
+                                      <Label htmlFor="sales-year" className="min-w-[30px]">Year:</Label>
+                                      <Select value={salesTableYear} onValueChange={setSalesTableYear}>
+                                        <SelectTrigger id="sales-year" className="w-[100px]">
+                                          <SelectValue placeholder="Select Year" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {getYearOptions().map(option => (
+                                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
                                     </div>
+                                    <Card>
+                                      <CardContent className="p-0">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Date</TableHead>
+                                              <TableHead className="text-right">Total</TableHead>
+                                              <TableHead className="text-right">Paid</TableHead>
+                                              <TableHead className="text-right">Balance</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {filteredResellerSalesForTable.length > 0 ? (
+                                              filteredResellerSalesForTable.map((sale) => {
+                                                const total = typeof sale.total === 'number' ? sale.total : 0;
+                                                const paid = typeof sale.paid === 'number' ? sale.paid : 0;
+                                                const balance = total - paid;
+                                                return (
+                                                  <TableRow key={sale.id}>
+                                                    <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
+                                                    <TableCell className="text-right">${total.toFixed(2)}</TableCell>
+                                                    <TableCell className="text-right">${paid.toFixed(2)}</TableCell>
+                                                    <TableCell className="text-right font-medium">${balance.toFixed(2)}</TableCell>
+                                                  </TableRow>
+                                                );
+                                              })
+                                            ) : (
+                                              <TableRow>
+                                                <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                                  No sales found for the selected month/year.
+                                                </TableCell>
+                                              </TableRow>
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      </CardContent>
+                                    </Card>
+                                  </div>
                                 </div>
                               )}
                               {/* Requests Currently not involved */}
