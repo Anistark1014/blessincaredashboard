@@ -1,18 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
-import { addDays } from "date-fns";
-import { ArrowDownCircle, ArrowDownSquare, ArrowUpCircle, Calendar as CalendarIcon, Search, Wallet } from "lucide-react";
+import { addDays, format, subMonths, subYears } from "date-fns";
+import { DateRange } from "react-day-picker";
+import { ArrowDownCircle, ArrowDownSquare, ArrowUpCircle, Calendar as CalendarIcon, Search, Wallet, Upload, Trash2, Plus, Undo, Redo, Copy, DollarSign, TrendingUp, AlertCircle, Activity, PiggyBank, CreditCard, TrendingDown, Target, Users, BarChart3, Calculator, Zap } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-// DateRange type for date filtering
-type DateRange = {
-  from: Date;
-  to?: Date;
-};
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,24 +28,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  DollarSign,
-  TrendingUp,
-  AlertCircle,
-  Activity,
-  PiggyBank,
-  CreditCard,
-  TrendingDown,
-  Target,
-  Users,
-  BarChart3,
-  Calculator,
-  Zap,
-} from "lucide-react";
-import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
+import * as XLSX from 'xlsx';
+// import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Badge } from "@/components/ui/badge";
 
 interface Investment {
   id: string;
@@ -74,7 +66,7 @@ interface LoanPayment {
   id: string;
   loan_id: string;
   amount: number;
-  note?: string;
+  note: string | null;
   payment_date: string;
 }
 
@@ -100,14 +92,8 @@ const Finance = () => {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
-  const [investmentPop, setInvestmentPop] = useState(false);
-  const [hideKpi, setHideKpi] = useState(() => {
-    if (isMobile) {
-      return true;
-    } else {
-      return false;
-    }
-  });
+  const [investmentPop, setInvestmentPop] = useState(false);  
+  const [hideKpi, setHideKpi] = useState(true);
   const [loanPop, setLoanPop] = useState(false);
   const [loanAction, setLoanAction] = useState<"take" | "pay">("take");
   const [sales, setSales] = useState<any[]>([]);
@@ -118,6 +104,31 @@ const Finance = () => {
     to: addDays(new Date(), 0),
   });
   const [isPopoverOpen, setPopoverOpen] = useState(false);
+
+  // Search and sort functionality
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<'date' | 'type' | 'description' | 'amount' | 'status'>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Export functionality
+  const handleExportToExcel = () => {
+    if (sales.length === 0 && expenses.length === 0 && investments.length === 0 && loans.length === 0 && loanPayments.length === 0) {
+      alert("No data to export.");
+      return;
+    }
+    const exportData = sales.map(s => ({
+      Date: s.date,
+      'Transaction Type': s.transaction_type,
+      Type: s.type || 'N/A',
+      Description: s.description || 'N/A',
+      Amount: s.amount,
+      Note: s.note,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Finances");
+    XLSX.writeFile(workbook, `Finances_Report.xlsx`);
+  };
 
   // Investment form state
   const [investmentForm, setInvestmentForm] = useState({
@@ -140,10 +151,6 @@ const Finance = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Fetching the data
-  // Fetching the data
-  // Fetching the data
 
   useEffect(() => {
     fetchSalesData();
@@ -242,7 +249,15 @@ const Finance = () => {
           created_at: loan.created_at,
         }))
       );
-      // setLoanPayments(paymentsData || []);
+      setLoanPayments(
+        (paymentsData || []).map((payment: any) => ({
+          id: payment.id,
+          loan_id: payment.loan_id,
+          amount: payment.amount,
+          note: payment.note,
+          payment_date: payment.payment_date,
+        }))
+      );
 
       const turnover = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
 
@@ -271,9 +286,117 @@ const Finance = () => {
       });
     }
   };
-  // Fetching the data
-  // Fetching the data
-  // Fetching the data
+  // Removed unused state variables and functions
+
+  // Combined, filtered, and sorted transactions for display
+  const allTransactions = useMemo(() => {
+    const transactions = [
+      // Sales transactions
+      ...sales.map(sale => ({
+        id: `sale-${sale.id}`,
+        date: new Date(sale.date),
+        type: 'Sale',
+        description: sale.products?.name || 'Product',
+        amount: sale.total,
+        status: sale.payment_status,
+        details: `Qty: ${sale.qty} × ₹${sale.price}`,
+        isPositive: true
+      })),
+      // Expense transactions
+      ...expenses.map(expense => ({
+        id: `expense-${expense.id}`,
+        date: new Date(expense.date),
+        type: 'Expense',
+        description: expense.category,
+        amount: -expense.amount,
+        status: 'Completed',
+        details: expense.description || 'No description',
+        isPositive: false
+      })),
+      // Investment transactions
+      ...investments.map(investment => ({
+        id: `investment-${investment.id}`,
+        date: new Date(investment.created_at),
+        type: 'Investment',
+        description: investment.investor_name,
+        amount: investment.amount,
+        status: 'Active',
+        details: investment.note || 'Investment received',
+        isPositive: true
+      })),
+      // Loan transactions
+      ...loans.map(loan => ({
+        id: `loan-${loan.id}`,
+        date: new Date(loan.created_at),
+        type: 'Loan',
+        description: loan.issuer,
+        amount: loan.amount,
+        status: loan.status,
+        details: `${loan.duration_months} months @ ${loan.interest_rate}%`,
+        isPositive: true
+      })),
+      // Loan payment transactions
+      ...loanPayments.map(payment => ({
+        id: `payment-${payment.id}`,
+        date: new Date(payment.payment_date),
+        type: 'Loan Payment',
+        description: 'Loan Payment',
+        amount: -payment.amount,
+        status: 'Paid',
+        details: payment.note || 'Monthly payment',
+        isPositive: false
+      }))
+    ];
+
+    // Filter by search term
+    const filteredTransactions = searchTerm.trim() === ''
+      ? transactions
+      : transactions.filter(transaction =>
+        transaction.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.amount.toString().includes(searchTerm) ||
+        transaction.date.toLocaleDateString().includes(searchTerm)
+      );
+
+    // Sort by selected field and direction
+    return filteredTransactions.sort((a, b) => {
+      let aValue: any, bValue: any;
+
+      switch (sortField) {
+        case 'date':
+          aValue = a.date.getTime();
+          bValue = b.date.getTime();
+          break;
+        case 'type':
+          aValue = a.type.toLowerCase();
+          bValue = b.type.toLowerCase();
+          break;
+        case 'description':
+          aValue = a.description.toLowerCase();
+          bValue = b.description.toLowerCase();
+          break;
+        case 'amount':
+          aValue = Math.abs(a.amount);
+          bValue = Math.abs(b.amount);
+          break;
+        case 'status':
+          aValue = a.status.toLowerCase();
+          bValue = b.status.toLowerCase();
+          break;
+        default:
+          aValue = a.date.getTime();
+          bValue = b.date.getTime();
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+  }, [sales, expenses, investments, loans, loanPayments, searchTerm, sortField, sortDirection]);
 
   // Memo for display date (like SalesTable)
   const displayDate = useMemo(() => {
@@ -490,7 +613,7 @@ const Finance = () => {
         setLoanPayments((prev) => [
           {
             ...paymentData,
-            note: paymentData.note ?? undefined,
+            note: paymentData.note ?? null,
           },
           ...prev,
         ]);
@@ -925,7 +1048,372 @@ const Finance = () => {
         </Card>
       </div>
 
-      <div>THis is data</div>
+      <div> <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <CardTitle className="text-2xl">All Transaction Records</CardTitle>
+
+            </div>
+          </div>
+          <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
+            <div className="relative flex-grow">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by type, description, status, amount, or date..."
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !date && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date?.from
+                    ? date.to
+                      ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
+                      : date.from.toLocaleDateString()
+                    : "Pick a date range"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0 flex"
+                side="bottom"
+                align="start"
+              >
+                <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
+                  <Button
+                    variant="ghost"
+                    className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                    onClick={() => {
+                      const now = new Date();
+                      setDate({
+                        from: new Date(now.getFullYear(), now.getMonth(), 1),
+                        to: addDays(new Date(), 0),
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    This Month
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                    onClick={() => {
+                      const now = new Date();
+                      const lastMonth = new Date(
+                        now.getFullYear(),
+                        now.getMonth() - 1,
+                        1
+                      );
+                      const lastMonthEnd = new Date(
+                        now.getFullYear(),
+                        now.getMonth(),
+                        0
+                      );
+                      setDate({
+                        from: lastMonth,
+                        to: lastMonthEnd,
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    Last Month
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                    onClick={() => {
+                      setDate({ from: subMonths(new Date(), 6), to: new Date() });
+                      setPopoverOpen(false);
+                    }}
+                  >Last 6 Months
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                    onClick={() => {
+                      const now = new Date();
+                      setDate({
+                        from: new Date(now.getFullYear(), 0, 1),
+                        to: addDays(new Date(), 0),
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    This Year
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                    onClick={() => {
+                      setDate({
+                        from: new Date(2000, 0, 1),
+                        to: addDays(new Date(), 0),
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    All Time
+                  </Button>
+                </div>
+                <div className="p-2 bg-muted/40 rounded-r-lg">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      From
+                    </label>
+                    <input
+                      type="date"
+                      value={
+                        date?.from ? date.from.toISOString().slice(0, 10) : ""
+                      }
+                      onChange={(e) => {
+                        const newFrom = e.target.value
+                          ? new Date(e.target.value)
+                          : undefined;
+                        setDate((prev) => ({ ...prev, from: newFrom! }));
+                      }}
+                      className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                    />
+                    <label className="text-xs font-medium text-muted-foreground">
+                      To
+                    </label>
+                    <input
+                      type="date"
+                      value={date?.to ? date.to.toISOString().slice(0, 10) : ""}
+                      onChange={(e) => {
+                        const newTo = e.target.value
+                          ? new Date(e.target.value)
+                          : undefined;
+                        setDate((prev) =>
+                          prev && prev.from
+                            ? { ...prev, to: newTo! }
+                            : newTo
+                              ? { from: newTo, to: newTo }
+                              : prev
+                        );
+                      }}
+                      className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => setPopoverOpen(false)}
+                      className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover> */}
+
+            <div className="flex items-center gap-2">
+              <TooltipProvider delayDuration={0}>
+                {/* <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={handleRedo} variant="outline" size="sm" disabled={redoStack.length === 0 || isUndoing}>
+                      <Redo className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Redo</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={handleUndo} variant="outline" size="sm" disabled={undoStack.length === 0 || isUndoing}>
+                      <Undo className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Undo</p></TooltipContent>
+                </Tooltip> */}
+                <Button onClick={handleExportToExcel} variant="outline" size="sm">
+                  <Upload className="h-4 w-4" />
+                </Button>
+                {/* <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={() => setAddingNew(true)} size="sm" disabled={addingNew}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Add new</p></TooltipContent>
+                </Tooltip> */}
+              </TooltipProvider>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      if (sortField === 'date') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('date');
+                        setSortDirection('desc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Date
+                      {sortField === 'date' && (
+                        <span className="text-xs">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      if (sortField === 'type') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('type');
+                        setSortDirection('asc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Type
+                      {sortField === 'type' && (
+                        <span className="text-xs">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      if (sortField === 'description') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('description');
+                        setSortDirection('asc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Description
+                      {sortField === 'description' && (
+                        <span className="text-xs">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="text-right cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      if (sortField === 'amount') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('amount');
+                        setSortDirection('desc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      Amount
+                      {sortField === 'amount' && (
+                        <span className="text-xs">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      if (sortField === 'status') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('status');
+                        setSortDirection('asc');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Status
+                      {sortField === 'status' && (
+                        <span className="text-xs">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allTransactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>{transaction.date.toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="default"
+                        className={
+                          transaction.type === 'Sale' ? 'bg-green-100 text-green-800' :
+                            transaction.type === 'Expense' ? 'bg-red-100 text-red-800' :
+                              transaction.type === 'Investment' ? 'bg-blue-100 text-blue-800' :
+                                transaction.type === 'Loan' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-orange-100 text-orange-800'
+                        }
+                      >
+                        {transaction.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{transaction.description}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {transaction.details}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className={`text-right font-medium ${transaction.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                      {transaction.isPositive ? '+' : ''}₹{Math.abs(transaction.amount).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={transaction.status === 'Fully Paid' || transaction.status === 'Active' || transaction.status === 'Completed' || transaction.status === 'Paid' ? 'default' : 'secondary'}
+                        className={
+                          transaction.status === 'Fully Paid' || transaction.status === 'Active' || transaction.status === 'Completed' || transaction.status === 'Paid'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }
+                      >
+                        {transaction.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+                {/* Empty state */}
+                {allTransactions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No transactions found for the selected date range
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card></div>
 
       {/* Investment Popup Dialog */}
       <Dialog open={investmentPop} onOpenChange={setInvestmentPop}>
