@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +27,12 @@ import ToggleTheme from './ToggleTheme';
 
 interface LayoutProps {
   children: React.ReactNode;
+}
+
+interface NavItem {
+  to: string;
+  label: string;
+  icon?: React.ComponentType<any>; // optional if you're using icons
 }
 
 // Cash Balance Hook - Replace with actual Supabase implementation
@@ -227,12 +234,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/expenses', icon: Settings, label: 'Expense Tracker' },
     { to: '/admin/inventory', icon: Users, label: 'Inventory Management' },
     { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
-    { to: '/admin/cash-balance', icon: Wallet, label: 'Cash Balance' },
+    // { to: '/admin/cash-balance', icon: Wallet, label: 'Cash Balance' },
     { to: '/admin/GrossProfitAnalysis', icon: IndianRupee, label: 'GrossProfitAnalysis' },
     { to: '/admin/rewards', icon: Award , label: 'Rewards' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
+
+const useKeyboardPageNavigation = (navItems:NavItem) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!e.ctrlKey) return;
+
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active?.getAttribute('contenteditable') === 'true'
+      ) return;
+
+      const currentIndex = navItems.findIndex(item => item.to === location.pathname);
+      if (currentIndex === -1) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIndex = (currentIndex + 1) % navItems.length;
+        navigate(navItems[nextIndex].to);
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
+        navigate(navItems[prevIndex].to);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navItems, location.pathname, navigate]);
+};
+
+useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavItems);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-lavender/5 to-blush/5">
