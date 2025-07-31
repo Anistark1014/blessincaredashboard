@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ interface NavItem {
 
 // Cash Balance Hook - Replace with actual Supabase implementation
 const useCashBalance = () => {
-  const [balance, setBalance] = useState(null);
+  const [balance, setBalance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
@@ -70,7 +70,7 @@ const useCashBalance = () => {
 const CashBalanceNavbar = () => {
   const { balance, loading, refetch } = useCashBalance();
   
-  const formatCompactCurrency = (amount) => {
+  const formatCompactCurrency = (amount: number) => {
     if (amount >= 10000000) {
       return `₹${(amount / 10000000).toFixed(1)}Cr`;
     } else if (amount >= 100000) {
@@ -81,7 +81,7 @@ const CashBalanceNavbar = () => {
     return `₹${amount}`;
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -204,7 +204,7 @@ const CashBalanceNavbar = () => {
                 to="/admin/cash-balance" 
                 className="text-xs text-primary hover:text-primary/80 font-medium"
               >
-                View Full Cash Balance Report →
+                View Full Cash Balance Report → 
               </NavLink>
             </div>
           </div>
@@ -217,7 +217,8 @@ const CashBalanceNavbar = () => {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isSidebarExpanded, setSidebarExpanded] = useState(false);
+  const sidebarRef = useRef<HTMLElement | null>(null);
 
   const resellerNavItems = [
     { to: '/reseller', icon: Home, label: 'Dashboard' },
@@ -241,44 +242,55 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
 
-const useKeyboardPageNavigation = (navItems:NavItem) => {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const useKeyboardPageNavigation = (navItems: any) => {
+    const location = useLocation();
+    const navigate = useNavigate();
 
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (!e.ctrlKey) return;
+
+        const active = document.activeElement;
+        if (
+          active instanceof HTMLInputElement ||
+          active instanceof HTMLTextAreaElement ||
+          active?.getAttribute('contenteditable') === 'true'
+        ) return;
+
+        const currentIndex = navItems.findIndex((item: any) => item.to === location.pathname);
+        if (currentIndex === -1) return;
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextIndex = (currentIndex + 1) % navItems.length;
+          navigate(navItems[nextIndex].to);
+        }
+
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
+          navigate(navItems[prevIndex].to);
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [navItems, location.pathname, navigate]);
+  };
+
+  useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavItems);
+
+  // collapse when clicking outside
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!e.ctrlKey) return;
-
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLTextAreaElement ||
-        active?.getAttribute('contenteditable') === 'true'
-      ) return;
-
-      const currentIndex = navItems.findIndex(item => item.to === location.pathname);
-      if (currentIndex === -1) return;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const nextIndex = (currentIndex + 1) % navItems.length;
-        navigate(navItems[nextIndex].to);
-      }
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
-        navigate(navItems[prevIndex].to);
+    const handleClickOutside = (e: MouseEvent) => {
+      const sidebarEl = sidebarRef.current;
+      if (sidebarEl && !sidebarEl.contains(e.target as Node)) {
+        setSidebarExpanded(false);
       }
     };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navItems, location.pathname, navigate]);
-};
-
-useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavItems);
-
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-lavender/5 to-blush/5">
@@ -292,7 +304,7 @@ useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavIt
                 variant="ghost"
                 size="icon"
                 className=""
-                onClick={() => setSidebarOpen(!isSidebarOpen)}
+                onClick={() => setSidebarExpanded((prev) => !prev)}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -306,7 +318,7 @@ useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavIt
                     strokeLinejoin="round"
                     strokeWidth={2}
                     d={
-                      isSidebarOpen
+                      isSidebarExpanded
                         ? 'M6 18L18 6M6 6l12 12' // X icon
                         : 'M4 6h16M4 12h16M4 18h16' // Hamburger
                     }
@@ -359,25 +371,20 @@ useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavIt
         </div>
       </nav>
 
-      {/* Mobile Sidebar Backdrop */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/30 z-40"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex flex-col gap-6">
           {/* Sidebar Navigation (Drawer style on all screens) */}
           <aside
+            id="sidebar"
+            ref={(el) => (sidebarRef.current = el)}
             className={`
-              fixed top-0 left-0 bottom-0 z-50 w-64 bg-background border-r border-lavender/10 shadow-lg
-              p-4 overflow-y-auto transform transition-transform duration-300
-              ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+              fixed top-0 left-0 bottom-0 z-50 
+              ${isSidebarExpanded ? 'w-64' : 'w-20'}
+              bg-background border-r border-lavender/10 shadow-lg
+               overflow-y-auto transition-all duration-300
             `}
           >
-            <div className="healthcare-card p-4">
+            <div className="p-4">
               <nav className="space-y-2">
                 {navItems.map((item) => {
                   const isActive = location.pathname === item.to;
@@ -385,15 +392,15 @@ useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavIt
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      onClick={() => setSidebarOpen(false)}
+                      onClick={() => setSidebarExpanded(false)}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                         isActive
                           ? 'bg-gradient-to-r from-lavender to-blush text-lavender-foreground shadow-[var(--shadow-soft)]'
                           : 'text-muted-foreground hover:text-foreground hover:bg-lavender/10'
                       }`}
                     >
-                      <item.icon className="w-5 h-5" />
-                      <span>{item.label}</span>
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarExpanded && <span>{item.label}</span>}
                     </NavLink>
                   );
                 })}
