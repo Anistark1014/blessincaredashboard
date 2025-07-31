@@ -18,7 +18,8 @@ import {
   TrendingUp,
   TrendingDown,
   RefreshCw,
-  Wallet
+  Wallet,
+  Award
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import ToggleTheme from './ToggleTheme';
@@ -228,6 +229,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
     { to: '/admin/cash-balance', icon: Wallet, label: 'Cash Balance' },
     { to: '/admin/GrossProfitAnalysis', icon: IndianRupee, label: 'GrossProfitAnalysis' },
+    { to: '/admin/rewards', icon: Award , label: 'Rewards' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
