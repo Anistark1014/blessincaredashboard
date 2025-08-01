@@ -92,7 +92,7 @@ const Finance = () => {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
-  const [investmentPop, setInvestmentPop] = useState(false);  
+  const [investmentPop, setInvestmentPop] = useState(false);
   const [hideKpi, setHideKpi] = useState(true);
   const [loanPop, setLoanPop] = useState(false);
   const [loanAction, setLoanAction] = useState<"take" | "pay">("take");
@@ -149,8 +149,8 @@ const Finance = () => {
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(date);
+  }, [date]);
 
   useEffect(() => {
     fetchSalesData();
@@ -201,12 +201,18 @@ const Finance = () => {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (date: DateRange | undefined) => {
     try {
+      // Create proper date ranges that cover full days
+      const startDate = date?.from ? new Date(date.from.getFullYear(), date.from.getMonth(), date.from.getDate(), 0, 0, 0, 0).toISOString() : "";
+      const endDate = date?.to ? new Date(date.to.getFullYear(), date.to.getMonth(), date.to.getDate(), 23, 59, 59, 999).toISOString() : "";
+
       // Fetch investments
       const { data: investmentsData, error: investmentsError } = await supabase
         .from("investments")
         .select("*")
+        .gte("created_at", startDate)
+        .lte("created_at", endDate)
         .order("created_at", { ascending: false });
 
       if (investmentsError) throw investmentsError;
@@ -215,6 +221,8 @@ const Finance = () => {
       const { data: loansData, error: loansError } = await supabase
         .from("loans")
         .select("*")
+        .gte("created_at", startDate)
+        .lte("created_at", endDate)
         .order("created_at", { ascending: false });
 
       if (loansError) throw loansError;
@@ -223,6 +231,8 @@ const Finance = () => {
       const { data: paymentsData, error: paymentsError } = await supabase
         .from("loan_payments")
         .select("*")
+        .gte("payment_date", startDate)
+        .lte("payment_date", endDate)
         .order("payment_date", { ascending: false });
 
       if (paymentsError) throw paymentsError;
@@ -297,9 +307,9 @@ const Finance = () => {
         date: new Date(sale.date),
         type: 'Sale',
         description: sale.products?.name || 'Product',
-        amount: sale.total,
+        amount: sale.paid || 0,
         status: sale.payment_status,
-        details: `Qty: ${sale.qty} × ₹${sale.price}`,
+        details: `Qty: ${sale.qty} × ₹${sale.price} = ₹${sale.total}`,
         isPositive: true
       })),
       // Expense transactions
@@ -689,6 +699,31 @@ const Finance = () => {
               align="start"
             >
               <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
+                {/* <Button
+                  variant="ghost"
+                  className={cn(
+                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                    date && date.from && date.to &&
+                      date.from.getFullYear() === new Date().getFullYear() &&
+                      date.from.getMonth() === new Date().getMonth() &&
+                      date.from.getDate() === new Date().getDate() &&
+                      date.to.getFullYear() === new Date().getFullYear() &&
+                      date.to.getMonth() === new Date().getMonth() &&
+                      date.to.getDate() === new Date().getDate() &&
+                      date.from.getTime() === date.to.getTime()
+                      ? "bg-lavender/30" : ""
+                  )}
+                  onClick={() => {
+                    const now = new Date();
+                    setDate({
+                      from: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+                      to: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+                    });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  Today
+                </Button> */}
                 <Button
                   variant="ghost"
                   className={cn(
@@ -696,7 +731,11 @@ const Finance = () => {
                     date && date.from && date.to &&
                       date.from.getFullYear() === new Date().getFullYear() &&
                       date.from.getMonth() === new Date().getMonth() &&
-                      date.to.toDateString() === new Date().toDateString()
+                      date.from.getDate() === 1 &&
+                      date.to.getFullYear() === new Date().getFullYear() &&
+                      date.to.getMonth() === new Date().getMonth() &&
+                      date.to.getDate() === new Date().getDate() &&
+                      date.from.getTime() !== date.to.getTime()
                       ? "bg-lavender/30" : ""
                   )}
                   onClick={() => {

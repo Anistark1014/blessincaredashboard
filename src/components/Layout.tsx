@@ -39,7 +39,7 @@ interface NavItem {
 const useCashBalance = () => {
   const [balance, setBalance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     fetchBalance();
   }, []);
@@ -62,14 +62,14 @@ const useCashBalance = () => {
       setLoading(false);
     }, 1000);
   };
-  
+
   return { balance, loading, refetch: fetchBalance };
 };
 
 // Cash Balance Component for Navbar
 const CashBalanceNavbar = () => {
   const { balance, loading, refetch } = useCashBalance();
-  
+
   const formatCompactCurrency = (amount: number) => {
     if (amount >= 10000000) {
       return `₹${(amount / 10000000).toFixed(1)}Cr`;
@@ -133,12 +133,12 @@ const CashBalanceNavbar = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        
+
         {/* Dropdown Content */}
         <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-lavender/20 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 backdrop-blur-sm">
           <div className="p-4">
             <h3 className="text-sm font-semibold text-foreground mb-3">Cash Flow Summary</h3>
-            
+
             <div className="space-y-2">
               {/* Inflows */}
               <div className="flex items-center justify-between">
@@ -150,7 +150,7 @@ const CashBalanceNavbar = () => {
                   +{formatCurrency(balance?.salesRevenue || 0)}
                 </span>
               </div>
-              
+
               {balance?.investmentsReceived > 0 && (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -200,11 +200,11 @@ const CashBalanceNavbar = () => {
 
             {/* View Full Report Link */}
             <div className="mt-3 pt-3 border-t border-lavender/20">
-              <NavLink 
-                to="/admin/cash-balance" 
+              <NavLink
+                to="/admin/cash-balance"
                 className="text-xs text-primary hover:text-primary/80 font-medium"
               >
-                View Full Cash Balance Report → 
+                View Full Cash Balance Report →
               </NavLink>
             </div>
           </div>
@@ -237,7 +237,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
     // { to: '/admin/cash-balance', icon: Wallet, label: 'Cash Balance' },
     { to: '/admin/GrossProfitAnalysis', icon: IndianRupee, label: 'GrossProfitAnalysis' },
-    { to: '/admin/rewards', icon: Award , label: 'Rewards' },
+    { to: '/admin/rewards', icon: Award, label: 'Rewards' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
@@ -379,7 +379,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             ref={(el) => (sidebarRef.current = el)}
             className={`
               fixed top-0 left-0 bottom-0 z-50 
-              ${isSidebarExpanded ? 'w-64' : 'w-20'}
+              ${isSidebarExpanded ? 'w-64' : 'w-0'}
               bg-background border-r border-lavender/10 shadow-lg
                overflow-y-auto transition-all duration-300
             `}
@@ -393,11 +393,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       key={item.to}
                       to={item.to}
                       onClick={() => setSidebarExpanded(false)}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        isActive
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
                           ? 'bg-gradient-to-r from-lavender to-blush text-lavender-foreground shadow-[var(--shadow-soft)]'
                           : 'text-muted-foreground hover:text-foreground hover:bg-lavender/10'
-                      }`}
+                        }`}
                     >
                       <item.icon className="w-5 h-5 flex-shrink-0" />
                       {isSidebarExpanded && <span>{item.label}</span>}

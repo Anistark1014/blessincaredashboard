@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, SortDesc } from 'lucide-react';
+import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, SortDesc, Box } from 'lucide-react';
 // import { cn } from '@/lib/utils';
 
 interface Product {
@@ -31,6 +31,14 @@ interface PriceRange {
   min: number;
   max: number;
   price: number;
+}
+
+interface Expense {
+  id: string;
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
 }
 
 interface InventoryTransaction {
@@ -231,7 +239,7 @@ const Inventory: React.FC = () => {
     if (products.length > 0) {
       // Calculate total stock number and value
       const stockNumber = products.reduce((sum, product) => sum + (Number(product.inventory) || 0), 0);
-      console.log(stockNumber);
+      // console.log(stockNumber);
 
       // Calculate stock value by multiplying each product's inventory with its own average price
       const stockValue = products.reduce((totalValue, product) => {
@@ -247,9 +255,9 @@ const Inventory: React.FC = () => {
 
         // Calculate value for this product: inventory * average price
         const productValue = inventory * averagePrice;
-        console.log(productValue);
+        // console.log(productValue);
 
-        console.log(`Product: ${product.name}, Inventory: ${inventory}, Avg Price: ${averagePrice}, Value: ${productValue}`);
+        // console.log(`Product: ${product.name}, Inventory: ${inventory}, Avg Price: ${averagePrice}, Value: ${productValue}`);
 
         return totalValue + productValue;
       }, 0);
@@ -342,6 +350,7 @@ const Inventory: React.FC = () => {
       return;
     }
 
+
     try {
       const selectedProduct = products.find(p => p.id === selectedProductId);
       if (!selectedProduct) return;
@@ -361,25 +370,48 @@ const Inventory: React.FC = () => {
 
       if (transactionError) throw transactionError;
 
+      // Create expense record for the purchase
+      if (costPerUnit && parseFloat(costPerUnit) > 0) {
+        const totalCost = parseFloat(costPerUnit) * parseInt(quantity);
+
+        const { error: expenseError } = await supabase
+          .from('expenses')
+          .insert({
+            category: "Stock Purchase",
+            amount: totalCost,
+            date: purchaseDate,
+            description: `Stock purchase: ${quantity} units of ${selectedProduct.name} at ₹${costPerUnit} per unit${notes ? ` - ${notes}` : ''}`,
+          });
+
+        if (expenseError) {
+          console.error('Error creating expense record:', expenseError);
+          // Don't throw error here as the main transaction was successful
+          toast({
+            title: "Warning",
+            description: "Stock purchase recorded but expense tracking failed.",
+            variant: "destructive",
+          });
+        }
+      }
+
       // Update product inventory
       const { error: updateError } = await supabase
         .from('products')
         .update({
-          // @ts-expect-error: inventory field exists in the database but not in the generated types
           inventory: selectedProduct.inventory + parseInt(quantity)
         })
         .eq('id', selectedProductId);
 
       if (updateError) throw updateError;
 
-      // Create notification
-      await supabase.from('notifications').insert({
-        user_id: user?.id,
-        type: 'stock_received',
-        message: `New stock received for ${selectedProduct.name}: +${quantity} units. Inventory updated.`,
-        related_entity_id: selectedProductId,
-        role: 'admin',
-      });
+      // // Create notification
+      // await supabase.from('notifications').insert({
+      //   user_id: user?.id,
+      //   type: 'stock_received',
+      //   message: `New stock received for ${selectedProduct.name}: +${quantity} units. Inventory updated.`,
+      //   related_entity_id: selectedProductId,
+      //   role: 'admin',
+      // });
 
       toast({
         title: "Stock Updated",
@@ -525,7 +557,7 @@ const Inventory: React.FC = () => {
               </div>
 
               <div>
-                <Label htmlFor="cost">Cost Per Unit (Optional)</Label>
+                <Label htmlFor="cost">Cost Per Unit</Label>
                 <Input
                   id="cost"
                   type="number"
@@ -713,7 +745,7 @@ const Inventory: React.FC = () => {
               </SelectContent>
             </Select>
 
-            <Button
+            {/* <Button
               variant={lowStockOnly ? "default" : "outline"}
               size="sm"
               onClick={() => setLowStockOnly(!lowStockOnly)}
@@ -721,7 +753,7 @@ const Inventory: React.FC = () => {
             >
               <AlertTriangle className="h-4 w-4 mr-2" />
               Low Stock Only
-            </Button>
+            </Button> */}
           </div>
         </div>
 
@@ -899,24 +931,7 @@ const Inventory: React.FC = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead
-                    className="cursor-pointer"
-                    onClick={() => {
-                      if (sortField === 'min_stock_alert') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('min_stock_alert');
-                        setSortDirection('asc');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center">
-                      Min Stock Alert
-                      {sortField === 'min_stock_alert' && (
-                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
-                      )}
-                    </div>
-                  </TableHead>
+
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -948,9 +963,10 @@ const Inventory: React.FC = () => {
                             {product.purchased_this_month}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="flex items-center">
+                          {product.inventory < 200 ? <Box className="h-4 w-4 text-red-500 mr-1" /> : <Box className="h-4 w-4 text-green-500 mr-1" />}
                           <Badge variant={isLowStock ? "destructive" : "secondary"}>
-                            {product.inventory} units
+                            {product.inventory || 0} units
                           </Badge>
                         </TableCell>
                         <TableCell>

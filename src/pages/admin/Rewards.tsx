@@ -11,7 +11,7 @@ import { Plus, Edit, Trash2, Gift, Gem, Sparkles, Diamond, Award, Trophy, Link, 
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
 
 // Assuming you have a types file for Supabase tables
 type Reward = Tables<'rewards'>;
@@ -125,108 +125,108 @@ const RewardForm: React.FC<RewardFormProps> = ({ onSubmit, onCancel, isEdit = fa
             setPreviewUrl(null);
         }
     }, [imageFile, formData.image_url]);
-    
+
     return (
         <div className="h-[85vh] overflow-auto px-4 py-6">
-        <form onSubmit={onSubmit} className="space-y-4 min-h-full p-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="title">Reward Title</Label>
-                    <Input
-                        id="title"
-                        placeholder="e.g., 10% Discount"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        required
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="points_required">Points Required</Label>
-                    <Input
-                        id="points_required"
-                        type="number"
-                        placeholder="e.g., 500"
-                        value={formData.points_required}
-                        onChange={(e) => setFormData({ ...formData, points_required: parseInt(e.target.value) || 0 })}
-                        required
-                    />
-                </div>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="link">Reward Link (Optional)</Label>
-                <Input
-                    id="link"
-                    type="url"
-                    placeholder="https://example.com/reward"
-                    value={formData.link || ''}
-                    onChange={(e) => setFormData({ ...formData, link: e.target.value || null })}
-                />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="image_upload">Reward Image (Optional)</Label>
-                <Input
-                    id="image_upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        setImageFile(file);
-                    }}
-                />
-                {previewUrl ? (
-                    <div className="border border-input rounded-md p-2 mt-2">
-                        <p className="text-sm text-muted-foreground mb-2">Image Preview</p>
-                        <img
-                            src={previewUrl}
-                            alt="Preview"
-                            className="w-full h-32 object-contain rounded-md"
+            <form onSubmit={onSubmit} className="space-y-4 min-h-full p-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="title">Reward Title</Label>
+                        <Input
+                            id="title"
+                            placeholder="e.g., 10% Discount"
+                            value={formData.title}
+                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                            required
                         />
                     </div>
-                ) : (
-                    <div className="border border-input rounded-md p-4 mt-2 flex justify-center items-center h-32 bg-muted">
-                        <ImageIcon className="w-10 h-10 text-muted-foreground opacity-50" />
+                    <div className="space-y-2">
+                        <Label htmlFor="points_required">Points Required</Label>
+                        <Input
+                            id="points_required"
+                            type="number"
+                            placeholder="e.g., 500"
+                            value={formData.points_required}
+                            onChange={(e) => setFormData({ ...formData, points_required: parseInt(e.target.value) || 0 })}
+                            required
+                        />
                     </div>
-                )}
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="tier">Tier</Label>
-                <Select
-                    value={formData.tier}
-                    onValueChange={(value) => setFormData({ ...formData, tier: value })}
-                >
-                    <SelectTrigger className="w-full">
-                        <SelectValue>
-                            {formData.tier ? <TierVisual tierName={formData.tier} /> : "Select Tier"}
-                        </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                        {allTiers.map(tier => (
-                            <SelectItem key={tier} value={tier}>
-                                <TierVisual tierName={tier} />
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                    id="description"
-                    placeholder="Enter reward details..."
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    required
-                />
-            </div>
-            <div className="flex justify-end gap-2">
-                <Button variant="outline" type="button" onClick={onCancel}>
-                    Cancel
-                </Button>
-                <Button type="submit">
-                    {isEdit ? 'Update Reward' : 'Add Reward'}
-                </Button>
-            </div>
-        </form>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="link">Reward Link (Optional)</Label>
+                    <Input
+                        id="link"
+                        type="url"
+                        placeholder="https://example.com/reward"
+                        value={formData.link || ''}
+                        onChange={(e) => setFormData({ ...formData, link: e.target.value || null })}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="image_upload">Reward Image (Optional)</Label>
+                    <Input
+                        id="image_upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            setImageFile(file);
+                        }}
+                    />
+                    {previewUrl ? (
+                        <div className="border border-input rounded-md p-2 mt-2">
+                            <p className="text-sm text-muted-foreground mb-2">Image Preview</p>
+                            <img
+                                src={previewUrl}
+                                alt="Preview"
+                                className="w-full h-32 object-contain rounded-md"
+                            />
+                        </div>
+                    ) : (
+                        <div className="border border-input rounded-md p-4 mt-2 flex justify-center items-center h-32 bg-muted">
+                            <ImageIcon className="w-10 h-10 text-muted-foreground opacity-50" />
+                        </div>
+                    )}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="tier">Tier</Label>
+                    <Select
+                        value={formData.tier}
+                        onValueChange={(value) => setFormData({ ...formData, tier: value })}
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue>
+                                {formData.tier ? <TierVisual tierName={formData.tier} /> : "Select Tier"}
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {allTiers.map(tier => (
+                                <SelectItem key={tier} value={tier}>
+                                    <TierVisual tierName={tier} />
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                        id="description"
+                        placeholder="Enter reward details..."
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        required
+                    />
+                </div>
+                <div className="flex justify-end gap-2">
+                    <Button variant="outline" type="button" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Button type="submit">
+                        {isEdit ? 'Update Reward' : 'Add Reward'}
+                    </Button>
+                </div>
+            </form>
         </div>
     );
 };
@@ -541,17 +541,17 @@ const Rewards = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {rewardsInTier.map((reward) => (
                                     <Card key={reward.id} className="healthcare-card flex flex-col">
-                                            <CardHeader className="p-4 pb-2">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <CardTitle className="text-lg font-semibold">{reward.title}</CardTitle>
-                                                    <Badge className="text-sm shrink-0">
-                                                        {reward.points_required} Points
-                                                    </Badge>
-                                                </div>
-                                                <div className={`p-2 ${getTierColor(reward.tier)} rounded-md`}>
-                                                    <TierVisual tierName={reward.tier} />
-                                                </div>
-                                            </CardHeader>
+                                        <CardHeader className="p-4 pb-2">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <CardTitle className="text-lg font-semibold">{reward.title}</CardTitle>
+                                                <Badge className="text-sm shrink-0">
+                                                    {reward.points_required} Points
+                                                </Badge>
+                                            </div>
+                                            <div className={`p-2 ${getTierColor(reward.tier)} rounded-md`}>
+                                                <TierVisual tierName={reward.tier} />
+                                            </div>
+                                        </CardHeader>
                                         <div className="p-4 pt-0">
                                             {reward.image_url ? (
                                                 <img
