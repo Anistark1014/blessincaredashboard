@@ -85,8 +85,7 @@ const useCashBalance = () => {
         // Sales revenue (paid amounts)
         supabase
           .from('sales')
-          .select('paid')
-          .eq('payment_status', 'paid'),
+          .select('paid'),
         
         // Investments received
         supabase
@@ -317,12 +316,12 @@ const CashBalanceNavbar = () => {
                 </h4>
                 
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
+                  {/* <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Goods Purchased</span>
                     <span className="text-xs text-red-600">
                       -{formatCurrency(balance?.goodsPurchases || 0)}
                     </span>
-                  </div>
+                  </div> */}
 
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Operating Expenses</span>
