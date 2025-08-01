@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/types/database'; // Your database types
+import { Database } from '@/types/supabase'; // Your database types
 import { Button } from '@/components/ui/button';
 import {
   Heart,
@@ -59,7 +59,7 @@ interface CashBalanceData {
 
 // Enhanced Cash Balance Hook with Real Supabase Integration
 const useCashBalance = () => {
-  const [balance, setBalance] = useState<any>(null);
+  // const [balance, setBalance] = useState<any>(null);
   const [balance, setBalance] = useState<CashBalanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +183,7 @@ const useCashBalance = () => {
 const CashBalanceNavbar = () => {
   const { balance, loading, error, refetch } = useCashBalance();
   
-  const formatCompactCurrency = (amount: number) => {
+  // const formatCompactCurrency = (amount: number) => {
   const formatCompactCurrency = (amount: number) => {
     if (amount >= 10000000) {
       return `₹${(amount / 10000000).toFixed(1)}Cr`;
@@ -195,7 +195,7 @@ const CashBalanceNavbar = () => {
     return `₹${amount}`;
   };
 
-  const formatCurrency = (amount: number) => {
+  // const formatCurrency = (amount: number) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -401,7 +401,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/expenses', icon: Settings, label: 'Expense Tracker' },
     { to: '/admin/inventory', icon: Users, label: 'Inventory Management' },
     { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
-    // { to: '/admin/cash-balance', icon: Wallet, label: 'Cash Balance' },
     { to: '/admin/CashBalancePage', icon: Wallet, label: 'Cash Balance' },
     { to: '/admin/GrossProfitAnalysis', icon: IndianRupee, label: 'GrossProfitAnalysis' },
     { to: '/admin/rewards', icon: Award , label: 'Rewards' },
@@ -585,4 +584,4 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 };
 
-export default Layout;
+export default Layout ;
