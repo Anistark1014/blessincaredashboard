@@ -54,7 +54,7 @@ const useCashBalance = () => {
         { data: cashTransactionsData, error: cashError },
         { data: goodsPurchasesData, error: goodsError }
       ] = await Promise.all([
-        supabase.from('sales').select('paid, date, payment_status, id').eq('payment_status', 'paid'),
+        supabase.from('sales').select('paid, date, payment_status, id'),
         supabase.from('investments').select('amount, created_at, investor_name, id'),
         supabase.from('expenses').select('amount, date, category, description, id'),
         supabase.from('loan_payments').select('amount, payment_date, id'),
@@ -353,7 +353,7 @@ const CashBalancePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/50 to-purple-50/50 dark:from-gray-900 dark:via-blue-900/20 dark:to-purple-900/20 p-6">
+    <div className="min-h-screen   p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -447,7 +447,7 @@ const CashBalancePage = () => {
                 <div className="space-y-2 pl-5">
                   <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Operating Expenses</span><span className="text-sm font-medium text-red-600">{formatCompactCurrency(data?.expensesPaid)}</span></div>
                   {data?.loanRepayments > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Loan Repayments</span><span className="text-sm font-medium text-red-600">{formatCompactCurrency(data.loanRepayments)}</span></div>}
-                  {data?.goodsPurchases > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Goods Purchases</span><span className="text-sm font-medium text-red-600">{formatCompactCurrency(data.goodsPurchases)}</span></div>}
+                  {/* {data?.goodsPurchases > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Goods Purchases</span><span className="text-sm font-medium text-red-600">{formatCompactCurrency(data.goodsPurchases)}</span></div>} */}
                   {data?.capitalWithdrawals > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Capital Withdrawals</span><span className="text-sm font-medium text-red-600">{formatCompactCurrency(data.capitalWithdrawals)}</span></div>}
                 </div>
               </div>
