@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, SortDesc } from 'lucide-react';
+// import { cn } from '@/lib/utils';
 
 interface Product {
   id: string;
@@ -232,30 +233,26 @@ const Inventory: React.FC = () => {
       const stockNumber = products.reduce((sum, product) => sum + (Number(product.inventory) || 0), 0);
       console.log(stockNumber);
 
-      // Calculate global average price from all price ranges
-      let globalAveragePrice = 0;
-      let totalPrices = 0;
-      let priceCount = 0;
+      // Calculate stock value by multiplying each product's inventory with its own average price
+      const stockValue = products.reduce((totalValue, product) => {
+        const inventory = Number(product.inventory) || 0;
 
-      products.forEach(product => {
+        // Calculate average price for this specific product
+        let averagePrice = product.price || 0; // fallback to product.price
+
         if (product.price_ranges && product.price_ranges.length > 0) {
-          // To know how many price entries are in price_ranges for this product:
-          // const priceEntriesCount = product.price_ranges.length;
-          // console.log(`Product ${product.name} has ${priceEntriesCount} price entries`);
-
-          product.price_ranges.forEach((range: PriceRange) => {
-
-            totalPrices += range.price;
-            priceCount++;
-          });
+          const totalPrice = product.price_ranges.reduce((sum, range) => sum + range.price, 0);
+          averagePrice = totalPrice / product.price_ranges.length;
         }
-      });
 
-      if (priceCount > 0) {
-        globalAveragePrice = totalPrices / priceCount;
-      }
+        // Calculate value for this product: inventory * average price
+        const productValue = inventory * averagePrice;
+        console.log(productValue);
 
-      const stockValue = stockNumber * globalAveragePrice;
+        console.log(`Product: ${product.name}, Inventory: ${inventory}, Avg Price: ${averagePrice}, Value: ${productValue}`);
+
+        return totalValue + productValue;
+      }, 0);
 
       setTotalStockNumber(stockNumber);
       setTotalStockValue(stockValue);
