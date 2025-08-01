@@ -15,7 +15,6 @@ import {
   Users,
   BarChart3,
   Warehouse,
-  CircleDollarSign,
   Flower2,
   IndianRupee,
   TrendingUp,
@@ -239,10 +238,9 @@ const CashBalanceNavbar = () => {
   const isNetPositive = (balance?.netCashFlow ?? 0) >= 0;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
       {/* Main Cash Balance Display */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-lg border border-lavender/20 backdrop-blur-sm">
-        <Wallet className={`w-4 h-4 ${isPositive ? 'text-green-500' : 'text-red-500'}`} />
+      <div className="flex items-center gap-2 px-2 sm:px-3 lg:px-4 py-2 bg-card/50 rounded-lg border border-lavender/20 backdrop-blur-sm">        <Wallet className={`w-4 h-4 ${isPositive ? 'text-green-500' : 'text-red-500'}`} />
         <div className="flex flex-col">
           <span className="text-xs text-muted-foreground">Available Cash</span>
           <span className={`text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
@@ -269,7 +267,7 @@ const CashBalanceNavbar = () => {
         
         {/* Enhanced Dropdown Content */}
         <div className="absolute right-0 top-full mt-2 w-96 bg-card border border-lavender/20 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 backdrop-blur-sm">
-          <div className="p-4">
+          <div className="p-3 sm:p-4 lg:p-5">
             <h3 className="text-sm font-semibold text-foreground mb-3">Cash Flow Summary</h3>
             
             <div className="space-y-2">
