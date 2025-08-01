@@ -21,6 +21,7 @@ import ProductDetails from "./pages/publicView/ProductDetails";
 import ViewProducts from "./pages/publicView/ViewProducts";
 import PublicLayout from "./components/PublicLayout"; // <-- import this if not already
 import AdminProfit from "./pages/admin/GrossProfitAnalysis";
+import CashBalancePage from "./pages/admin/CashBalancePage";
 
 
 const queryClient = new QueryClient();
@@ -154,6 +155,11 @@ const App = () => (
            <Route path="/admin/GrossProfitAnalysis" element={
             <ProtectedRoute allowedRole="admin">
               <AdminProfit />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/CashBalancePage" element={
+            <ProtectedRoute allowedRole="admin">
+              <CashBalancePage />
             </ProtectedRoute>
           } />
 
