@@ -379,7 +379,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             ref={(el) => (sidebarRef.current = el)}
             className={`
               fixed top-0 left-0 bottom-0 z-50 
-              ${isSidebarExpanded ? 'w-64' : 'w-20'}
+              ${isSidebarExpanded ? 'w-64  ' : 'w-20 md:inline hidden'}
               bg-background border-r border-lavender/10 shadow-lg
                overflow-y-auto transition-all duration-300
             `}
