@@ -52,7 +52,7 @@ interface UndoOperation {
     importedRecords?: Expense[];
   };
 }
-
+//To Add Expense Category
 const expenseCategories = [
   'Stock Purchase', 
   'Marketing', 
