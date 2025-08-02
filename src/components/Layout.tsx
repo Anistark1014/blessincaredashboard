@@ -242,7 +242,7 @@ const CashBalanceNavbar = () => {
       {/* Main Cash Balance Display */}
       <div className="flex items-center gap-2 px-2 sm:px-3 lg:px-4 py-2 bg-card/50 rounded-lg border border-lavender/20 backdrop-blur-sm">        <Wallet className={`w-4 h-4 ${isPositive ? 'text-green-500' : 'text-red-500'}`} />
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">Available Cash</span>
+          <span className="text-xs text-muted-foreground">Balance</span>
           <span className={`text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
             {formatCompactCurrency(balance?.availableCashBalance || 0)}
           </span>
@@ -295,14 +295,14 @@ const CashBalanceNavbar = () => {
                     </div>
                   )}
 
-                  {(balance?.capitalInjected ?? 0) > 0 && (
+                  {/* {(balance?.capitalInjected ?? 0) > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Capital Injected</span>
                       <span className="text-xs text-green-600">
                         +{formatCurrency(balance.capitalInjected)}
                       </span>
                     </div>
-                  )}
+                  )} */}
                 </div>
               </div>
 

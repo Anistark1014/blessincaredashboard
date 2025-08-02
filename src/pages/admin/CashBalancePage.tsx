@@ -439,7 +439,7 @@ const CashBalancePage = () => {
                 <div className="space-y-2 pl-5">
                   <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Sales Revenue</span><span className="text-sm font-medium text-green-600">{formatCompactCurrency(data?.salesRevenue)}</span></div>
                   {data?.investmentsReceived > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Investments</span><span className="text-sm font-medium text-green-600">{formatCompactCurrency(data.investmentsReceived)}</span></div>}
-                  {data?.capitalInjected > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Capital Injected</span><span className="text-sm font-medium text-green-600">{formatCompactCurrency(data.capitalInjected)}</span></div>}
+                  {/* {data?.capitalInjected > 0 && <div className="flex items-center justify-between"><span className="text-sm text-gray-600 dark:text-gray-400">Capital Injected</span><span className="text-sm font-medium text-green-600">{formatCompactCurrency(data.capitalInjected)}</span></div>} */}
                 </div>
               </div>
               <div className="space-y-3">
