@@ -16,21 +16,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle } from 'lucide-react';
+import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle, Upload, Download } from 'lucide-react';
 import {
   LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   Legend,
   ResponsiveContainer
 } from 'recharts';
-
-// --- IMPORTANT: Define your Deno Edge Function URL here ---
-// const DENO_ADD_RESELLER_FUNCTION_URL = import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL || 'YOUR_DENO_FUNCTION_URL_HERE';
-// const DENO_UPDATE_RESELLER_FUNCTION_URL = import.meta.env.VITE_UPDATE_RESELLER_FUNCTION_URL || 'YOUR_DENO_UPDATE_FUNCTION_URL_HERE';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import { buttonVariants } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 
 // Define the interfaces based on your provided structure
@@ -83,20 +82,6 @@ interface Clearance {
   member_id: string | null;
   paid_amount: number;
   status: string;
-}
-
-interface Request { // Still present but commented out in JSX
-  id: string;
-  reseller_id: string;
-  products_ordered: any;
-  total: number;
-  status: string;
-  paid: number;
-  payment_status: string;
-  request_date: string;
-  special_instructions: string | null;
-  admin_notes: string | null;
-  date: string;
 }
 
 interface InfoItemProps {
@@ -175,6 +160,11 @@ const AdminResellers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Sorting state for the main table
+  const [sortKey, setSortKey] = useState<keyof Reseller | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+
   // Editable fields for reseller details (within the details dialog)
   const [editableResellerName, setEditableResellerName] = useState('');
   const [editableEmail, setEditableEmail] = useState('');
@@ -203,6 +193,16 @@ const AdminResellers: React.FC = () => {
 
 
   const { toast } = useToast();
+
+  const handleSort = (key: keyof Reseller) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
 
   // Helper function to handle toggle login access
   const handleToggleLoginAccess = async (resellerId: string, currentStatus: boolean) => {
@@ -277,18 +277,21 @@ const AdminResellers: React.FC = () => {
           const clearanceData = await fetchClearanceByMemberId(reseller.id);
 
           let totalRevenue = 0;
+          let RP = 0;
           let totalOutstanding = 0;
           let totalProductsSold = 0;
 
           // Sum paid from sales
-          totalRevenue += salesData.reduce((sum, sale) => sum + (sale.gross_profit ?? 0), 0);
+          totalRevenue += salesData.reduce((sum, sale) => sum + (sale.total ?? 0), 0);
+          RP += salesData.reduce((sum, sale) => sum + (sale.gross_profit ?? 0), 0);
           totalOutstanding += salesData.reduce((sum, sale) => sum + (sale.outstanding ?? 0), 0);
           totalProductsSold += salesData.reduce((sum, sale) => sum + (sale.qty ?? 0), 0);
 
           // Sum paid_amount from clearance
           totalRevenue += clearanceData.reduce((sum, clearance) => sum + (clearance.paid_amount ?? 0), 0);
 
-          const rewardPoints = Math.floor(totalRevenue / 100);
+          const rewardPoints = Math.floor(RP / 5);
+          console.log(RP,rewardPoints)
 
           return {
             ...reseller,
@@ -528,16 +531,23 @@ useEffect(() => {
 
   // Filter resellerSales for the table within the details dialog based on month/year
   const filteredResellerSalesForTable = useMemo(() => {
-    if (!resellerSales || resellerSales.length === 0) return [];
-    if (!salesTableMonth || !salesTableYear) return resellerSales; // Show all if no filter selected
+      if (!resellerSales || resellerSales.length === 0) return [];
+      if (!salesTableYear) return resellerSales;
 
-    return resellerSales.filter(sale => {
-      const saleDate = new Date(sale.date);
-      return (
-        saleDate.getMonth() + 1 === parseInt(salesTableMonth) &&
-        saleDate.getFullYear() === parseInt(salesTableYear)
-      );
-    });
+      return resellerSales.filter(sale => {
+          const saleDate = new Date(sale.date);
+          const isSelectedYear = saleDate.getFullYear() === parseInt(salesTableYear);
+
+          // If 'salesTableMonth' is 'all', just check the year. Otherwise, check both month and year.
+          if (salesTableMonth === 'all') {
+              return isSelectedYear;
+          } else {
+              return (
+                  saleDate.getMonth() + 1 === parseInt(salesTableMonth) &&
+                  isSelectedYear
+              );
+          }
+      });
   }, [resellerSales, salesTableMonth, salesTableYear]);
 
 
@@ -706,6 +716,7 @@ useEffect(() => {
     );
   };
 
+
   const handleUpdateResellerDetails = async () => {
     if (!selectedReseller) return;
 
@@ -807,7 +818,7 @@ const filteredResellers = useMemo(() => {
         const filteredSales = (reseller.all_sales_data || []).filter(sale => isInRange(sale.date));
         const filteredClearance = (reseller.all_clearance_data || []).filter(clearance => isInRange(clearance.date));
 
-        const totalRevenue = 
+        const totalRevenue =
           filteredSales.reduce((sum, sale) => sum + (sale.paid ?? 0), 0) +
           filteredClearance.reduce((sum, c) => sum + (c.paid_amount ?? 0), 0);
 
@@ -815,20 +826,34 @@ const filteredResellers = useMemo(() => {
         const totalProductsSold = filteredSales.reduce((sum, sale) => sum + (sale.qty ?? 0), 0);
         const rewardPoints = Math.floor(totalRevenue / 100);
 
-        console.log({totalRevenue,totalOutstanding})
-
         return {
           ...reseller,
           total_revenue_generated: totalRevenue,
           payment_amount_remaining: totalOutstanding,
           total_products_sold: totalProductsSold,
-          reward_points:rewardPoints,
+          reward_points: rewardPoints,
         };
       })
       .filter(reseller => {
         // keep only those with some sales or clearance in range
         return reseller.total_revenue_generated > 0 || reseller.payment_amount_remaining > 0;
       });
+  }
+
+  // --- NEW: Add Sorting Logic ---
+  if (sortKey) {
+    currentFiltered.sort((a, b) => {
+      const aValue = a[sortKey];
+      const bValue = b[sortKey];
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      }
+      return 0;
+    });
   }
 
   return currentFiltered;
@@ -838,15 +863,127 @@ const filteredResellers = useMemo(() => {
   mainTableTimeRange,
   mainTableStartDate,
   mainTableEndDate,
+  sortKey, // Add sort keys to dependencies
+  sortDirection,
 ]);
 
+// --- NEW: Export Functionality ---
+const handleExport = () => {
+  const data = filteredResellers.map(reseller => ({
+    "ID": reseller.id,
+    "Name": reseller.name,
+    "Email": reseller.email,
+    "Region": reseller.region,
+    "Total Revenue": reseller.total_revenue_generated,
+    "Outstanding Amount": reseller.payment_amount_remaining,
+    "Reward Points": reseller.reward_points,
+    "Is Active": reseller.is_active ? 'Yes' : 'No',
+    "Created At": new Date(reseller.created_at).toLocaleDateString(),
+  }));
 
-  const getMonthOptions = () => {
-    return Array.from({ length: 12 }, (_, i) => ({
-      value: (i + 1).toString(),
-      label: new Date(0, i).toLocaleString('en-US', { month: 'long' })
-    }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Resellers");
+
+  XLSX.writeFile(wb, "resellers.xlsx");
+  toast({
+    title: "Export Successful",
+    description: "Reseller data has been exported to resellers.xlsx",
+  });
+};
+
+// --- NEW: Import Functionality ---
+const handleAddResellerFromImport = async (reseller: any) => {
+    const { name, email, phone, region, coverage } = reseller;
+    if (!name) return; // Skip rows without a name
+
+    try {
+      const sessionResult = await supabase.auth.getSession();
+      const accessToken = sessionResult.data.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(import.meta.env.VITE_ADD_RESELLER_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          name: name,
+          email: email,
+          phone: phone,
+          region: region,
+          coverage: coverage || 0,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to add reseller ${name}.`);
+      }
+    } catch (error) {
+      console.error(`Error adding reseller ${name}:`, error);
+      // Log the error but continue with other rows
+    }
   };
+
+const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+  setLoading(true);
+
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+    const headers = json[0] as string[];
+    const resellerData = json.slice(1);
+
+    for (const row of resellerData) {
+      const reseller: any = {};
+      headers.forEach((header, index) => {
+        const key = header.toLowerCase().replace(/\s/g, '_');
+        reseller[key] = (row as any)[index];
+      });
+      await handleAddResellerFromImport(reseller);
+    }
+
+    toast({
+      title: "Import Successful",
+      description: "Reseller data has been imported.",
+    });
+  } catch (error) {
+    console.error('Error importing resellers:', error);
+    toast({
+      title: "Import Failed",
+      description: "An error occurred during import.",
+      variant: "destructive",
+    });
+  } finally {
+    setLoading(false);
+    fetchResellers();
+    if (event.target) {
+        event.target.value = ''; // Clear the input field for next import
+    }
+  }
+};
+
+
+const getMonthOptions = () => {
+    // Adding a 'Full Year' option at the start
+    const options = [{ value: 'all', label: 'Full Year' }];
+    for (let i = 0; i < 12; i++) {
+        options.push({
+            value: (i + 1).toString(),
+            label: new Date(0, i).toLocaleString('en-US', { month: 'long' })
+        });
+    }
+    return options;
+};
 
   const getYearOptions = () => {
     const years = [];
@@ -944,7 +1081,36 @@ const filteredResellers = useMemo(() => {
                 className="pl-9 w-full"
               />
             </div>
+             {/* NEW: Import/Export Buttons */}
 
+<TooltipProvider>
+  <div className="flex items-center gap-2">
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* Add size="sm" to match the other button */}
+        <Button variant="outline" size="sm" onClick={handleExport}>
+          <Upload className="h-4 w-4" /> {/* Keep dimensions consistent */}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Export Reseller Data</TooltipContent>
+    </Tooltip>
+
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <label
+          htmlFor="import-file"
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {/* Correct the height to match the other icon */}
+          <Download className="h-4 w-4" />
+        </label>
+      </TooltipTrigger>
+      <TooltipContent>Import Reseller Data</TooltipContent>
+    </Tooltip>
+
+    {/* ... your hidden input ... */}
+  </div>
+</TooltipProvider>
             {/* Main Table Date Filter Buttons */}
             <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end flex-grow">
               <Label className="text-sm text-muted-foreground min-w-[50px] md:min-w-0">Sales in:</Label>
@@ -1018,7 +1184,18 @@ const filteredResellers = useMemo(() => {
                   <TableHead className="w-[80px]">Tier</TableHead>
                   <TableHead className="min-w-[150px]">Name</TableHead>
                   <TableHead>Region</TableHead>
-                  <TableHead>Revenue</TableHead>
+                  <TableHead>
+                     {/* NEW: Sortable Revenue Header */}
+                     <div
+                        className="flex items-center gap-1 cursor-pointer"
+                        onClick={() => handleSort('total_revenue_generated')}
+                     >
+                       Payables
+                       {sortKey === 'total_revenue_generated' && (
+                         <span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>
+                       )}
+                     </div>
+                  </TableHead>
                   <TableHead>Outstanding</TableHead>
                   <TableHead>Reward Points</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -1266,141 +1443,79 @@ const filteredResellers = useMemo(() => {
 
 
                                   </div>
-                                  {/* Recent Sales Table (with Month/Year Filter) */}
-                                  <div className="space-y-4 border rounded-lg col-span-3 p-4">
-                                    <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
-                                    <div className="flex flex-wrap items-center gap-4 mb-4">
-                                      <Label htmlFor="sales-month" className="min-w-[40px]">Month:</Label>
-                                      <Select value={salesTableMonth} onValueChange={setSalesTableMonth}>
-                                        <SelectTrigger id="sales-month" className="w-[150px]">
-                                          <SelectValue placeholder="Select Month" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {getMonthOptions().map(option => (
-                                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                    {/* Recent Sales Table (with Month/Year Filter) */}
+                                    <div className="space-y-4 border rounded-lg col-span-3 p-4">
+                                        <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
+                                        <div className="flex flex-wrap items-center gap-4 mb-4">
+                                            <Label htmlFor="sales-month" className="min-w-[40px]">Month:</Label>
+                                            <Select value={salesTableMonth} onValueChange={setSalesTableMonth}>
+                                                <SelectTrigger id="sales-month" className="w-[150px]">
+                                                    <SelectValue placeholder="Select Month" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">Full Year</SelectItem> {/* Explicitly add 'Full Year' item */}
+                                                    {getMonthOptions().map(option => {
+                                                        // Skip the 'Full Year' option as it's already added.
+                                                        if (option.value === 'all') return null;
+                                                        return (
+                                                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                                        );
+                                                    })}
+                                                </SelectContent>
+                                            </Select>
 
-                                      <Label htmlFor="sales-year" className="min-w-[30px]">Year:</Label>
-                                      <Select value={salesTableYear} onValueChange={setSalesTableYear}>
-                                        <SelectTrigger id="sales-year" className="w-[100px]">
-                                          <SelectValue placeholder="Select Year" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {getYearOptions().map(option => (
-                                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                            <Label htmlFor="sales-year" className="min-w-[30px]">Year:</Label>
+                                            <Select value={salesTableYear} onValueChange={setSalesTableYear}>
+                                                <SelectTrigger id="sales-year" className="w-[100px]">
+                                                    <SelectValue placeholder="Select Year" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {getYearOptions().map(option => (
+                                                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <Card>
+                                            <CardContent className="p-0">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Date</TableHead>
+                                                            <TableHead className="text-right">Payables</TableHead>
+                                                            <TableHead className="text-right">Paid</TableHead>
+                                                            <TableHead className="text-right">Outstanding</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {filteredResellerSalesForTable.length > 0 ? (
+                                                            filteredResellerSalesForTable.map((sale) => {
+                                                                const total = typeof sale.total === 'number' ? sale.total : 0;
+                                                                const paid = typeof sale.paid === 'number' ? sale.paid : 0;
+                                                                const outstanding = typeof sale.outstanding === 'number' ? sale.outstanding : 0;
+                                                                return (
+                                                                    <TableRow key={sale.id}>
+                                                                        <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
+                                                                        <TableCell className="text-right">${total.toFixed(2)}</TableCell>
+                                                                        <TableCell className="text-right">${paid.toFixed(2)}</TableCell>
+                                                                        <TableCell className="text-right font-medium">${outstanding.toFixed(2)}</TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <TableRow>
+                                                                <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                                                    No sales found for the selected month/year.
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        )}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
                                     </div>
-                                    <Card>
-                                      <CardContent className="p-0">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Date</TableHead>
-                                              <TableHead className="text-right">Total</TableHead>
-                                              <TableHead className="text-right">Paid</TableHead>
-                                              <TableHead className="text-right">Balance</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {filteredResellerSalesForTable.length > 0 ? (
-                                              filteredResellerSalesForTable.map((sale) => {
-                                                const total = typeof sale.total === 'number' ? sale.total : 0;
-                                                const paid = typeof sale.paid === 'number' ? sale.paid : 0;
-                                                const balance = total - paid;
-                                                return (
-                                                  <TableRow key={sale.id}>
-                                                    <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
-                                                    <TableCell className="text-right">${total.toFixed(2)}</TableCell>
-                                                    <TableCell className="text-right">${paid.toFixed(2)}</TableCell>
-                                                    <TableCell className="text-right font-medium">${balance.toFixed(2)}</TableCell>
-                                                  </TableRow>
-                                                );
-                                              })
-                                            ) : (
-                                              <TableRow>
-                                                <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
-                                                  No sales found for the selected month/year.
-                                                </TableCell>
-                                              </TableRow>
-                                            )}
-                                          </TableBody>
-                                        </Table>
-                                      </CardContent>
-                                    </Card>
-                                  </div>
                                 </div>
                               )}
-                              {/* Requests Currently not involved */}
-                              {/* <div className="mt-6 border rounded-lg p-4">
-                                <h3 className="text-lg font-semibold mb-3">
-                                  Recent Requests ({resellerRequests.length})
-                                </h3>
-                                <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
-                                  {resellerRequests.length > 0 ? (
-                                    resellerRequests.map((request) => (
-                                      <div
-                                        key={request.id}
-                                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 border rounded-md bg-card shadow-sm"
-                                      >
-                                        <div className="flex-1">
-                                          <div className="flex items-center space-x-2 mb-1 sm:mb-0">
-                                            <span className="font-medium text-primary">
-                                              #{request.id.slice(0, 8)}
-                                            </span>
-                                            <Badge className={getStatusBadge(request.status)}>
-                                              {request.status}
-                                            </Badge>
-                                          </div>
-                                          <p className="text-sm text-muted-foreground">
-                                            Amount: ${request.total_amount.toFixed(2)} | Date:{" "}
-                                            {new Date(request.request_date).toLocaleDateString()}
-                                          </p>
-                                          {request.special_instructions && (
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                              Special Instructions: {request.special_instructions}
-                                            </p>
-                                          )}
-                                        </div>
-                                        {request.status === "Pending" && (
-                                          <div className="flex space-x-2 flex-shrink-0">
-                                            <Button
-                                              size="sm"
-                                              onClick={() =>
-                                                handleRequestStatusUpdate(
-                                                  request.id,
-                                                  "Approved"
-                                                )
-                                              }
-                                            >
-                                              Approve
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant="destructive"
-                                              onClick={() =>
-                                                handleRequestStatusUpdate(
-                                                  request.id,
-                                                  "Rejected"
-                                                )
-                                              }
-                                            >
-                                              Reject
-                                            </Button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground text-center py-4">
-                                      No requests found for this reseller.
-                                    </p>
-                                  )}
-                                </div>
-                              </div> */}
                             </DialogContent>
                           </Dialog>
                         </TableCell>

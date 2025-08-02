@@ -2014,7 +2014,7 @@ const SalesTable: React.FC = () => {
                       <TableHead onClick={() => requestSort('product')} className="cursor-pointer">Product</TableHead>
                       <TableHead onClick={() => requestSort('qty')} className="text-right cursor-pointer">Qty</TableHead>
                       <TableHead onClick={() => requestSort('price')} className="text-right cursor-pointer">Price</TableHead>
-                      <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer">Total</TableHead>
+                      <TableHead onClick={() => requestSort('total')} className="text-right cursor-pointer">Payables</TableHead>
                       <TableHead onClick={() => requestSort('paid')} className="text-right cursor-pointer">Paid</TableHead>
                       <TableHead onClick={() => requestSort('outstanding')} className="text-right cursor-pointer">Outstanding</TableHead>
                       <TableHead onClick={() => requestSort('payment_status')} className="cursor-pointer">Status</TableHead>
