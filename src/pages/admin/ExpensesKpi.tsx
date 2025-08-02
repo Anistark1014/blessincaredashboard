@@ -59,14 +59,14 @@ const formatCompactCurrency = (amount: number) => {
 const ExpenseKPICards: React.FC<ExpenseKPICardsProps> = ({ expenses }) => {
   // Sample data for demonstration
   const sampleExpenses = [
-    { id: '1', date: '2025-01-15', category: 'Stock Purchase', description: 'Inventory Purchase', amount: 150000 },
-    { id: '2', date: '2025-01-16', category: 'Marketing', description: 'Digital Ads', amount: 25000 },
-    { id: '3', date: '2025-01-17', category: 'Salaries', description: 'Monthly Payroll', amount: 80000 },
-    { id: '4', date: '2025-01-18', category: 'Utilities & Subscriptions', description: 'Office Utilities', amount: 12000 },
-    { id: '5', date: '2025-01-19', category: 'Logistics', description: 'Shipping Costs', amount: 18000 },
-    { id: '6', date: '2025-01-20', category: 'Travel Allowance', description: 'Business Trip', amount: 15000 },
-    { id: '7', date: '2025-01-21', category: 'Tax Expense', description: 'GST Payment', amount: 22000 },
-    { id: '8', date: '2025-01-22', category: 'Other Business Expense', description: 'Office Supplies', amount: 8000 }
+    { id: '1', date: '2025-01-15', category: 'Stock Purchase', description: 'Inventory Purchase', amount: 0 },
+    { id: '2', date: '2025-01-16', category: 'Marketing', description: 'Digital Ads', amount: 0 },
+    { id: '3', date: '2025-01-17', category: 'Salaries', description: 'Monthly Payroll', amount: 0 },
+    { id: '4', date: '2025-01-18', category: 'Utilities & Subscriptions', description: 'Office Utilities', amount: 0 },
+    { id: '5', date: '2025-01-19', category: 'Logistics', description: 'Shipping Costs', amount: 0 },
+    { id: '6', date: '2025-01-20', category: 'Travel Allowance', description: 'Business Trip', amount: 0 },
+    { id: '7', date: '2025-01-21', category: 'Tax Expense', description: 'GST Payment', amount: 0 },
+    { id: '8', date: '2025-01-22', category: 'Other Business Expense', description: 'Office Supplies', amount: 0 }
   ];
 
   const displayExpenses = expenses.length > 0 ? expenses : sampleExpenses;
@@ -108,7 +108,7 @@ const ExpenseKPICards: React.FC<ExpenseKPICardsProps> = ({ expenses }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           
           {/* Total Expenses */}
-          <Card className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
+          <Card className=" border-slate-700 hover:bg-slate-750 transition-colors duration-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-slate-400 text-sm font-medium">Total Expenses</h3>
@@ -126,7 +126,7 @@ const ExpenseKPICards: React.FC<ExpenseKPICardsProps> = ({ expenses }) => {
           </Card>
 
           {/* Average Expense */}
-          <Card className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
+          <Card className=" border-slate-700 hover:bg-slate-750 transition-colors duration-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-slate-400 text-sm font-medium">Average Expense</h3>
@@ -144,7 +144,7 @@ const ExpenseKPICards: React.FC<ExpenseKPICardsProps> = ({ expenses }) => {
           </Card>
 
           {/* Highest Single Expense */}
-          <Card className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
+          <Card className=" border-slate-700 hover:bg-slate-750 transition-colors duration-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-slate-400 text-sm font-medium">Highest Expense</h3>
@@ -162,7 +162,7 @@ const ExpenseKPICards: React.FC<ExpenseKPICardsProps> = ({ expenses }) => {
           </Card>
 
           {/* Active Categories */}
-          <Card className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
+          <Card className=" border-slate-700 hover:bg-slate-750 transition-colors duration-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-slate-400 text-sm font-medium">Active Categories</h3>
@@ -189,7 +189,7 @@ const ExpenseKPICards: React.FC<ExpenseKPICardsProps> = ({ expenses }) => {
               const IconComponent = stat.icon;
               
               return (
-                <Card key={stat.category} className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
+                <Card key={stat.category} className=" border-slate-700 hover:bg-slate-750 transition-colors duration-200">
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3 mb-3">
                       <div className="bg-slate-700 p-2 rounded-lg">

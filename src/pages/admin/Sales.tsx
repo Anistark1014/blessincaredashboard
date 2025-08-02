@@ -2610,7 +2610,7 @@ const SalesTable: React.FC = () => {
                         onClick={() => requestSort("total")}
                         className="text-right cursor-pointer"
                       >
-                        Total
+                        Payables
                       </TableHead>
                       <TableHead
                         onClick={() => requestSort("paid")}
