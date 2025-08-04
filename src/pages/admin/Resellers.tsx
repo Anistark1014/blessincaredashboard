@@ -1108,7 +1108,13 @@ const getMonthOptions = () => {
       <TooltipContent>Import Reseller Data</TooltipContent>
     </Tooltip>
 
-    {/* ... your hidden input ... */}
+<Input
+ id="import-file"
+type="file"
+accept=".xlsx, .xls"
+className="hidden"
+onChange={handleImport}
+ />
   </div>
 </TooltipProvider>
             {/* Main Table Date Filter Buttons */}
