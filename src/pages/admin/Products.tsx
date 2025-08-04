@@ -96,11 +96,11 @@ interface ProductFormData {
             "Vending Machine"
         ];
 
-        const fixedAvailabilities = [
-            "In Stock",
-            "Out of Stock",
-            "Low Stock"
-        ];
+        // const fixedAvailabilities = [
+        //     "In Stock",
+        //     "Out of Stock",
+        //     "Low Stock"
+        // ];
 
 
         useEffect(() => {

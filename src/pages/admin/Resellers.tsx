@@ -27,7 +27,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
+// import { saveAs } from 'file-saver';
 import { buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
@@ -48,7 +48,7 @@ interface Reseller {
   payment_status: "pending" | "clear";
   payment_amount_remaining: number;
   total_revenue_generated?: number; // Added for KPI & table column
-  reward_points?: number; // Added for details view
+  reward_points: number | null; // Added for details view
   coverage?: number | null; // Added for details view (editable)
   sub_active_resellers?: number; // Placeholder for sub-hierarchy active resellers
   sub_passive_resellers?: number; // Placeholder for sub-hierarchy passive resellers
@@ -1210,7 +1210,7 @@ onChange={handleImport}
               <TableBody>
                 {filteredResellers.length > 0 ? (
                   filteredResellers.map((reseller) => {
-                    const tierInfo = getTierInfo(reseller.reward_points);
+                    const tierInfo = getTierInfo(reseller.reward_points || 0);
                     return (
                       <TableRow key={reseller.id}>
                         <TableCell>
