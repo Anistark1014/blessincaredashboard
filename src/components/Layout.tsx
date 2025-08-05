@@ -376,6 +376,102 @@ const CashBalanceNavbar = () => {
   );
 };
 
+// Mobile Bottom Navigation Component
+const MobileBottomNavigation = ({ navItems }: { navItems: NavItem[] }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [centerIndex, setCenterIndex] = useState(0);
+
+  // Find current active index
+  const activeIndex = navItems.findIndex(item => item.to === location.pathname);
+
+  // Scroll to center active item on route change
+  useEffect(() => {
+    if (activeIndex !== -1) {
+      scrollToItem(activeIndex);
+      setCenterIndex(activeIndex);
+    }
+  }, [activeIndex]);
+
+  const scrollToItem = (index: number) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const itemWidth = 80; // Width of each nav item
+    const containerWidth = container.clientWidth;
+    const scrollPosition = (index * itemWidth) - (containerWidth / 2) + (itemWidth / 2);
+    
+    container.scrollTo({
+      left: Math.max(0, scrollPosition),
+      behavior: 'smooth'
+    });
+  };
+
+  const handleNavClick = (item: NavItem, index: number) => {
+    navigate(item.to);
+    scrollToItem(index);
+    setCenterIndex(index);
+  };
+
+  // Handle scroll to update center item
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const itemWidth = 80;
+    const containerWidth = container.clientWidth;
+    const scrollLeft = container.scrollLeft;
+    const centerPosition = scrollLeft + (containerWidth / 2);
+    const newCenterIndex = Math.round(centerPosition / itemWidth);
+    
+    if (newCenterIndex !== centerIndex && newCenterIndex >= 0 && newCenterIndex < navItems.length) {
+      setCenterIndex(newCenterIndex);
+    }
+  };
+
+  return (
+    <div className="md:hidden fixed bottom-0 left-0 bg-transparent right-0 z-50 backdrop-blur-sm border-t border-lavender/20">
+      <div className="relative flex items-center h-20 ">
+        {/* Navigation Items Container */}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-x-auto  scrollbar-hide px-4"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <div className="flex gap-2 m-2 justify-start " style={{ width: `${navItems.length * 80}px` }}>
+            {navItems.map((item, index) => {
+              const isActive = location.pathname === item.to;
+              const isCenter = index === centerIndex;
+              
+              return (
+                <button
+                  key={item.to}
+                  onClick={() => handleNavClick(item, index)}
+                  className={`flex-shrink-0 w-16 h-16 rounded-full flex flex-col items-center justify-center gap-1 transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-br from-lavender to-blush text-lavender-foreground shadow-lg scale-110'
+                      : isCenter
+                      ? 'bg-lavender/20 text-foreground scale-105 shadow-md'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-lavender/10'
+                  }`}
+                  style={{
+                    transform: `scale(${isCenter ? (isActive ? 1.15 : 1.05) : isActive ? 1.1 : 1})`,
+                    boxShadow: isActive ? '0 8px 25px rgba(100, 100, 255, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.3)' : 'none'
+                  }}
+                >
+                  <item.icon className={`w-5 h-5 ${isCenter || isActive ? 'animate-bounce-slow scale-125' : ''}`} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Rest of your Layout component remains the same...
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
@@ -385,21 +481,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const resellerNavItems = [
     { to: '/reseller', icon: Home, label: 'Dashboard' },
-    { to: '/reseller/catalog', icon: Package, label: 'Product Catalog' },
-    { to: '/reseller/requests', icon: ShoppingCart, label: 'My Requests' },
+    { to: '/reseller/catalog', icon: Package, label: 'Catalog' },
+    { to: '/reseller/requests', icon: ShoppingCart, label: 'Requests' },
     { to: '/reseller/payments', icon: CreditCard, label: 'Payments' },
   ];
 
   const adminNavItems = [
     { to: '/admin', icon: Home, label: 'Dashboard' },
-    { to: '/admin/products', icon: Package, label: 'Product Management' },
-    { to: '/admin/resellers', icon: Users, label: 'Reseller Management' },
-    { to: '/admin/sales', icon: BarChart3, label: 'Sales Tracking' },
-    { to: '/admin/expenses', icon: TrendingDown, label: 'Expense Tracker' },
-    { to: '/admin/inventory', icon: Warehouse, label: 'Inventory Management' },
-    { to: '/admin/finance', icon: IndianRupee, label: 'Finance Management' },
-    { to: '/admin/CashBalancePage', icon: Wallet, label: 'Cash Balance' },
-    { to: '/admin/GrossProfitAnalysis', icon: TrendingUp, label: 'GrossProfitAnalysis' },
+    { to: '/admin/products', icon: Package, label: 'Products' },
+    { to: '/admin/resellers', icon: Users, label: 'Resellers' },
+    { to: '/admin/sales', icon: BarChart3, label: 'Sales' },
+    { to: '/admin/expenses', icon: TrendingDown, label: 'Expenses' },
+    { to: '/admin/inventory', icon: Warehouse, label: 'Inventory' },
+    { to: '/admin/finance', icon: IndianRupee, label: 'Finance' },
+    { to: '/admin/CashBalancePage', icon: Wallet, label: 'Cash' },
+    { to: '/admin/GrossProfitAnalysis', icon: TrendingUp, label: 'Profit' },
     { to: '/admin/rewards', icon: Award , label: 'Rewards' },
   ];
 
@@ -466,7 +562,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className=""
+                className="md:inline hidden"
                 onClick={() => setSidebarExpanded((prev) => !prev)}
               >
                 <svg
@@ -501,7 +597,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Middle Section - Cash Balance (only for admin) */}
             <div className="flex-1 flex justify-center">
               {user?.role === 'admin' && (
-                <CashBalanceNavbar />
+                <div className="hidden md:block">
+                  <CashBalanceNavbar />
+                </div>
               )}
             </div>
 
@@ -536,13 +634,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex flex-col gap-6">
-          {/* Sidebar Navigation (Drawer style on all screens) */}
+          {/* Desktop Sidebar Navigation */}
           <aside
             id="sidebar"
             ref={(el) => (sidebarRef.current = el)}
             className={`
-              fixed top-0 left-0 bottom-0 z-50 
-              ${isSidebarExpanded ? 'w-64  ' : 'w-20 md:inline hidden'}
+              fixed top-0 left-0 bottom-0 z-50 hidden md:block
+              ${isSidebarExpanded ? 'w-64  ' : 'w-20'}
               bg-background border-r border-lavender/10 shadow-lg
                overflow-y-auto transition-all duration-300
             `}
@@ -571,11 +669,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 min-w-0">
+          <main className={`flex-1 min-w-0 ${isSidebarExpanded ? 'md:ml-64' : 'md:ml-20'} transition-all duration-300 mb-20 md:mb-0`}>
             {children}
           </main>
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation navItems={navItems} />
     </div>
   );
 };

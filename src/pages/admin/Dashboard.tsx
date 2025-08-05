@@ -142,7 +142,7 @@ const AdminDashboard = () => {
               Monitor your women&apos;s healthcare business performance
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex md:flex-row flex-col gap-2">
             <Link to="/admin/products">
               <Button variant="outline">
                 <Package className="w-4 h-4 mr-2" />
