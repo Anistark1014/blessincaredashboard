@@ -432,7 +432,7 @@ const MobileBottomNavigation = ({ navItems }: { navItems: NavItem[] }) => {
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 bg-transparent right-0 z-50 backdrop-blur-sm border-t border-lavender/20">
-      <div className="relative flex items-center h-20 ">
+      <div className="relative flex items-center h-16 ">
         {/* Navigation Items Container */}
         <div
           ref={scrollContainerRef}
@@ -449,19 +449,17 @@ const MobileBottomNavigation = ({ navItems }: { navItems: NavItem[] }) => {
                 <button
                   key={item.to}
                   onClick={() => handleNavClick(item, index)}
-                  className={`flex-shrink-0 w-16 h-16 rounded-full flex flex-col items-center justify-center gap-1 transition-all duration-300 ${
+                  className={`flex-shrink-0 w-12 h-12 rounded-full flex flex-col items-center justify-center gap-1 transition-all duration-300 ${
                     isActive
                       ? 'bg-gradient-to-br from-lavender to-blush text-lavender-foreground shadow-lg scale-110'
-                      : isCenter
-                      ? 'bg-lavender/20 text-foreground scale-105 shadow-md'
                       : 'text-muted-foreground hover:text-foreground hover:bg-lavender/10'
                   }`}
                   style={{
-                    transform: `scale(${isCenter ? (isActive ? 1.15 : 1.05) : isActive ? 1.1 : 1})`,
+                    transform: `scale(${isCenter ? (isActive ? 1.1 : 1.03) : isActive ? 1.05 : 1})`,
                     boxShadow: isActive ? '0 8px 25px rgba(100, 100, 255, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.3)' : 'none'
                   }}
                 >
-                  <item.icon className={`w-5 h-5 ${isCenter || isActive ? 'animate-bounce-slow scale-125' : ''}`} />
+                  <item.icon className={`w-4 h-4 ${isCenter || isActive ? 'animate-bounce-slow scale-110' : ''}`} />
                 </button>
               );
             })}
