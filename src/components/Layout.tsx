@@ -431,7 +431,7 @@ const MobileBottomNavigation = ({ navItems }: { navItems: NavItem[] }) => {
   };
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 bg-transparent right-0 z-50 backdrop-blur-sm border-t border-lavender/20">
+    <div className="md:hidden w-min fixed bottom-0 left-0 bg-transparent right-0 z-50 backdrop-blur-sm border-t border-lavender/20">
       <div className="relative flex items-center h-16 ">
         {/* Navigation Items Container */}
         <div
@@ -488,13 +488,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin', icon: Home, label: 'Dashboard' },
     { to: '/admin/products', icon: Package, label: 'Products' },
     { to: '/admin/resellers', icon: Users, label: 'Resellers' },
-    { to: '/admin/sales', icon: BarChart3, label: 'Sales' },
+    { to: '/admin/sales', icon: TrendingUp, label: 'Sales' },
     { to: '/admin/expenses', icon: TrendingDown, label: 'Expenses' },
     { to: '/admin/inventory', icon: Warehouse, label: 'Inventory' },
-    { to: '/admin/finance', icon: IndianRupee, label: 'Finance' },
-    { to: '/admin/CashBalancePage', icon: Wallet, label: 'Cash' },
-    { to: '/admin/GrossProfitAnalysis', icon: TrendingUp, label: 'Profit' },
-    { to: '/admin/rewards', icon: Award , label: 'Rewards' },
+    { to: '/admin/finance', icon: Wallet, label: 'Finance' },
+    // { to: '/admin/CashBalancePage', icon: IndianRupee, label: 'Cash' },
+    // { to: '/admin/GrossProfitAnalysis', icon: BarChart3, label: 'Profit' },
+    // { to: '/admin/rewards', icon: Award , label: 'Rewards' },
   ];
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;

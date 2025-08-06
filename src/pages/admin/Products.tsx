@@ -201,8 +201,8 @@ interface ProductFormData {
                 gross_profit: formData.gross_profit ?? null,
                 cost_price: formData.cost_price ?? null,
                 mrp: formData.mrp ?? null,
-                price_ranges: formData.price_ranges ?? [],
-                media: formData.media ?? null,
+                price_ranges: formData.price_ranges ? JSON.parse(JSON.stringify(formData.price_ranges)) : [],
+                media: formData.media ? JSON.parse(JSON.stringify(formData.media)) : null,
             };
 
             try {
@@ -298,13 +298,21 @@ interface ProductFormData {
                 gross_profit: product.gross_profit || 0,
                 sku_id: product.sku_id || '',
                 category: product.category || '',
-                media: product.media || [],
+                media: Array.isArray(product.media)
+                    ? product.media
+                    : typeof product.media === 'string'
+                        ? JSON.parse(product.media)
+                        : product.media === null || product.media === undefined
+                            ? []
+                            : [],
                 info_link: product.info_link || '',
                 cost_price: product.cost_price || 0,
                 mrp: product.mrp || 0,
-                price_ranges: product.price_ranges?.length
+                price_ranges: Array.isArray(product.price_ranges)
                     ? product.price_ranges
-                    : [],
+                    : typeof product.price_ranges === 'string'
+                        ? JSON.parse(product.price_ranges)
+                        : [],
             });
             setIsEditModalOpen(true);
         };
@@ -514,15 +522,25 @@ interface ProductFormData {
                                 )}
                                 <div className="space-y-1">
                                     <p className="text-sm font-medium text-muted-foreground">Price Ranges:</p>
-                                    {product.price_ranges?.length ? (
-                                        product.price_ranges.map((range, index) => (
-                                            <p key={index} className="text-sm">
-                                                {range.min} – {range.max} units: ₹{range.price}
-                                            </p>
-                                        ))
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground italic">No pricing info</p>
-                                    )}
+                                    {(() => {
+                                        const priceRanges = product.price_ranges ? 
+                                            (Array.isArray(product.price_ranges) 
+                                                ? product.price_ranges 
+                                                : typeof product.price_ranges === 'string' 
+                                                    ? JSON.parse(product.price_ranges) 
+                                                    : []
+                                            ) as PriceRange[] : [];
+                                        
+                                        return priceRanges.length ? (
+                                            priceRanges.map((range, index) => (
+                                                <p key={index} className="text-sm">
+                                                    {range.min} – {range.max} units: ₹{range.price}
+                                                </p>
+                                            ))
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No pricing info</p>
+                                        );
+                                    })()}
                                 </div>
 
                                 <div className="flex gap-2 pt-2">
