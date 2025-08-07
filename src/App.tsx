@@ -23,6 +23,7 @@ import PublicLayout from "./components/PublicLayout"; // <-- import this if not 
 import AdminProfit from "./pages/admin/GrossProfitAnalysis";
 import CashBalancePage from "./pages/admin/CashBalancePage";
 import Rewards from "./pages/admin/Rewards";
+import Profile from "./pages/Profile";
 
 
 const queryClient = new QueryClient();
@@ -90,7 +91,17 @@ const App = () => (
             <Route path="/product/:id" element={<ProductDetails />} />
           {/* <Route path="/" element={<Home />} /> */}
           </Route>
-
+          {/* Profile */}
+          <Route path="/admin-profile" element={
+            <ProtectedRoute allowedRole="admin">
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/reseller-profile" element={
+            <ProtectedRoute allowedRole="reseller">
+              <Profile />
+            </ProtectedRoute>
+          } />
 
           {/* Reseller Routes */}
           <Route path="/reseller" element={

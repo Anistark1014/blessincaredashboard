@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase'; // Your database types
@@ -21,7 +21,8 @@ import {
   TrendingDown,
   RefreshCw,
   Wallet,
-  Award
+  Award,
+  User2
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import ToggleTheme from './ToggleTheme';
@@ -548,6 +549,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-lavender/5 to-blush/5">
@@ -604,17 +606,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* User Actions */}
             <div className="flex items-center gap-4">
               <ToggleTheme />
-              <Button variant="ghost" size="sm" className="relative hidden md:inline">
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-blush rounded-full pulse-soft"></span>
-              </Button>
               <div className="items-center gap-3 hidden md:flex">
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium text-foreground">{user?.name}</p>
                   <p className="text-xs text-muted-foreground">{user?.email}</p>
                 </div>
                 <div className="w-8 h-8 bg-gradient-to-br from-mint to-mint-dark rounded-full flex items-center justify-center">
-                  <Flower2 className="w-4 h-4 text-mint-foreground" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (user?.role === 'admin') {
+                        navigate('/admin-profile');
+                      } else {
+                        navigate('/reseller-profile');
+                      }
+                    }}
+                  >
+                    <User2 className="w-4 h-4 text-mint-foreground" />
+                  </Button>
                 </div>
               </div>
               <Button
