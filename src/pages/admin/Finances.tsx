@@ -242,7 +242,7 @@ const Finance = () => {
           id: inv.id,
           investor_name: inv.investor_name,
           amount: inv.amount,
-          note: inv.note,
+          note: inv.note ?? undefined,
           created_at: inv.created_at,
         }))
       );
@@ -264,7 +264,7 @@ const Finance = () => {
           id: payment.id,
           loan_id: payment.loan_id,
           amount: payment.amount,
-          note: payment.note,
+          note: payment.note ?? null,
           payment_date: payment.payment_date,
         }))
       );
@@ -303,7 +303,9 @@ const Finance = () => {
     const transactions = [
       // Sales transactions
       ...sales.map(sale => ({
-        id: `sale-${sale.id}`,
+        id: sale.id,
+        originalId: sale.id, // Store original ID
+        originalType: 'sales', // Store original table name
         date: new Date(sale.date),
         type: 'Sale',
         description: sale.products?.name || 'Product',
@@ -314,7 +316,9 @@ const Finance = () => {
       })),
       // Expense transactions
       ...expenses.map(expense => ({
-        id: `expense-${expense.id}`,
+        id: expense.id,
+        originalId: expense.id, // Store original ID
+        originalType: 'expenses', // Store original table name
         date: new Date(expense.date),
         type: 'Expense',
         description: expense.category,
@@ -325,7 +329,9 @@ const Finance = () => {
       })),
       // Investment transactions
       ...investments.map(investment => ({
-        id: `investment-${investment.id}`,
+        id: investment.id,
+        originalId: investment.id, // Store original ID
+        originalType: 'investments', // Store original table name
         date: new Date(investment.created_at),
         type: 'Investment',
         description: investment.investor_name,
@@ -336,7 +342,9 @@ const Finance = () => {
       })),
       // Loan transactions
       ...loans.map(loan => ({
-        id: `loan-${loan.id}`,
+        id: loan.id,
+        originalId: loan.id, // Store original ID
+        originalType: 'loans', // Store original table name
         date: new Date(loan.created_at),
         type: 'Loan',
         description: loan.issuer,
@@ -347,7 +355,9 @@ const Finance = () => {
       })),
       // Loan payment transactions
       ...loanPayments.map(payment => ({
-        id: `payment-${payment.id}`,
+        id: payment.id,
+        originalId: payment.id, // Store original ID
+        originalType: 'loan_payments', // Store original table name
         date: new Date(payment.payment_date),
         type: 'Loan Payment',
         description: 'Loan Payment',
@@ -667,6 +677,67 @@ const Finance = () => {
     }
   };
 
+  const handleDeleteTransaction = async (id: string, type: string) => {
+    try {
+      if (type === 'Sale') {
+        const { error } = await supabase.from('sales').delete().eq('id', id);
+        if (error) throw error;
+        setSales(prev => prev.filter(item => item.id !== id));
+        toast({ title: 'Success', description: 'Sale deleted.' });
+      } else if (type === 'Expense') {
+        const { error } = await supabase.from('expenses').delete().eq('id', id);
+        if (error) throw error;
+        setExpenses(prev => prev.filter(item => item.id !== id));
+        toast({ title: 'Success', description: 'Expense deleted.' });
+      } else if (type === 'Investment') {
+        const { error } = await supabase.from('investments').delete().eq('id', id);
+        if (error) throw error;
+        setInvestments(prev => prev.filter(item => item.id !== id));
+        setBalance(prev => prev - Number(investments.find(inv => inv.id === id)?.amount || 0));
+        toast({ title: 'Success', description: 'Investment deleted.' });
+      } else if (type === 'Loan') {
+        // Delete loan payments first
+        const { error: loanPaymentsError } = await supabase.from('loan_payments').delete().eq('loan_id', id);
+        if (loanPaymentsError) {
+          console.error('Error deleting related loan payments:', loanPaymentsError);
+        }
+        // Delete loan itself
+        const { error } = await supabase.from('loans').delete().eq('id', id);
+        if (error) throw error;
+        setLoans(prev => prev.filter(item => item.id !== id));
+        setLoanPayments(prev => prev.filter(payment => payment.loan_id !== id));
+        setBalance(prev => prev - Number(loans.find(loan => loan.id === id)?.amount || 0));
+        toast({ title: 'Success', description: 'Loan and related payments deleted.' });
+      } else if (type === 'Loan Payment') {
+        const { error } = await supabase.from('loan_payments').delete().eq('id', id);
+        if (error) throw error;
+        setLoanPayments(prev => prev.filter(item => item.id !== id));
+        // Optionally update loan remaining_balance
+        const payment = loanPayments.find(p => p.id === id);
+        if (payment) {
+          const loan = loans.find(l => l.id === payment.loan_id);
+          if (loan) {
+            const newBalance = loan.remaining_balance + Number(payment.amount);
+            await supabase.from('loans').update({ remaining_balance: newBalance }).eq('id', loan.id);
+            setLoans(prev => prev.map(l => l.id === loan.id ? { ...l, remaining_balance: newBalance } : l));
+            setBalance(prev => prev + Number(payment.amount));
+          }
+        }
+        toast({ title: 'Success', description: 'Loan payment deleted.' });
+      } else {
+        throw new Error('Unknown transaction type');
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to delete ${type} record. See console for details.`,
+        variant: 'destructive',
+      });
+    }
+  };
+
+
   return (
     <div className="space-y-6">
       <div>
@@ -943,7 +1014,7 @@ const Finance = () => {
           </CardContent>
         </Card>
 
-        {/*  Gross Profit/Margin */}
+        {/* Gross Profit/Margin */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -1394,6 +1465,7 @@ const Finance = () => {
                       )}
                     </div>
                   </TableHead>
+                  <TableHead className="text-center">Actions</TableHead> {/* New TableHead for Actions */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1437,13 +1509,23 @@ const Finance = () => {
                         {transaction.status}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-center"> {/* New TableCell for the delete button */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteTransaction(transaction.originalId, transaction.type)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
 
                 {/* Empty state */}
                 {allTransactions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground"> {/* Adjusted colspan */}
                       No transactions found for the selected date range
                     </TableCell>
                   </TableRow>
