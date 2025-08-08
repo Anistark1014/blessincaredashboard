@@ -15,7 +15,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { name, email, phone, region, coverage } = body;
+    const { name, email, phone, region, sub_region,coverage } = body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return new Response(JSON.stringify({ error: "Missing or invalid 'name' field." }), {
@@ -48,6 +48,7 @@ serve(async (req) => {
         email: (email && email.trim()) ? email.trim() : null,
         phone: (phone && phone.trim()) ? phone.trim() : null,
         region: (region && region.trim()) ? region.trim() : null,
+        sub_region: (sub_region && sub_region.trim()) ? sub_region.trim() : null,
         coverage: coverage || 0,
         role: 'reseller',
       }

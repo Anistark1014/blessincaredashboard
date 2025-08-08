@@ -42,6 +42,7 @@ serve(async (req) => {
     authUpdates.user_metadata = {
       name: updates.name,
       region: updates.region,
+      sub_region: updates.sub_region,
       coverage: updates.coverage,
       // Add any other fields from your public.users table that are editable here
     };

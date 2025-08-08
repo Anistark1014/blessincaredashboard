@@ -43,6 +43,7 @@ interface Reseller {
   exclusive_features: string | null;
   created_at: string;
   region: string | null;
+  sub_region: string | null;
   role: string;
   total_products_sold: number;
   payment_status: "pending" | "clear";
@@ -169,6 +170,7 @@ const AdminResellers: React.FC = () => {
   const [editableResellerName, setEditableResellerName] = useState('');
   const [editableEmail, setEditableEmail] = useState('');
   const [editableRegion, setEditableRegion] = useState('');
+  const [editableSubRegion, setEditableSubRegion] = useState('');
   const [editableCoverage, setEditableCoverage] = useState<number | ''>('');
   const [isLoginAccessEnabled, setIsLoginAccessEnabled] = useState(false);
 
@@ -299,6 +301,7 @@ const AdminResellers: React.FC = () => {
             email: reseller.email ?? null,
             contact_info: reseller.contact_info ?? null,
             region: reseller.region ?? "Unknown",
+            sub_region: reseller.sub_region ?? "Unknown",
             created_at: reseller.created_at ?? "",
             total_products_sold: totalProductsSold,
             payment_status: totalOutstanding === 0 ? "clear" : "pending",
@@ -383,7 +386,6 @@ const AdminResellers: React.FC = () => {
   }, [fetchResellers, selectedReseller]); // Added selectedReseller and fetchResellers to dependency array for clarity and correctness
 
 useEffect(() => {
-  console.log('TRIGGER FETCH: ', timeRange, selectedReseller?.id);
   if (selectedReseller?.id) {
     fetchResellerSalesData(selectedReseller.id);
   }
@@ -504,6 +506,7 @@ useEffect(() => {
       setEditableResellerName(selectedReseller.name || '');
       setEditableEmail(selectedReseller.email || '');
       setEditableRegion(selectedReseller.region || '');
+      setEditableSubRegion(selectedReseller.sub_region || '');
       setEditableCoverage(selectedReseller.coverage ?? '');
       setIsLoginAccessEnabled(selectedReseller.is_active);
 
@@ -521,6 +524,7 @@ useEffect(() => {
       setEditableResellerName('');
       setEditableEmail('');
       setEditableRegion('');
+      setEditableSubRegion('');
       setEditableCoverage('');
       setIsLoginAccessEnabled(false);
       setResellerSales([]);
@@ -558,14 +562,15 @@ useEffect(() => {
       email: '',
       phone: '',
       region: '',
+      sub_region: '',
       coverage: 0,
     });
     const [submitting, setSubmitting] = useState(false);
     const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
     const handleAddResellerSubmit = async () => {
-      const { name, email, phone, region, coverage } = formData;
-
+      const { name, email, phone, region, coverage,sub_region } = formData;
+      console.log('Form: ',formData);
       if (!name) {
         toast({
           title: "Missing Information",
@@ -591,12 +596,13 @@ useEffect(() => {
             email: email === '' ? null : email,
             phone: phone === '' ? null : phone,
             region: region === '' ? null : region,
+            sub_region: sub_region === '' ? null : sub_region,
             coverage,
           }),
         });
 
         const result = await response.json();
-
+        console.log("response :",response)
         if (!response.ok) {
           throw new Error(result.error || "Failed to add reseller via backend service.");
         }
@@ -620,7 +626,7 @@ useEffect(() => {
           });
         }
 
-        setFormData({ name: '', email: '', phone: '', region: '', coverage: 0 });
+        setFormData({ name: '', email: '', phone: '', region: '',sub_region:'', coverage: 0 });
         fetchResellers(); // Re-fetch all resellers to update the main table
         // Close the dialog after submission and re-fetch if password wasn't generated (meaning user won't manually close it)
         if (!result.generated_password) {
@@ -670,6 +676,12 @@ useEffect(() => {
           name="region"
           placeholder="Region (optional)"
           value={formData.region}
+          onChange={handleChange}
+        />
+        <Input
+          name="sub_region"
+          placeholder="Sub-Region (optional)"
+          value={formData.sub_region}
           onChange={handleChange}
         />
         <Input
@@ -728,6 +740,7 @@ useEffect(() => {
       const updatesPayload: any = {
         name: editableResellerName,
         region: editableRegion,
+        sub_region: editableSubRegion,
         coverage: editableCoverage === '' ? 0 : editableCoverage,
       };
 
@@ -874,6 +887,7 @@ const handleExport = () => {
     "Name": reseller.name,
     "Email": reseller.email,
     "Region": reseller.region,
+    "Sub-Region": reseller.sub_region,
     "Total Revenue": reseller.total_revenue_generated,
     "Outstanding Amount": reseller.payment_amount_remaining,
     "Reward Points": reseller.reward_points,
@@ -894,7 +908,7 @@ const handleExport = () => {
 
 // --- NEW: Import Functionality ---
 const handleAddResellerFromImport = async (reseller: any) => {
-    const { name, email, phone, region, coverage } = reseller;
+    const { name, email, phone, region,sub_region, coverage } = reseller;
     if (!name) return; // Skip rows without a name
 
     try {
@@ -912,6 +926,7 @@ const handleAddResellerFromImport = async (reseller: any) => {
           email: email,
           phone: phone,
           region: region,
+          sub_region: sub_region,
           coverage: coverage || 0,
         }),
       });
@@ -949,6 +964,7 @@ const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const key = header.toLowerCase().replace(/\s/g, '_');
         reseller[key] = (row as any)[index];
       });
+      console.log(reseller)
       await handleAddResellerFromImport(reseller);
     }
 
@@ -1306,6 +1322,15 @@ onChange={handleImport}
                                         id="reseller-region"
                                         value={editableRegion}
                                         onChange={(e) => setEditableRegion(e.target.value)}
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label htmlFor="reseller-sub-region">Sub Region</Label>
+                                      <Input
+                                        id="reseller-sub-region"
+                                        value={editableSubRegion}
+                                        onChange={(e) => setEditableSubRegion(e.target.value)}
                                         className="mt-1"
                                       />
                                     </div>
