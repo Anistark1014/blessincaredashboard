@@ -515,17 +515,30 @@ return (
                                         <Package className="w-10 h-10 text-muted-foreground" />
                                     </div>
                                 )}
-                                {product.description && (
+
+
+
+
+                                {/* {product.description && (
                                     <div
-                                        className="text-sm text-muted-foreground line-clamp-2"
-                                        dangerouslySetInnerHTML={{
+                                    className="text-sm text-muted-foreground line-clamp-2"
+                                    dangerouslySetInnerHTML={{
                                             __html: product.description ?? ""
                                         }}
                                     />
-                                )}
-                                
+                                )} */}
+
+
+
+                                {/* <div className="space-y-1">
+                                    <p className="text-sm font-medium text-muted-foreground mb-1">Category:</p>
+                                    <Badge variant="outline" className="text-sm">
+                                        {product.category || 'Uncategorized'}
+                                    </Badge>
+                                </div> */}
+
                                 <div className="space-y-1">
-                                    <p className="text-sm font-medium text-muted-foreground mb-1">Price Ranges:</p>
+                                    <p className="text-sm font-medium text-muted-foreground mb-1">Price Chart:</p>
                                     {(() => {
                                         const priceRanges = product.price_ranges
                                             ? (Array.isArray(product.price_ranges)
@@ -540,7 +553,7 @@ return (
                                             <table className="w-full text-sm border rounded overflow-hidden">
                                                 <thead>
                                                     <tr className="bg-muted">
-                                                        <th className="py-1 px-2 text-left font-semibold">QTY</th>
+                                                        <th className="py-1 px-2 text-left font-semibold">QTY (Pieces)</th>
                                                         <th className="py-1 px-2 text-left font-semibold">Price (₹)</th>
                                                     </tr>
                                                 </thead>
@@ -558,12 +571,7 @@ return (
                                         );
                                     })()}
                                 </div>
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium text-muted-foreground mb-1">Category:</p>
-                                    <Badge variant="outline" className="text-sm">
-                                        {product.category || 'Uncategorized'}
-                                    </Badge>
-                                </div>
+                                
 
                                 <div className="flex gap-2 pt-2">
                                     <Button
