@@ -162,8 +162,8 @@ const AdminResellers: React.FC = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Sorting state for the main table
-  const [sortKey, setSortKey] = useState<keyof Reseller | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortKey, setSortKey] = useState<keyof Reseller | null>('name'); // Default to 'name'
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc'); // Default to ascending
 
 
   // Editable fields for reseller details (within the details dialog)
@@ -1212,38 +1212,50 @@ onChange={handleImport}
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">Tier</TableHead>
-                  <TableHead className="min-w-[150px]">Name</TableHead>
-                  <TableHead>Region</TableHead>
-                  <TableHead>Sub Region</TableHead>
-                  <TableHead>
-                     {/* NEW: Sortable Revenue Header */}
-                     <div
-                        className="flex items-center gap-1 cursor-pointer"
-                        onClick={() => handleSort('total_revenue_generated')}
-                     >
-                       Payables
-                       {sortKey === 'total_revenue_generated' && (
-                         <span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>
-                       )}
-                     </div>
-                  </TableHead>
-                  <TableHead>Outstanding</TableHead>
-                  <TableHead>Reward Points</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredResellers.length > 0 ? (
-                  filteredResellers.map((reseller) => {
-                    const tierInfo = getTierInfo(reseller.reward_points || 0);
-                    return (
-                      <TableRow key={reseller.id}>
-                        <TableCell>
-                          <TierIcon svgName={tierInfo.svg} tier={tierInfo.tier} />
-                        </TableCell>
+                      <TableHeader>
+          <TableRow>
+            <TableHead className="w-[40px] text-center">#</TableHead> {/* Numbering column */}
+            <TableHead className="w-[80px]">Tier</TableHead>
+            <TableHead className="min-w-[150px]">
+              <div
+                className="flex items-center gap-1 cursor-pointer select-none"
+                onClick={() => handleSort('name')}
+              >
+                Name
+                {sortKey === 'name' && (
+                  <span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>
+                )}
+              </div>
+            </TableHead>
+            <TableHead>Region</TableHead>
+            <TableHead>Sub Region</TableHead>
+            <TableHead>
+              {/* NEW: Sortable Revenue Header */}
+              <div
+                className="flex items-center gap-1 cursor-pointer"
+                onClick={() => handleSort('total_revenue_generated')}
+              >
+                Payables
+                {sortKey === 'total_revenue_generated' && (
+                  <span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>
+                )}
+              </div>
+            </TableHead>
+            <TableHead>Outstanding</TableHead>
+            <TableHead>Reward Points</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredResellers.length > 0 ? (
+            filteredResellers.map((reseller, idx) => {
+              const tierInfo = getTierInfo(reseller.reward_points || 0);
+              return (
+                <TableRow key={reseller.id}>
+                  <TableCell className="text-center">{idx + 1}</TableCell> {/* Numbering cell */}
+                  <TableCell>
+                    <TierIcon svgName={tierInfo.svg} tier={tierInfo.tier} />
+                  </TableCell>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             {reseller.name}

@@ -209,7 +209,7 @@ const SalesTable: React.FC = () => {
   const [newSale, setNewSale] = useState<Partial<Sale>>({});
 
   const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    from: new Date(2000, 0, 1),
     to: addDays(new Date(), 0),
   });
 
@@ -1809,12 +1809,16 @@ const SalesTable: React.FC = () => {
       );
     }
 
-    const displayValue =
-      field === "member_id"
-        ? sale.users?.name
-        : field === "product_id"
-        ? sale.products?.name
-        : sale[field];
+// ...existing code...
+        const displayValue =
+          field === "member_id"
+            ? sale.users?.name
+            : field === "product_id"
+            ? sale.products?.name
+            : field === "date"
+            ? format(new Date(sale.date), "dd MMM yyyy") // <-- formatted date
+            : sale[field];
+// ...existing code...
 
     const isCurrency = ["price", "total", "paid", "outstanding"].includes(
       field
@@ -2150,6 +2154,7 @@ const SalesTable: React.FC = () => {
               Cancel
             </Button>
           </div>
+          
         </TableCell>
       </TableRow>
     );
@@ -2308,18 +2313,28 @@ const SalesTable: React.FC = () => {
 
 return (
 
-    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
-      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-          <div>
-              <h1 className="text-3xl font-bold text-foreground">Sales Management</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your sales transactions, track payments, and analyze performance.
-              </p>
-          </div>
-        </div>
-      </div>
+      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+        <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  <div className="flex items-center space-x-3">
+    <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+    <div>
+      <h1 className="text-3xl font-bold text-foreground">Sales Management</h1>
+      <p className="text-muted-foreground mt-1">
+        Manage your sales transactions, track payments, and analyze performance.
+      </p>
+    </div>
+  </div>
+  
+  {/* Add this new button */}
+  <Button 
+    onClick={() => setAddingNew(true)} 
+    className="bg-primary hover:bg-primary/90"
+    disabled={addingNew}
+  >
+    <Plus className="h-4 w-4 mr-2" />
+    New Sales Record
+  </Button>
+</div>
 
     
     <div className="space-y-6">
@@ -2501,6 +2516,7 @@ return (
                 </div>
               </PopoverContent>
             </Popover>
+            
 
             <div className="flex items-center gap-2">
               <TooltipProvider delayDuration={0}>
@@ -2549,6 +2565,8 @@ return (
                     <p>Export</p>
                   </TooltipContent>
                 </Tooltip>
+
+                {/* Add New sales Record */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -2565,7 +2583,16 @@ return (
                 </Tooltip>
               </TooltipProvider>
             </div>
+            <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={deleteSelectedRows}
+                          disabled={selectedRows.length === 0}
+                        >
+                          <Trash2 className="h-4 w-4" />
+             </Button>
           </div>
+          
         </CardHeader>
         <CardContent className="p-0">
           <div className="relative h-[calc(100vh-300px)]">
@@ -2574,7 +2601,7 @@ return (
                 <Table>
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableHead className="w-[50px] px-4">
+                      <TableHead className="w-[16px] px-2">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2583,8 +2610,8 @@ return (
                         >
                           {selectedRows.length === sortedSales.length &&
                           sortedSales.length > 0
-                            ? "Deselect All"
-                            : "Select All"}
+                            ? "All"
+                            : "All"}
                         </Button>
                       </TableHead>
                       <TableHead
@@ -2658,16 +2685,7 @@ return (
                           <Copy className="h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="text-right pr-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={deleteSelectedRows}
-                          disabled={selectedRows.length === 0}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableHead>
+
                     </TableRow>
                   </TableHeader>
                   <TableBody>
