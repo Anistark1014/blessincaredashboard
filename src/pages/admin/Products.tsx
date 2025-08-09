@@ -44,6 +44,7 @@ interface ProductFormData {
     mrp: number | null;
     price_ranges?: PriceRange[];
     media?: MediaItem[] | null;
+    inventory?: number | null;
 }
 
     const AdminProducts = () => {
@@ -490,7 +491,7 @@ return (
                                         <div className="flex justify-between items-center w-full">
                                             <Badge variant="outline">
                                                 <p className="text-sm text-muted-foreground mt-1">
-                                                    {product.availability || 'Unknown'}
+                                                    {(product.availability) ?? 'Unknown'} - {product.inventory ?? "0"}
                                                 </p>
                                             </Badge>
                                             <p className="text-sm truncate text-muted-foreground mt-1">

@@ -31,6 +31,7 @@ interface Product {
   mrp: number | null;
   price_ranges?: PriceRange[];
   media?: MediaItem[] | null;
+  inventory?: number | null; // Added inventory field
 }
 
 const ProductDetails = () => {
@@ -106,6 +107,10 @@ console.log(product)
           <p className="text-muted-foreground">
             Gross Profit: ₹{product.gross_profit?.toFixed(2) || "N/A"}
           </p>
+         <p className="text-muted-foreground">
+          In Stock: {product.inventory ?? "N/A"}
+        </p>
+
           {/* Description */}
                                     {product.description && (
                                         <div
