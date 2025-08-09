@@ -167,7 +167,7 @@ interface ProductFormData {
                     </div>
                     <div className='flex justify-around items-center gap-2 '>
                         <div className={cn('', isEdit ? "hidden" : "flex-1")}>
-                            <Label className='mb-2' htmlFor="sku_id">SKU ID <span className='text-xs ml-2'>(name-size-qty-type1-type2)</span></Label>
+                            <Label className='mb-2' htmlFor="sku_id">SKU ID <span className='text-xs ml-2'>(BRAND-PRODUCT-TYPE-SIZE-PACKAGING)</span></Label>
                             <Input
                                 id="sku_id"
                                 type="text"
