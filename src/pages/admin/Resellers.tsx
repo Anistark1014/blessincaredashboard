@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle, Upload, Download } from 'lucide-react';
+import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle, Upload, Download, HandCoins } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -792,6 +792,7 @@ const filteredResellers = useMemo(() => {
     reseller.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     reseller.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     reseller.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    reseller.sub_region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     reseller.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -1020,12 +1021,19 @@ const getMonthOptions = () => {
   }
 
 
-  return (
-    <div className="space-y-6 p-6">
+return (
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h1 className="text-3xl font-bold text-foreground">Reseller Management</h1>
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <div>
+              <h1 className="text-3xl font-bold text-foreground">Reseller  Management</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage your Reseller Network, track performance, and optimize your reseller relationships.
+              </p>
+          </div>
+        </div>
         <Dialog>
           <DialogTrigger asChild>
             <Button className="w-full md:w-auto">+ Add Reseller</Button>
@@ -1038,6 +1046,9 @@ const getMonthOptions = () => {
           </DialogContent>
         </Dialog>
       </div>
+      <div className="space-y-6">
+        
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1047,7 +1058,7 @@ const getMonthOptions = () => {
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="flex-grow">
-            <div className="text-3xl font-bold">{resellers.length}</div>
+            <div className="text-3xl font-bold">{resellers.length + resellers.filter(r => r.is_active).reduce((sum, r) => sum + (r.coverage || 0), 0)}</div>
           </CardContent>
         </Card>
         <Card className="flex flex-col">
@@ -1061,7 +1072,7 @@ const getMonthOptions = () => {
         </Card>
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Coverage (Sub-resellers)</CardTitle>
+            <CardTitle className="text-sm font-medium">Passive Resellers</CardTitle>
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="flex-grow">
@@ -1072,12 +1083,12 @@ const getMonthOptions = () => {
         </Card>
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Outstanding Amount</CardTitle>
-            <XCircle className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Outstanding </CardTitle>
+            <HandCoins className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="flex-grow">
             <div className="text-3xl font-bold">
-              ${resellers.reduce((sum, r) => sum + r.payment_amount_remaining, 0).toFixed(2)}
+              ₹{resellers.reduce((sum, r) => sum + r.payment_amount_remaining, 0).toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -1206,6 +1217,7 @@ onChange={handleImport}
                   <TableHead className="w-[80px]">Tier</TableHead>
                   <TableHead className="min-w-[150px]">Name</TableHead>
                   <TableHead>Region</TableHead>
+                  <TableHead>Sub Region</TableHead>
                   <TableHead>
                      {/* NEW: Sortable Revenue Header */}
                      <div
@@ -1250,7 +1262,8 @@ onChange={handleImport}
                           </div>
                         </TableCell>
                         <TableCell>{reseller.region}</TableCell>
-                        <TableCell>${reseller.total_revenue_generated?.toFixed(2) ?? '0.00'}</TableCell>
+                        <TableCell>{reseller.sub_region}</TableCell>
+                        <TableCell>₹{reseller.total_revenue_generated?.toFixed(2) ?? '0.00'}</TableCell>
                         <TableCell>
                           <Badge
                             className={
@@ -1259,7 +1272,7 @@ onChange={handleImport}
                                 : "bg-red-100 text-red-800 hover:bg-red-100"
                             }
                           >
-                            ${reseller.payment_amount_remaining.toFixed(2)}
+                            ₹{reseller.payment_amount_remaining.toFixed(2)}
                           </Badge>
                         </TableCell>
                         <TableCell>{reseller.reward_points || 0}</TableCell>
@@ -1439,7 +1452,7 @@ onChange={handleImport}
                                           <LineChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-                                            <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
+                                            <YAxis fontSize={12} tickFormatter={(v) => `₹${v}`} />
                                             <Tooltip />
                                             <Legend />
                                             <Line type="monotone" dataKey="revenue" stroke="#8884d8" activeDot={{ r: 6 }} />
@@ -1464,8 +1477,8 @@ onChange={handleImport}
                                         </div>
                                         <InfoItem label="Phone Number" value={selectedReseller.contact_info?.phone || "Initially empty; compulsory on first login"} />
                                         <InfoItem label="Total Products Sold" value={selectedReseller.total_products_sold} />
-                                        <InfoItem label="Total Revenue Generated (Lifetime)" value={`$${selectedReseller.total_revenue_generated?.toFixed(2) ?? '0.00'}`} />
-                                        <InfoItem label="Total Outstanding Amount (Lifetime)" value={`$${selectedReseller.payment_amount_remaining.toFixed(2) ?? '0.00'}`} />
+                                        <InfoItem label="Total Revenue Generated (Lifetime)" value={`₹${selectedReseller.total_revenue_generated?.toFixed(2) ?? '0.00'}`} />
+                                        <InfoItem label="Total Outstanding Amount (Lifetime)" value={`₹${selectedReseller.payment_amount_remaining.toFixed(2) ?? '0.00'}`} />
                                         <InfoItem label="Current Reward Points" value={selectedReseller.reward_points || 0} />
                                         <InfoItem label="Active Resellers (Sub-hierarchy)" value={selectedReseller.sub_active_resellers || 0} />
                                         <InfoItem label="Passive Resellers (Sub-hierarchy)" value={selectedReseller.sub_passive_resellers || 0} />
@@ -1527,9 +1540,9 @@ onChange={handleImport}
                                                                 return (
                                                                     <TableRow key={sale.id}>
                                                                         <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
-                                                                        <TableCell className="text-right">${total.toFixed(2)}</TableCell>
-                                                                        <TableCell className="text-right">${paid.toFixed(2)}</TableCell>
-                                                                        <TableCell className="text-right font-medium">${outstanding.toFixed(2)}</TableCell>
+                                                                        <TableCell className="text-right">₹{total.toFixed(2)}</TableCell>
+                                                                        <TableCell className="text-right">₹{paid.toFixed(2)}</TableCell>
+                                                                        <TableCell className="text-right font-medium">₹{outstanding.toFixed(2)}</TableCell>
                                                                     </TableRow>
                                                                 );
                                                             })

@@ -76,12 +76,11 @@ console.log(product)
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Product Image */}
         <div className="flex-1 max-w-md mx-auto lg:mx-0">
-          <p className="text-muted-foreground mb-2">SKU: {product.sku_id || "N/A"}</p>
           {product.image_url ? (
             <img
-              src={product.image_url}
-              alt={product.name}
-              className="rounded-lg w-full object-cover max-h-96"
+            src={product.image_url}
+            alt={product.name}
+            className="rounded-lg w-full object-cover max-h-96"
             />
           ) : (
             <div className="w-full h-96 bg-muted flex items-center justify-center text-muted-foreground rounded-lg">
@@ -93,6 +92,7 @@ console.log(product)
         {/* Product Info */}
         <div className="flex-1 space-y-3">
           <h1 className="text-3xl font-bold">{product.name}</h1>
+          <p className="text-muted-foreground mb-2">SKU: {product.sku_id || "N/A"}</p>
           <p className="text-muted-foreground">
             Availability: {product.availability || "Unknown"}
           </p>
@@ -106,6 +106,15 @@ console.log(product)
           <p className="text-muted-foreground">
             Gross Profit: ₹{product.gross_profit?.toFixed(2) || "N/A"}
           </p>
+          {/* Description */}
+                                    {product.description && (
+                                        <div
+                                            className="text-sm text-muted-foreground line-clamp-2"
+                                            dangerouslySetInnerHTML={{
+                                                __html: product.description ?? ""
+                                            }}
+                                        />
+                                    )}
             {product.info_link && (
               <Button
                 variant="outline"
@@ -119,15 +128,6 @@ console.log(product)
         </div>
       </div>
 
-      {/* Description */}
-                                {product.description && (
-                                    <div
-                                        className="text-sm text-muted-foreground line-clamp-2"
-                                        dangerouslySetInnerHTML={{
-                                            __html: product.description ?? ""
-                                        }}
-                                    />
-                                )}
 
       {/* Price Ranges */}
       {product.price_ranges && product.price_ranges.length > 0 && (

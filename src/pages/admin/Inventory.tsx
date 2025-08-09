@@ -509,14 +509,18 @@ const Inventory: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
           <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Inventory Management</h1>
-        </div>
-
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <div>
+              <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage your healthcare product inventory with real-time tracking & analytics
+              </p>
+            </div>
+                  </div>
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2 w-full sm:w-auto">
               <Package className="h-4 w-4" />
@@ -594,6 +598,12 @@ const Inventory: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+      <div className="space-y-6">
+
+
+
+        
       </div>
 
       {/* KPI Cards */}

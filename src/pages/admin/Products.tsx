@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Trash2, Package } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package, Box } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 import { useNavigate } from "react-router-dom";
@@ -84,16 +84,16 @@ interface ProductFormData {
         // and defined fixed lists for filters as requested.
 
         const fixedCategories = [
-            "Sanitary Pads",
+            "Sanitary Napkins",
             "Maternity Pads",
-            "Incinerator Machine",
+            "Period Underwear",
+            "Tampons",
+            "Menstrual Cups",
             "Wet Wipes",
             "Baby Diapers",
             "Adult Diapers",
-            "Menstrual Cups",
-            "Period Underwear",
-            "Tampons",
-            "Vending Machine"
+            "Vending Machine",
+            "Incinerator Machine"
         ];
 
         // const fixedAvailabilities = [
@@ -376,19 +376,21 @@ interface ProductFormData {
             );
         }
 
-        return (
-            <div className="space-y-6 fade-in-up">
-                {/* Header */}
-                <div className="healthcare-card">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                            <h1 className="text-3xl font-bold text-foreground">Product Management</h1>
-                            <p className="text-muted-foreground mt-1">
-                                Manage your healthcare product inventory with real-time updates
-                            </p>
-                        </div>
-                    </div>
-                </div>
+
+return (
+
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <Box className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <div>
+              <h1 className="text-3xl font-bold text-foreground">Product Management</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage your healthcare products portfolio, including adding, editing, and deleting products. 
+              </p>
+          </div>
+        </div>
+      </div>
                 {/* Sales Dashboard Section - Rendered below header */}
                 <SalesDashboard
                     currentProductSearchTerm={searchTerm}
@@ -520,27 +522,46 @@ interface ProductFormData {
                                         }}
                                     />
                                 )}
+                                
                                 <div className="space-y-1">
-                                    <p className="text-sm font-medium text-muted-foreground">Price Ranges:</p>
+                                    <p className="text-sm font-medium text-muted-foreground mb-1">Price Ranges:</p>
                                     {(() => {
-                                        const priceRanges = product.price_ranges ? 
-                                            (Array.isArray(product.price_ranges) 
-                                                ? product.price_ranges 
-                                                : typeof product.price_ranges === 'string' 
-                                                    ? JSON.parse(product.price_ranges) 
+                                        const priceRanges = product.price_ranges
+                                            ? (Array.isArray(product.price_ranges)
+                                                ? product.price_ranges
+                                                : typeof product.price_ranges === 'string'
+                                                    ? JSON.parse(product.price_ranges)
                                                     : []
-                                            ) as PriceRange[] : [];
+                                            ) as PriceRange[]
+                                            : [];
                                         
                                         return priceRanges.length ? (
-                                            priceRanges.map((range, index) => (
-                                                <p key={index} className="text-sm">
-                                                    {range.min} – {range.max} units: ₹{range.price}
-                                                </p>
-                                            ))
+                                            <table className="w-full text-sm border rounded overflow-hidden">
+                                                <thead>
+                                                    <tr className="bg-muted">
+                                                        <th className="py-1 px-2 text-left font-semibold">QTY</th>
+                                                        <th className="py-1 px-2 text-left font-semibold">Price (₹)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {priceRanges.map((range, idx) => (
+                                                        <tr key={idx} className="border-t">
+                                                            <td className="py-1 px-2">{range.min} – {range.max}</td>
+                                                            <td className="py-1 px-2">₹{range.price}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         ) : (
                                             <p className="text-sm text-muted-foreground italic">No pricing info</p>
                                         );
                                     })()}
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium text-muted-foreground mb-1">Category:</p>
+                                    <Badge variant="outline" className="text-sm">
+                                        {product.category || 'Uncategorized'}
+                                    </Badge>
                                 </div>
 
                                 <div className="flex gap-2 pt-2">

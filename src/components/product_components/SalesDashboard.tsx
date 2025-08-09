@@ -646,7 +646,7 @@ const processSalesData = useMemo(() => (
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="qty">Packages Sold</SelectItem>
-                                        <SelectItem value="price">Price Per Unit</SelectItem>
+                                        {/* <SelectItem value="price">Price Per Unit</SelectItem> */}
                                         <SelectItem value="total">Total Revenue</SelectItem>
                                     </SelectContent>
                                 </Select>

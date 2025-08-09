@@ -34,6 +34,7 @@ import {
   Calendar as CalendarIcon,
   Copy,
   Badge,
+  TrendingUp,
 } from "lucide-react";
 // import {
 //   Dialog,
@@ -2304,7 +2305,23 @@ const SalesTable: React.FC = () => {
     }
   };
 
-  return (
+
+return (
+
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <div>
+              <h1 className="text-3xl font-bold text-foreground">Sales Management</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage your sales transactions, track payments, and analyze performance.
+              </p>
+          </div>
+        </div>
+      </div>
+
+    
     <div className="space-y-6">
       <EnhancedSalesDashboard data={sortedSales} />
       <Card>
@@ -2713,6 +2730,7 @@ const SalesTable: React.FC = () => {
         </CardContent>
       </Card>
     </div>
+      </div>
   );
 };
 

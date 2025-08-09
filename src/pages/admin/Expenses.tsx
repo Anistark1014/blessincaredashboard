@@ -33,6 +33,7 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
+import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, SortDesc, Box } from 'lucide-react';
 
 // --- INTERFACES & CONSTANTS ---
 interface Expense {
@@ -332,8 +333,23 @@ const AdminExpenses: React.FC = () => {
   if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
   return (
+
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <TrendingDown className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <div>
+              <h1 className="text-3xl font-bold text-foreground">Expense Management</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage company expenses, track spending, and analyze financial performance.
+              </p>
+            </div>
+        </div>
+      </div>
+      <div className="space-y-6">
+
     <TooltipProvider>
-      <div className="p-4 md:p-8 space-y-6">
+      <div className="p-4 md:p-1 space-y-6">
 
         {/* KPI Section - Now using the separated component */}
         <ExpenseKPICards expenses={sortedExpenses} />
@@ -611,6 +627,8 @@ const AdminExpenses: React.FC = () => {
         </Card>
       </div>
     </TooltipProvider>
+      </div>
+    </div>
   );
 };
 

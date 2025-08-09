@@ -739,31 +739,40 @@ const Finance = () => {
 
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Finance</h1>
-        <p className="text-muted-foreground">
-          Manage investments, loans, and financial overview
-        </p>
-        <div className="flex items-center gap-2 mt-2">
-          <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                id="date"
-                variant={"outline"}
-                className={cn(
-                  "w-[300px] justify-start text-left font-normal",
-                  !date && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date?.from
-                  ? date.to
-                    ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
-                    : date.from.toLocaleDateString()
-                  : "Pick a date range"}
-              </Button>
-            </PopoverTrigger>
+    <div>
+      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="healthcare-card fade-in-up flex flex-col gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      {/* Title */}
+      <div className="flex items-center gap-3">
+        <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Finance Management</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Manage investments, loans, and financial transactions efficiently.
+          </p>
+        </div>
+      </div>
+      {/* Calendar & KPI Toggle */}
+      <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-end">
+        <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              id="date"
+              variant={"outline"}
+              className={cn(
+                "w-full sm:w-[300px] justify-start text-left font-normal",
+                !date && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {date?.from
+                ? date.to
+                  ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
+                  : date.from.toLocaleDateString()
+                : "Pick a date range"}
+            </Button>
+          </PopoverTrigger>
             <PopoverContent
               className="w-auto p-0 flex"
               side="bottom"
@@ -950,6 +959,11 @@ const Finance = () => {
         </div>
 
       </div>
+        </div>
+      </div>
+
+    <div className="space-y-6">
+
 
       {/* Basic KPI Cards */}
       <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-4 ${hideKpi ? "hidden" : ""}`}>
@@ -2040,8 +2054,10 @@ const Finance = () => {
       </div> */}
 
       {/* Investments Table */}
+      {/* Investments Table */}
+    </div>
     </div>
   );
-};
+}
 
 export default Finance;

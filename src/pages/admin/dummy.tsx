@@ -30,7 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const resellerNavItems = [
     { to: '/reseller', icon: Home, label: 'Dashboard' },
-    { to: '/reseller/catalog', icon: Package, label: 'Product Catalog' },
+    { to: '/reseller/catalog', icon: Package, label: 'Product List' },
     { to: '/reseller/requests', icon: ShoppingCart, label: 'My Requests' },
     { to: '/reseller/payments', icon: CreditCard, label: 'Payments' },
   ];

@@ -100,7 +100,7 @@ const navigate = useNavigate();
   return (
     <div className="space-y-6 fade-in-up">
       {/* Header */}
-      <div className="healthcare-card">
+      {/* <div className="healthcare-card">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Product Management</h1>
@@ -109,7 +109,7 @@ const navigate = useNavigate();
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Filters */}
       <Card className="healthcare-card">
