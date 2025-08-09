@@ -89,6 +89,57 @@ const Inventory: React.FC = () => {
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
+  // Shrinkage states
+  const [shrinkageModalOpen, setShrinkageModalOpen] = useState(false);
+  const [shrinkageProductId, setShrinkageProductId] = useState('');
+  const [shrinkageQty, setShrinkageQty] = useState('');
+  const [shrinkageNotes, setShrinkageNotes] = useState('');
+  // Handle Shrinkage
+  const handleShrinkage = async () => {
+    if (!shrinkageProductId || !shrinkageQty) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a product and enter shrinkage quantity.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const selectedProduct = products.find(p => p.id === shrinkageProductId);
+      if (!selectedProduct) return;
+      const qty = parseInt(shrinkageQty);
+      if (qty <= 0) {
+        toast({ title: "Invalid Quantity", description: "Shrinkage quantity must be positive.", variant: "destructive" });
+        return;
+      }
+      // Subtract from inventory
+      const newInventory = (selectedProduct.inventory || 0) - qty;
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ inventory: newInventory })
+        .eq('id', shrinkageProductId);
+      if (updateError) throw updateError;
+      // Log inventory transaction
+      await supabase.from('inventory_transactions').insert({
+        product_id: shrinkageProductId,
+        product_name: selectedProduct.name,
+        type: 'shrinkage',
+        quantity: qty,
+        cost_per_unit: null,
+        transaction_date: new Date().toISOString().split('T')[0],
+        notes: shrinkageNotes || 'Shrinkage',
+      });
+      toast({ title: "Shrinkage Recorded", description: `Shrinkage of ${qty} units for ${selectedProduct.name} recorded.` });
+      setShrinkageModalOpen(false);
+      setShrinkageProductId('');
+      setShrinkageQty('');
+      setShrinkageNotes('');
+    } catch (error) {
+      console.error('Error recording shrinkage:', error);
+      toast({ title: "Error", description: "Failed to record shrinkage.", variant: "destructive" });
+    }
+  };
+
   // Filter and sort states
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [lowStockOnly, setLowStockOnly] = useState(false);
@@ -96,7 +147,7 @@ const Inventory: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Time range filter states
-  const [timeRange, setTimeRange] = useState('30'); // Default to 30 days
+  const [timeRange, setTimeRange] = useState('all'); // Default to all time
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
@@ -223,12 +274,15 @@ const Inventory: React.FC = () => {
           endDate = new Date(customEndDate);
           endDate.setHours(23, 59, 59, 999);
         } else {
-          // Fallback to 30 days if custom dates not set
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          // Fallback to all time if custom dates not set
+          startDate = new Date(2000, 0, 1);
         }
         break;
+      case 'all':
+        startDate = new Date(2000, 0, 1);
+        break;
       default:
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        startDate = new Date(2000, 0, 1);
     }
 
     return { startDate, endDate };
@@ -374,14 +428,16 @@ const Inventory: React.FC = () => {
       if (costPerUnit && parseFloat(costPerUnit) > 0) {
         const totalCost = parseFloat(costPerUnit) * parseInt(quantity);
 
-        const { error: expenseError } = await supabase
+        const { data: expenseData, error: expenseError } = await supabase
           .from('expenses')
           .insert({
             category: "Stock Purchase",
             amount: totalCost,
-            date: purchaseDate,
+            date: new Date(purchaseDate).toISOString(),
             description: `Stock purchase: ${quantity} units of ${selectedProduct.name} at ₹${costPerUnit} per unit${notes ? ` - ${notes}` : ''}`,
-          });
+          })
+          .select()
+          .single();
 
         if (expenseError) {
           console.error('Error creating expense record:', expenseError);
@@ -391,6 +447,8 @@ const Inventory: React.FC = () => {
             description: "Stock purchase recorded but expense tracking failed.",
             variant: "destructive",
           });
+        } else {
+          console.log('Expense record created:', expenseData);
         }
       }
 
@@ -514,90 +572,141 @@ const Inventory: React.FC = () => {
         <div className="flex items-center space-x-3">
           <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
           <div>
-              <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your healthcare product inventory with real-time tracking & analytics
-              </p>
-            </div>
-                  </div>
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center space-x-2 w-full sm:w-auto">
-              <Package className="h-4 w-4" />
-              <span>Record Stock Purchase</span>
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Record Stock Purchase</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="product">Product</Label>
-                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a product" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map(product => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  placeholder="Enter quantity"
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="cost">Cost Per Unit</Label>
-                <Input
-                  id="cost"
-                  type="number"
-                  step="0.01"
-                  value={costPerUnit}
-                  onChange={(e) => setCostPerUnit(e.target.value)}
-                  placeholder="Enter cost per unit"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="date">Purchase Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="notes">Notes (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Enter any notes about this purchase"
-                />
-              </div>
-
-              <Button onClick={handleStockPurchase} className="w-full">
-                Record Purchase
+            <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
+            <p className="text-muted-foreground mt-1">
+              Manage your healthcare product inventory with real-time tracking & analytics
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 mt-4 sm:mt-0">
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center space-x-2 w-full sm:w-auto">
+                <Package className="h-4 w-4" />
+                <span>Record Stock Purchase</span>
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Stock Purchase</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="product">Product</Label>
+                  <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map(product => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="quantity">Quantity</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="Enter quantity"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cost">Cost Per Unit</Label>
+                  <Input
+                    id="cost"
+                    type="number"
+                    step="0.01"
+                    value={costPerUnit}
+                    onChange={(e) => setCostPerUnit(e.target.value)}
+                    placeholder="Enter cost per unit"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="date">Purchase Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="notes">Notes (Optional)</Label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Enter any notes about this purchase"
+                  />
+                </div>
+                <Button onClick={handleStockPurchase} className="w-full">
+                  Record Purchase
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          {/* Shrinkage Button and Modal */}
+          <Dialog open={shrinkageModalOpen} onOpenChange={setShrinkageModalOpen}>
+            <DialogTrigger asChild>
+              <Button variant="destructive" className="flex items-center space-x-2 w-full sm:w-auto">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Add Shrinkage</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Inventory Shrinkage</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="shrinkage_product">Product</Label>
+                  <Select value={shrinkageProductId} onValueChange={setShrinkageProductId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map(product => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="shrinkage_qty">Shrinkage Quantity</Label>
+                  <Input
+                    id="shrinkage_qty"
+                    type="number"
+                    value={shrinkageQty}
+                    onChange={(e) => setShrinkageQty(e.target.value)}
+                    placeholder="Enter shrinkage quantity"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="shrinkage_notes">Notes (Optional)</Label>
+                  <Textarea
+                    id="shrinkage_notes"
+                    value={shrinkageNotes}
+                    onChange={(e) => setShrinkageNotes(e.target.value)}
+                    placeholder="Enter any notes about this shrinkage"
+                  />
+                </div>
+                <Button onClick={handleShrinkage} className="w-full" variant="destructive">
+                  Record Shrinkage
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       <div className="space-y-6">
 
@@ -721,6 +830,7 @@ const Inventory: React.FC = () => {
                   <SelectValue placeholder="Time Range" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
                   <SelectItem value="1">Last 1 Day</SelectItem>
                   <SelectItem value="2">Last 2 Days</SelectItem>
                   <SelectItem value="7">Last 7 Days</SelectItem>

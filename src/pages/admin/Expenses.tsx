@@ -85,7 +85,7 @@ const AdminExpenses: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: keyof Expense } | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [date, setDate] = useState<DateRange | undefined>({ from: new Date(new Date().getFullYear(), new Date().getMonth(), 1), to: addDays(new Date(), 0) });
+  const [date, setDate] = useState<DateRange | undefined>({ from: new Date(2000, 0, 1), to: addDays(new Date(), 0) });
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Expense | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
@@ -104,7 +104,13 @@ const AdminExpenses: React.FC = () => {
     if (error) {
       toast({ title: "Error", description: "Failed to fetch expenses.", variant: "destructive" });
     } else {
-      setExpenses(data as Expense[]);
+      // Normalize date field to YYYY-MM-DD for all loaded expenses
+      setExpenses(
+        (data as Expense[]).map(exp => ({
+          ...exp,
+          date: exp.date ? exp.date.slice(0, 10) : '',
+        }))
+      );
     }
     setLoading(false);
   };
@@ -173,6 +179,25 @@ const AdminExpenses: React.FC = () => {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      // If this is a stock purchase, try to parse product and qty from description and update inventory
+      if (recordToInsert.category === 'Stock Purchase' && recordToInsert.description) {
+        // Try to extract product name and quantity from description
+        const match = recordToInsert.description.match(/(\d+) units of ([^@]+) at/);
+        if (match) {
+          const qty = parseInt(match[1]);
+          const productName = match[2].trim();
+          // Find product by name
+          const { data: products, error: prodErr } = await supabase
+            .from('products')
+            .select('id, inventory')
+            .ilike('name', `%${productName}%`);
+          if (!prodErr && products && products.length > 0) {
+            const product = products[0];
+            const newInventory = (product.inventory || 0) + qty;
+            await supabase.from('products').update({ inventory: newInventory }).eq('id', product.id);
+          }
+        }
+      }
       setExpenses(prev => [
         {
           ...data,
@@ -210,6 +235,26 @@ const AdminExpenses: React.FC = () => {
     addToUndoStack({ type: 'delete', data: { deletedRecords } });
 
     setExpenses(expenses.filter(exp => !selectedRows.includes(exp.id)));
+    // For each deleted expense, if it's a stock purchase, try to revert inventory
+    for (const exp of deletedRecords) {
+      if (exp.category === 'Stock Purchase' && exp.description) {
+        const match = exp.description.match(/(\d+) units of ([^@]+) at/);
+        if (match) {
+          const qty = parseInt(match[1]);
+          const productName = match[2].trim();
+          // Find product by name
+          const { data: products, error: prodErr } = await supabase
+            .from('products')
+            .select('id, inventory')
+            .ilike('name', `%${productName}%`);
+          if (!prodErr && products && products.length > 0) {
+            const product = products[0];
+            const newInventory = (product.inventory || 0) - qty;
+            await supabase.from('products').update({ inventory: newInventory }).eq('id', product.id);
+          }
+        }
+      }
+    }
     const { error } = await supabase.from('expenses').delete().in('id', selectedRows);
 
     if (error) {

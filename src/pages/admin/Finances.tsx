@@ -100,7 +100,7 @@ const Finance = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    from: new Date(2000, 0, 1),
     to: addDays(new Date(), 0),
   });
   const [isPopoverOpen, setPopoverOpen] = useState(false);

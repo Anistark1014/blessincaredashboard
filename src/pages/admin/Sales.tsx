@@ -716,15 +716,18 @@ const SalesTable: React.FC = () => {
 
         // Update product inventory - subtract qty from stock for sales
         if (newSale.product_id && qty > 0) {
-          const oldInventory = await updateProductInventory(
-            newSale.product_id,
-            -qty
-          );
-          inventoryChanges.push({
-            productId: newSale.product_id,
-            oldInventory,
-            newInventory: oldInventory - qty,
-          });
+          // Get current inventory
+          const { data: product, error: prodErr } = await supabase
+            .from("products")
+            .select("inventory")
+            .eq("id", newSale.product_id)
+            .single();
+          if (!prodErr && product) {
+            const oldInventory = product.inventory || 0;
+            const newInventory = oldInventory - qty;
+            await supabase.from("products").update({ inventory: newInventory }).eq("id", newSale.product_id);
+            inventoryChanges.push({ productId: newSale.product_id, oldInventory, newInventory });
+          }
         }
       } else {
         // Clearance
@@ -1102,12 +1105,17 @@ const SalesTable: React.FC = () => {
         newBalance: number;
       }[] = [];
       const salesRecordReversals: any[] = [];
+      const inventoryReverts: { productId: string; revertQty: number }[] = [];
 
       for (const record of deletedRecords) {
         let balanceChange = 0;
 
         if (record.transaction_type === "Sale") {
           balanceChange = -record.outstanding; // Decrease user's due balance
+          // Revert inventory: add back sold qty
+          if (record.product_id && record.qty > 0) {
+            inventoryReverts.push({ productId: record.product_id, revertQty: record.qty });
+          }
         } else {
           // Clearance - need to reverse the sales record updates
           balanceChange = record.paid; // Increase user's due balance (reverse the clearance)
@@ -1175,6 +1183,21 @@ const SalesTable: React.FC = () => {
             payment_status: reversal.newStatus,
           })
           .eq("id", reversal.id);
+      }
+
+      // Revert inventory for deleted sales
+      for (const revert of inventoryReverts) {
+        // Get current inventory
+        const { data: product, error: prodErr } = await supabase
+          .from("products")
+          .select("inventory")
+          .eq("id", revert.productId)
+          .single();
+        if (!prodErr && product) {
+          const oldInventory = product.inventory || 0;
+          const newInventory = oldInventory + revert.revertQty;
+          await supabase.from("products").update({ inventory: newInventory }).eq("id", revert.productId);
+        }
       }
 
       addToUndoStack({
