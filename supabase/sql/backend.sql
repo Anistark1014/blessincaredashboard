@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   category TEXT NOT NULL,
   amount NUMERIC(10, 2) NOT NULL,
   date TIMESTAMP DEFAULT now(),
-  description TEXT
+  description TEXT,
+  inventory_transaction_id uuid REFERENCES inventory_transactions(id)
 );
 
 -- ========== 6. NOTIFICATIONS TABLE ==========
@@ -127,3 +128,41 @@ SELECT
   SUM(amount) AS total_spent
 FROM expenses
 GROUP BY type, category;
+
+
+
+-- Trigger function to sync inventory and delete inventory transaction
+CREATE OR REPLACE FUNCTION handle_expense_delete()
+RETURNS TRIGGER AS $$
+DECLARE
+  txn_qty INT;
+  prod_id UUID;
+BEGIN
+  -- Get the inventory transaction details
+  SELECT quantity, product_id INTO txn_qty, prod_id
+  FROM inventory_transactions
+  WHERE id = OLD.inventory_transaction_id;
+
+  -- Reduce the product's inventory
+  IF prod_id IS NOT NULL AND txn_qty IS NOT NULL THEN
+    UPDATE products
+    SET availability = (availability::int - txn_qty)::text
+    WHERE id = prod_id;
+  END IF;
+
+  -- Delete the inventory transaction
+  IF OLD.inventory_transaction_id IS NOT NULL THEN
+    DELETE FROM inventory_transactions WHERE id = OLD.inventory_transaction_id;
+  END IF;
+
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger on expenses delete
+DROP TRIGGER IF EXISTS trigger_handle_expense_delete ON expenses;
+CREATE TRIGGER trigger_handle_expense_delete
+AFTER DELETE ON expenses
+FOR EACH ROW
+WHEN (OLD.inventory_transaction_id IS NOT NULL)
+EXECUTE FUNCTION handle_expense_delete();

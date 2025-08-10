@@ -35,10 +35,12 @@ interface PriceRange {
 
 interface Expense {
   id: string;
-  date: string;
+  type: string;
   category: string;
-  description: string;
   amount: number;
+  date: string;
+  description: string | null;
+  inventory_transaction_id: string | null;
 }
 
 interface InventoryTransaction {
@@ -409,8 +411,9 @@ const Inventory: React.FC = () => {
       const selectedProduct = products.find(p => p.id === selectedProductId);
       if (!selectedProduct) return;
 
-      // Create inventory transaction
-      const { error: transactionError } = await supabase
+
+      // Create inventory transaction and get its ID
+      const { data: transactionData, error: transactionError } = await supabase
         .from('inventory_transactions')
         .insert({
           product_id: selectedProductId,
@@ -420,12 +423,14 @@ const Inventory: React.FC = () => {
           cost_per_unit: costPerUnit ? parseFloat(costPerUnit) : null,
           transaction_date: purchaseDate,
           notes: notes || null,
-        });
+        })
+        .select()
+        .single();
 
       if (transactionError) throw transactionError;
 
-      // Create expense record for the purchase
-      if (costPerUnit && parseFloat(costPerUnit) > 0) {
+      // Create expense record for the purchase, linking to inventory_transaction_id
+      if (costPerUnit && parseFloat(costPerUnit) > 0 && transactionData && transactionData.id) {
         const totalCost = parseFloat(costPerUnit) * parseInt(quantity);
 
         const { data: expenseData, error: expenseError } = await supabase
@@ -435,6 +440,7 @@ const Inventory: React.FC = () => {
             amount: totalCost,
             date: new Date(purchaseDate).toISOString(),
             description: `Stock purchase: ${quantity} units of ${selectedProduct.name} at ₹${costPerUnit} per unit${notes ? ` - ${notes}` : ''}`,
+            inventory_transaction_id: transactionData.id,
           })
           .select()
           .single();

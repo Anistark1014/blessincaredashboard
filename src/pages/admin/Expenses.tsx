@@ -38,10 +38,12 @@ import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, S
 // --- INTERFACES & CONSTANTS ---
 interface Expense {
   id: string;
-  date: string;
+  type: string;
   category: string;
-  description: string;
   amount: number;
+  date: string;
+  description: string | null;
+  inventory_transaction_id: string | null;
 }
 
 interface UndoOperation {
@@ -91,18 +93,19 @@ const AdminExpenses: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<{ key: keyof Expense | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const { toast } = useToast();
-  const [isDialogOpen, setDialogOpen] = useState(false);
   const [isPopoverOpen, setPopoverOpen] = useState(false);
-  const [customDate, setCustomDate] = useState<DateRange | undefined>(date);
 
   // --- DATA FETCHING & SIDE EFFECTS ---
 
   const fetchExpenses = async () => {
-    if (!date?.from || !date?.to) return;
     setLoading(true);
-    const { data, error } = await supabase.from('expenses').select('*').gte('date', date.from.toISOString()).lte('date', date.to.toISOString());
+    // Remove date filter for debugging
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('id, date, category, description, amount, type, inventory_transaction_id');
     if (error) {
-      toast({ title: "Error", description: "Failed to fetch expenses.", variant: "destructive" });
+      console.error('Supabase fetch error:', error);
+      toast({ title: "Error", description: `Failed to fetch expenses: ${error.message}`, variant: "destructive" });
     } else {
       // Normalize date field to YYYY-MM-DD for all loaded expenses
       setExpenses(
@@ -132,8 +135,11 @@ const AdminExpenses: React.FC = () => {
     });
     if (sortConfig.key) {
       filtered.sort((a, b) => {
-        const valA = a[sortConfig.key!];
-        const valB = b[sortConfig.key!];
+        let valA = a[sortConfig.key!];
+        let valB = b[sortConfig.key!];
+        // Handle nulls for string and number fields
+        if (valA == null) valA = '';
+        if (valB == null) valB = '';
         if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
@@ -148,11 +154,7 @@ const AdminExpenses: React.FC = () => {
     setUndoStack(prev => [...prev, operation].slice(-10));
   };
 
-  const handleApplyCustomDate = () => {
-    setDate(customDate);
-    setDialogOpen(false);
-    setPopoverOpen(false);
-  };
+
 
   const handleAddNew = async () => {
     if (!newExpense.category || !newExpense.date || Number(newExpense.amount) <= 0) {
@@ -163,17 +165,19 @@ const AdminExpenses: React.FC = () => {
       });
     }
 
-    const recordToInsert = {
+    const recordToInsert: any = {
       date: newExpense.date as string,
       category: newExpense.category as string,
       description: newExpense.description ?? '',
       amount: Number(newExpense.amount),
+      type: newExpense.category === 'Stock Purchase' ? 'stock' : 'general',
+      // inventory_transaction_id will be set only by Inventory.tsx
     };
 
     const { data, error } = await supabase
       .from('expenses')
       .insert(recordToInsert)
-      .select()
+      .select('id, date, category, description, amount, type, inventory_transaction_id')
       .single();
 
     if (error) {
@@ -271,11 +275,14 @@ const AdminExpenses: React.FC = () => {
       return toast({ title: "No Data", description: "The imported file is empty or invalid.", variant: "destructive" });
     }
 
+
     const processedData = importedRows.map(row => ({
       date: new Date(row.Date).toISOString().split('T')[0],
       category: row.Category,
       description: row.Description,
       amount: Number(row.Amount),
+      type: row.Type ?? 'general', // default type if not present
+      inventory_transaction_id: row.InventoryTransactionId ?? null,
     })).filter(d => d.category && d.date && !isNaN(d.amount));
 
     if (processedData.length === 0) {
@@ -397,7 +404,7 @@ const AdminExpenses: React.FC = () => {
       <div className="p-4 md:p-1 space-y-6">
 
         {/* KPI Section - Now using the separated component */}
-        <ExpenseKPICards expenses={sortedExpenses} />
+        <ExpenseKPICards expenses={sortedExpenses.map(e => ({ ...e, description: e.description ?? '' }))} />
 
         {/* Main Table Card */}
         <Card>
