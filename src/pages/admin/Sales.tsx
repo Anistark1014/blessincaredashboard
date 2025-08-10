@@ -206,7 +206,9 @@ const SalesTable: React.FC = () => {
     field: keyof Sale;
   } | null>(null);
   const [addingNew, setAddingNew] = useState(false);
-  const [newSale, setNewSale] = useState<Partial<Sale>>({});
+  const [newSale, setNewSale] = useState<Partial<Sale>>({
+    date: new Date().toISOString().slice(0, 10),
+  });
 
   const [date, setDate] = useState<DateRange | undefined>({
     from: new Date(2000, 0, 1),
@@ -231,6 +233,9 @@ const SalesTable: React.FC = () => {
     key: "date",
     direction: "descending",
   });
+
+  // For add-new calendar popover
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [membersWithDues, setMembersWithDues] = useState<
     {
@@ -2101,18 +2106,43 @@ const SalesTable: React.FC = () => {
       ? getPendingSalesForMember(newSale.member_id)
       : [];
 
+    // Modern calendar UI for date selection
     return (
       <TableRow className="bg-secondary">
         <TableCell></TableCell>
         <TableCell className="p-1">
-          <Input
-            type="date"
-            className="h-8"
-            value={newSale.date ?? ""}
-            onChange={(e) =>
-              handleNewChange("date" as keyof Sale, e.target.value)
-            }
-          />
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-8",
+                  !newSale.date && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {newSale.date
+                  ? (() => {
+                      const d = new Date(newSale.date);
+                      return isNaN(d.getTime()) ? "Pick a date" : d.toLocaleDateString();
+                    })()
+                  : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={newSale.date ? new Date(newSale.date) : undefined}
+                onSelect={(date) => {
+                  if (date) {
+                    handleNewChange("date" as keyof Sale, date.toISOString().slice(0, 10));
+                    setCalendarOpen(false);
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </TableCell>
         <TableCell className="p-1">
           <Select
@@ -2472,7 +2502,13 @@ return (
   
   {/* Add this new button */}
   <Button 
-    onClick={() => setAddingNew(true)} 
+    onClick={() => {
+      setAddingNew(true);
+      setNewSale((prev) => ({
+        ...prev,
+        date: new Date().toISOString().slice(0, 10),
+      }));
+    }} 
     className="bg-primary hover:bg-primary/90"
     disabled={addingNew}
   >

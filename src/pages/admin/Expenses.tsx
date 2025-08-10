@@ -1060,20 +1060,35 @@ const AdminExpenses: React.FC = () => {
                         <TableRow className="bg-muted/50">
                           <TableCell></TableCell>
                           <TableCell className="p-1">
-                            <Input
-                              type="date"
-                              value={
-                                newExpense.date ||
-                                format(new Date(), "yyyy-MM-dd")
-                              }
-                              onChange={(e) =>
-                                setNewExpense((prev) => ({
-                                  ...prev,
-                                  date: e.target.value,
-                                }))
-                              }
-                              className="h-8"
-                            />
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-[140px] justify-start text-left font-normal h-8",
+                                    !newExpense.date && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {newExpense.date
+                                    ? format(new Date(newExpense.date), "dd MMM yyyy")
+                                    : "Pick date"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={newExpense.date ? new Date(newExpense.date) : undefined}
+                                  onSelect={(date) => {
+                                    setNewExpense((prev) => ({
+                                      ...prev,
+                                      date: date ? format(date, "yyyy-MM-dd") : undefined,
+                                    }));
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                           <TableCell className="p-1">
                             <Select

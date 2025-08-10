@@ -904,42 +904,19 @@ const Finance = () => {
               </div>
               <div className="p-2 bg-muted/40 rounded-r-lg">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    From
+                  <label className="text-xs font-medium text-muted-foreground mb-1">
+                    Date Range
                   </label>
-                  <input
-                    type="date"
-                    value={
-                      date?.from ? date.from.toISOString().slice(0, 10) : ""
-                    }
-                    onChange={(e) => {
-                      const newFrom = e.target.value
-                        ? new Date(e.target.value)
-                        : undefined;
-                      setDate((prev) => ({ ...prev, from: newFrom! }));
-                    }}
-                    className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
-                  />
-                  <label className="text-xs font-medium text-muted-foreground">
-                    To
-                  </label>
-                  <input
-                    type="date"
-                    value={date?.to ? date.to.toISOString().slice(0, 10) : ""}
-                    onChange={(e) => {
-                      const newTo = e.target.value
-                        ? new Date(e.target.value)
-                        : undefined;
-                      setDate((prev) =>
-                        prev && prev.from
-                          ? { ...prev, to: newTo! }
-                          : newTo
-                            ? { from: newTo, to: newTo }
-                            : prev
-                      );
-                    }}
-                    className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
-                  />
+                  <div className="rounded-md border border-lavender/30 bg-background">
+                    <Calendar
+                      mode="range"
+                      selected={date}
+                      onSelect={setDate}
+                      numberOfMonths={1}
+                      className="rounded-md"
+                      initialFocus
+                    />
+                  </div>
                   <Button
                     type="button"
                     onClick={() => setPopoverOpen(false)}
@@ -1293,42 +1270,19 @@ const Finance = () => {
                 </div>
                 <div className="p-2 bg-muted/40 rounded-r-lg">
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      From
-                    </label>
-                    <input
-                      type="date"
-                      value={
-                        date?.from ? date.from.toISOString().slice(0, 10) : ""
-                      }
-                      onChange={(e) => {
-                        const newFrom = e.target.value
-                          ? new Date(e.target.value)
-                          : undefined;
-                        setDate((prev) => ({ ...prev, from: newFrom! }));
-                      }}
-                      className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                  <label className="text-xs font-medium text-muted-foreground mb-1">
+                    Date Range
+                  </label>
+                  <div className="rounded-md border border-lavender/30 bg-background">
+                    <Calendar
+                      mode="range"
+                      selected={date}
+                      onSelect={setDate}
+                      numberOfMonths={1}
+                      className="rounded-md"
+                      initialFocus
                     />
-                    <label className="text-xs font-medium text-muted-foreground">
-                      To
-                    </label>
-                    <input
-                      type="date"
-                      value={date?.to ? date.to.toISOString().slice(0, 10) : ""}
-                      onChange={(e) => {
-                        const newTo = e.target.value
-                          ? new Date(e.target.value)
-                          : undefined;
-                        setDate((prev) =>
-                          prev && prev.from
-                            ? { ...prev, to: newTo! }
-                            : newTo
-                              ? { from: newTo, to: newTo }
-                              : prev
-                        );
-                      }}
-                      className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
-                    />
+                  </div>
                     <Button
                       type="button"
                       onClick={() => setPopoverOpen(false)}
