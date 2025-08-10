@@ -7,9 +7,36 @@ import { cn } from '@/lib/utils';
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 
+// Custom ReactQuill wrapper with minimal configuration to reduce warnings
+const QuillEditor = ({ value, onChange, ...props }: any) => {
+  const modules = {
+    toolbar: [
+      [{ 'header': [1, 2, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['clean']
+    ],
+  };
 
-// Create a properly typed wrapper for ReactQuill
-const QuillEditor = ReactQuill as any;
+  const formats = [
+    'header',
+    'bold', 'italic', 'underline',
+    'list', 'bullet'
+  ];
+
+  return (
+    <div className="react-quill-wrapper">
+      <ReactQuill
+        theme="snow"
+        value={value || ""}
+        onChange={onChange}
+        modules={modules}
+        formats={formats}
+        {...props}
+      />
+    </div>
+  );
+};
 
 interface PriceRange {
     min: number;
@@ -46,15 +73,14 @@ interface ProductFormData {
         setFormData,
         onSubmit,
         isEdit = false,
-        onCancel,
-        uploadImageToSupabase
+        onCancel
     }: {
         formData: ProductFormData;
         setFormData: React.Dispatch<React.SetStateAction<ProductFormData>>;
         onSubmit: (e: React.FormEvent) => void;
         isEdit?: boolean;
         onCancel: () => void;
-        uploadImageToSupabase: (file: File) => Promise<string | null>;
+        // removed uploadImageToSupabase
     }) => {
         const handlePriceRangeChange = useCallback((
             index: number,
@@ -108,7 +134,6 @@ interface ProductFormData {
                         />
                         <div className='m-4'>
                             <QuillEditor
-                                theme="snow"
                                 value={formData.description ?? ""}
                                 onChange={(value: string) =>
                                     setFormData((prev) => ({ ...prev, description: value }))
@@ -243,25 +268,13 @@ interface ProductFormData {
                                 </Select>
                             </div>
                             <div>
-                                <Label htmlFor="image">Product Image</Label>
+                                <Label htmlFor="image_url">Product Image URL</Label>
                                 <Input
-                                    id="image"
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                            // Show preview immediately
-                                            const previewUrl = URL.createObjectURL(file);
-                                            setFormData((prev) => ({ ...prev, image_url: previewUrl }));
-
-                                            // Upload to Supabase
-                                            const url = await uploadImageToSupabase(file);
-                                            if (url) {
-                                                setFormData((prev) => ({ ...prev, image_url: url }));
-                                            }
-                                        }
-                                    }}
+                                    id="image_url"
+                                    type="text"
+                                    placeholder="Paste image link here..."
+                                    value={formData.image_url || ''}
+                                    onChange={e => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
                                 />
                             </div>
                         </span>

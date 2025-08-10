@@ -185,8 +185,45 @@ const AdminExpenses: React.FC = () => {
     setLoading(false);
   };
 
+
+  // Real-time refresh for expenses, sales, inventory, and products
   useEffect(() => {
     fetchExpenses();
+
+    const handleRelevantChange = () => {
+      fetchExpenses();
+    };
+
+    // Subscribe to expenses changes
+    const expensesChannel = supabase
+      .channel('expenses-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, handleRelevantChange)
+      .subscribe();
+
+    // Subscribe to sales changes
+    const salesChannel = supabase
+      .channel('sales-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, handleRelevantChange)
+      .subscribe();
+
+    // Subscribe to inventory changes
+    const inventoryChannel = supabase
+      .channel('inventory-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, handleRelevantChange)
+      .subscribe();
+
+    // Subscribe to products changes
+    const productsChannel = supabase
+      .channel('products-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, handleRelevantChange)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(expensesChannel);
+      supabase.removeChannel(salesChannel);
+      supabase.removeChannel(inventoryChannel);
+      supabase.removeChannel(productsChannel);
+    };
   }, [date]);
   useEffect(() => {
     const checkDarkMode = () =>
@@ -252,71 +289,103 @@ const AdminExpenses: React.FC = () => {
       // inventory_transaction_id will be set only by Inventory.tsx
     };
 
-    const { data, error } = await supabase
-      .from("expenses")
-      .insert(recordToInsert)
-      .select(
-        "id, date, category, description, amount, type, inventory_transaction_id"
-      )
-      .single();
+    // Create optimistic record
+    const tempId = `temp-${Date.now()}`;
+    const optimisticRecord = {
+      id: tempId,
+      ...recordToInsert,
+    };
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      // If this is a stock purchase, try to parse product and qty from description and update inventory
-      if (
-        recordToInsert.category === "Stock Purchase" &&
-        recordToInsert.description
-      ) {
-        // Try to extract product name and quantity from description
-        const match = recordToInsert.description.match(
-          /(\d+) units of ([^@]+) at/
+    // Optimistically add to UI
+    setExpenses((prev) =>
+      [optimisticRecord, ...prev].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
+    );
+    setNewExpense({
+      date: format(new Date(), "yyyy-MM-dd"),
+      amount: 0,
+      category: "",
+      description: "",
+    });
+    setAddingNew(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("expenses")
+        .insert(recordToInsert)
+        .select(
+          "id, date, category, description, amount, type, inventory_transaction_id"
+        )
+        .single();
+
+      if (error) {
+        // Revert optimistic update
+        setExpenses(prev => prev.filter(e => e.id !== tempId));
+        setAddingNew(true);
+        setNewExpense({
+          date: newExpense.date,
+          amount: newExpense.amount,
+          category: newExpense.category,
+          description: newExpense.description,
+        });
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        // Replace optimistic record with real data
+        const realRecord = {
+          ...data,
+          description: data.description ?? "",
+        };
+        setExpenses((prev) =>
+          prev.map(e => e.id === tempId ? realRecord : e)
         );
-        if (match) {
-          const qty = parseInt(match[1]);
-          const productName = match[2].trim();
-          // Find product by name
-          const { data: products, error: prodErr } = await supabase
-            .from("products")
-            .select("id, inventory")
-            .ilike("name", `%${productName}%`);
-          if (!prodErr && products && products.length > 0) {
-            const product = products[0];
-            const newInventory = (product.inventory || 0) + qty;
-            await supabase
+
+        // If this is a stock purchase, try to parse product and qty from description and update inventory
+        if (
+          recordToInsert.category === "Stock Purchase" &&
+          recordToInsert.description
+        ) {
+          // Try to extract product name and quantity from description
+          const match = recordToInsert.description.match(
+            /(\d+) units of ([^@]+) at/
+          );
+          if (match) {
+            const qty = parseInt(match[1]);
+            const productName = match[2].trim();
+            // Find product by name
+            const { data: products, error: prodErr } = await supabase
               .from("products")
-              .update({ inventory: newInventory })
-              .eq("id", product.id);
+              .select("id, inventory")
+              .ilike("name", `%${productName}%`);
+            if (!prodErr && products && products.length > 0) {
+              const product = products[0];
+              const newInventory = (product.inventory || 0) + qty;
+              await supabase
+                .from("products")
+                .update({ inventory: newInventory })
+                .eq("id", product.id);
+            }
           }
         }
+
+        addToUndoStack({
+          type: "add",
+          data: { addedRecord: realRecord },
+        });
+        toast({ title: "Success", description: "Expense added." });
       }
-      setExpenses((prev) =>
-        [
-          {
-            ...data,
-            description: data.description ?? "",
-          },
-          ...prev,
-        ].sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        )
-      );
-      addToUndoStack({
-        type: "add",
-        data: { addedRecord: { ...data, description: data.description ?? "" } },
+    } catch (error: any) {
+      // Revert optimistic update
+      setExpenses(prev => prev.filter(e => e.id !== tempId));
+      toast({
+        title: "Error",
+        description: "Failed to add expense",
+        variant: "destructive",
       });
-      setNewExpense({
-        date: format(new Date(), "yyyy-MM-dd"),
-        amount: 0,
-        category: "",
-        description: "",
-      });
-      setAddingNew(false);
-      toast({ title: "Success", description: "Expense added." });
     }
   };
 
@@ -329,20 +398,33 @@ const AdminExpenses: React.FC = () => {
     if (!originalRecord) return;
 
     const updatedRecord = { ...originalRecord, [field]: value };
+    
+    // Optimistically update UI
     setExpenses(expenses.map((exp) => (exp.id === id ? updatedRecord : exp)));
     setEditingCell(null);
 
     addToUndoStack({ type: "edit", data: { originalRecord } });
 
-    const { error } = await supabase
-      .from("expenses")
-      .update({ [field]: value })
-      .eq("id", id);
-    if (error) {
-      setExpenses(expenses);
+    try {
+      const { error } = await supabase
+        .from("expenses")
+        .update({ [field]: value })
+        .eq("id", id);
+      if (error) {
+        // Revert optimistic update
+        setExpenses(expenses.map((exp) => (exp.id === id ? originalRecord : exp)));
+        toast({
+          title: "Update Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      // Revert optimistic update
+      setExpenses(expenses.map((exp) => (exp.id === id ? originalRecord : exp)));
       toast({
         title: "Update Failed",
-        description: error.message,
+        description: "Failed to update expense",
         variant: "destructive",
       });
     }
@@ -353,83 +435,99 @@ const AdminExpenses: React.FC = () => {
     const deletedRecords = expenses.filter((exp) =>
       selectedRows.includes(exp.id)
     );
+    
+    // Optimistically remove from UI
+    setExpenses(expenses.filter((exp) => !selectedRows.includes(exp.id)));
+    const originalSelectedRows = [...selectedRows];
+    setSelectedRows([]);
+
     addToUndoStack({ type: "delete", data: { deletedRecords } });
 
-    setExpenses(expenses.filter((exp) => !selectedRows.includes(exp.id)));
-
-    // For each deleted expense, if it's a stock purchase, revert inventory and delete inventory transaction
-    for (const exp of deletedRecords) {
-      if (exp.category === "Stock Purchase") {
-        if (exp.inventory_transaction_id) {
-          // Find the inventory transaction
-          const { data: invTrans, error: invTransErr } = await supabase
-            .from("inventory_transactions")
-            .select("id, product_id, quantity")
-            .eq("id", exp.inventory_transaction_id)
-            .single();
-          if (!invTransErr && invTrans) {
-            // Subtract quantity from product inventory
-            const { data: product, error: prodErr } = await supabase
-              .from("products")
-              .select("id, inventory")
-              .eq("id", invTrans.product_id)
-              .single();
-            if (!prodErr && product) {
-              const newInventory =
-                (product.inventory || 0) - (invTrans.quantity || 0);
-              await supabase
-                .from("products")
-                .update({ inventory: newInventory })
-                .eq("id", product.id);
-            }
-            // Delete the inventory transaction
-            await supabase
+    try {
+      // For each deleted expense, if it's a stock purchase, revert inventory and delete inventory transaction
+      for (const exp of deletedRecords) {
+        if (exp.category === "Stock Purchase") {
+          if (exp.inventory_transaction_id) {
+            // Find the inventory transaction
+            const { data: invTrans, error: invTransErr } = await supabase
               .from("inventory_transactions")
-              .delete()
-              .eq("id", invTrans.id);
-          }
-        } else if (exp.description) {
-          // Fallback: parse description for product and qty
-          const match = exp.description.match(/(\d+) units of ([^@]+) at/);
-          if (match) {
-            const qty = parseInt(match[1]);
-            const productName = match[2].trim();
-            // Find product by name
-            const { data: products, error: prodErr } = await supabase
-              .from("products")
-              .select("id, inventory")
-              .ilike("name", `%${productName}%`);
-            if (!prodErr && products && products.length > 0) {
-              const product = products[0];
-              const newInventory = (product.inventory || 0) - qty;
-              await supabase
+              .select("id, product_id, quantity")
+              .eq("id", exp.inventory_transaction_id)
+              .single();
+            if (!invTransErr && invTrans) {
+              // Subtract quantity from product inventory
+              const { data: product, error: prodErr } = await supabase
                 .from("products")
-                .update({ inventory: newInventory })
-                .eq("id", product.id);
+                .select("id, inventory")
+                .eq("id", invTrans.product_id)
+                .single();
+              if (!prodErr && product) {
+                const newInventory =
+                  (product.inventory || 0) - (invTrans.quantity || 0);
+                await supabase
+                  .from("products")
+                  .update({ inventory: newInventory })
+                  .eq("id", product.id);
+              }
+              // Delete the inventory transaction
+              await supabase
+                .from("inventory_transactions")
+                .delete()
+                .eq("id", invTrans.id);
+            }
+          } else if (exp.description) {
+            // Fallback: parse description for product and qty
+            const match = exp.description.match(/(\d+) units of ([^@]+) at/);
+            if (match) {
+              const qty = parseInt(match[1]);
+              const productName = match[2].trim();
+              // Find product by name
+              const { data: products, error: prodErr } = await supabase
+                .from("products")
+                .select("id, inventory")
+                .ilike("name", `%${productName}%`);
+              if (!prodErr && products && products.length > 0) {
+                const product = products[0];
+                const newInventory = (product.inventory || 0) - qty;
+                await supabase
+                  .from("products")
+                  .update({ inventory: newInventory })
+                  .eq("id", product.id);
+              }
             }
           }
         }
       }
-    }
 
-    const { error } = await supabase
-      .from("expenses")
-      .delete()
-      .in("id", selectedRows);
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .in("id", originalSelectedRows);
 
-    if (error) {
+      if (error) {
+        // Revert optimistic update
+        setExpenses((prev) => [...prev, ...deletedRecords]);
+        setSelectedRows(originalSelectedRows);
+        toast({
+          title: "Delete Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `${deletedRecords.length} expense(s) deleted.`,
+        });
+      }
+    } catch (error: any) {
+      // Revert optimistic update
       setExpenses((prev) => [...prev, ...deletedRecords]);
+      setSelectedRows(originalSelectedRows);
       toast({
         title: "Delete Failed",
-        description: error.message,
+        description: "Failed to delete expenses",
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Success",
-        description: `${deletedRecords.length} expense(s) deleted.`,
-      });
-      setSelectedRows([]);
     }
   };
 
@@ -443,7 +541,8 @@ const AdminExpenses: React.FC = () => {
     }
 
     const processedData = importedRows
-      .map((row) => ({
+      .map((row, index) => ({
+        id: `temp-${Date.now()}-${index}`,
         date: new Date(row.Date).toISOString().split("T")[0],
         category: row.Category,
         description: row.Description,
@@ -462,29 +561,51 @@ const AdminExpenses: React.FC = () => {
       });
     }
 
-    const { data, error } = await supabase
-      .from("expenses")
-      .insert(processedData)
-      .select();
-    if (error) {
+    // Optimistically add to UI
+    setExpenses(prev => [...processedData, ...prev]);
+
+    try {
+      const dbData = processedData.map(({ id, ...rest }) => rest);
+      const { data, error } = await supabase
+        .from("expenses")
+        .insert(dbData)
+        .select();
+      if (error) {
+        // Revert optimistic update
+        setExpenses(prev => prev.filter(e => !e.id.toString().startsWith('temp-')));
+        toast({
+          title: "Import Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        const normalizedData = (data as Expense[]).map((exp) => ({
+          ...exp,
+          description: exp.description ?? "",
+        }));
+
+        // Replace optimistic records with real data
+        setExpenses(prev => {
+          const withoutOptimistic = prev.filter(e => !e.id.toString().startsWith('temp-'));
+          return [...normalizedData, ...withoutOptimistic];
+        });
+
+        addToUndoStack({
+          type: "import",
+          data: { importedRecords: normalizedData },
+        });
+        toast({
+          title: "Success",
+          description: `${data.length} expenses imported.`,
+        });
+      }
+    } catch (error: any) {
+      // Revert optimistic update
+      setExpenses(prev => prev.filter(e => !e.id.toString().startsWith('temp-')));
       toast({
         title: "Import Failed",
-        description: error.message,
+        description: "Failed to import expenses",
         variant: "destructive",
-      });
-    } else {
-      const normalizedData = (data as Expense[]).map((exp) => ({
-        ...exp,
-        description: exp.description ?? "",
-      }));
-      addToUndoStack({
-        type: "import",
-        data: { importedRecords: normalizedData },
-      });
-      fetchExpenses();
-      toast({
-        title: "Success",
-        description: `${data.length} expenses imported.`,
       });
     }
   };

@@ -1479,7 +1479,7 @@ const Finance = () => {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="text-center">Actions</TableHead> {/* New TableHead for Actions */}
+                  <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1523,7 +1523,7 @@ const Finance = () => {
                         {transaction.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center"> {/* New TableCell for the delete button */}
+                    <TableCell className="text-center">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1535,11 +1535,9 @@ const Finance = () => {
                     </TableCell>
                   </TableRow>
                 ))}
-
-                {/* Empty state */}
                 {allTransactions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground"> {/* Adjusted colspan */}
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No transactions found for the selected date range
                     </TableCell>
                   </TableRow>

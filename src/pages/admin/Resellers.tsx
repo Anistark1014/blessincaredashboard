@@ -1214,7 +1214,7 @@ onChange={handleImport}
             <Table>
                       <TableHeader>
           <TableRow>
-            <TableHead className="w-[40px] text-center">#</TableHead> {/* Numbering column */}
+            <TableHead className="w-[40px] text-center">#</TableHead>
             <TableHead className="w-[80px]">Tier</TableHead>
             <TableHead className="min-w-[150px]">
               <div
@@ -1252,7 +1252,7 @@ onChange={handleImport}
               const tierInfo = getTierInfo(reseller.reward_points || 0);
               return (
                 <TableRow key={reseller.id}>
-                  <TableCell className="text-center">{idx + 1}</TableCell> {/* Numbering cell */}
+                  <TableCell className="text-center">{idx + 1}</TableCell>
                   <TableCell>
                     <TierIcon svgName={tierInfo.svg} tier={tierInfo.tier} />
                   </TableCell>

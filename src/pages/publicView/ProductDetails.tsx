@@ -55,7 +55,19 @@ const ProductDetails = () => {
       if (error) {
         console.error("Error fetching product:", error);
       } else {
-        setProduct(data as Product);
+        // Properly handle the Json type conversion for price_ranges and media
+        const productData: Product = {
+          ...data,
+          description: data.description || undefined,
+          availability: data.availability || undefined,
+          created_at: data.created_at || undefined,
+          image_url: data.image_url || undefined,
+          category: data.category || undefined,
+          info_link: data.info_link || undefined,
+          price_ranges: Array.isArray(data.price_ranges) ? (data.price_ranges as unknown as PriceRange[]) : undefined,
+          media: Array.isArray(data.media) ? (data.media as unknown as MediaItem[]) : undefined
+        };
+        setProduct(productData);
       }
       setLoading(false);
     };
@@ -70,7 +82,7 @@ const ProductDetails = () => {
       </div>
     );
   }
-console.log(product)
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Top Section: Image + Basic Info */}
@@ -135,7 +147,7 @@ console.log(product)
 
 
       {/* Price Ranges */}
-      {product.price_ranges && product.price_ranges.length > 0 && (
+      {product.price_ranges && Array.isArray(product.price_ranges) && product.price_ranges.length > 0 && (
         <div>
           <h2 className="text-xl font-semibold mb-2">Price Ranges</h2>
           <div className="overflow-x-auto">
@@ -162,7 +174,7 @@ console.log(product)
       )}
 
       {/* Media Section */}
-      {product.media && product.media.length > 0 && (
+      {product.media && Array.isArray(product.media) && product.media.length > 0 && (
         <div>
           <h2 className="text-xl font-semibold mb-2">Media</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

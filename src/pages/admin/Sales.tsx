@@ -503,8 +503,45 @@ const SalesTable: React.FC = () => {
     }
   };
 
+
+  // Real-time refresh for sales, expenses, inventory, and products
   useEffect(() => {
     fetchSales();
+
+    const handleRelevantChange = () => {
+      fetchSales();
+    };
+
+    // Subscribe to sales changes
+    const salesChannel = supabase
+      .channel('sales-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, handleRelevantChange)
+      .subscribe();
+
+    // Subscribe to expenses changes
+    const expensesChannel = supabase
+      .channel('expenses-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, handleRelevantChange)
+      .subscribe();
+
+    // Subscribe to inventory changes
+    const inventoryChannel = supabase
+      .channel('inventory-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, handleRelevantChange)
+      .subscribe();
+
+    // Subscribe to products changes
+    const productsChannel = supabase
+      .channel('products-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, handleRelevantChange)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(salesChannel);
+      supabase.removeChannel(expensesChannel);
+      supabase.removeChannel(inventoryChannel);
+      supabase.removeChannel(productsChannel);
+    };
   }, [date]);
 
   useEffect(() => {
@@ -670,6 +707,60 @@ const SalesTable: React.FC = () => {
       return;
     }
 
+    // Create optimistic record
+    let optimisticRecord: Sale;
+    const tempId = `temp-${Date.now()}`;
+
+    if (transactionType === "Sale") {
+      const qty = Number(newSale.qty);
+      const price = Number(newSale.price);
+      const total = qty * price;
+      const paid = Number(newSale.paid ?? 0);
+      const outstanding = total - paid;
+      const payment_status = calculatePaymentStatus("Sale", total, paid, 0);
+
+      optimisticRecord = {
+        id: tempId,
+        date: String(newSale.date),
+        qty,
+        price,
+        total,
+        paid,
+        outstanding,
+        payment_status,
+        member_id: String(newSale.member_id),
+        product_id: String(newSale.product_id),
+        transaction_type: "Sale",
+        users: user,
+        products: products.find(p => p.id === newSale.product_id) || null,
+      };
+    } else {
+      const paid = Number(newSale.paid);
+      const currentUserBalance = user.due_balance || 0;
+      const payment_status = calculatePaymentStatus("Clearance", 0, paid, currentUserBalance);
+
+      optimisticRecord = {
+        id: tempId,
+        date: String(newSale.date),
+        qty: 0,
+        price: 0,
+        total: 0,
+        paid,
+        outstanding: 0,
+        payment_status,
+        member_id: String(newSale.member_id),
+        product_id: null,
+        transaction_type: "Clearance",
+        users: user,
+        products: null,
+      };
+    }
+
+    // Optimistically add to UI
+    setSales([optimisticRecord, ...sales]);
+    setNewSale({});
+    setAddingNew(false);
+
     try {
       let recordToInsert: any;
       let userBalanceChange = 0;
@@ -739,6 +830,10 @@ const SalesTable: React.FC = () => {
           alert(
             `Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentUserBalance}). Please refresh and try again.`
           );
+          // Revert optimistic update
+          setSales(prev => prev.filter(s => s.id !== tempId));
+          setAddingNew(true);
+          setNewSale(optimisticRecord);
           return;
         }
 
@@ -793,6 +888,8 @@ const SalesTable: React.FC = () => {
             change.oldInventory - change.newInventory
           );
         }
+        // Revert optimistic update
+        setSales(prev => prev.filter(s => s.id !== tempId));
         alert("Insert failed: " + error.message);
       } else if (data) {
         const rawRecord = data[0];
@@ -830,6 +927,9 @@ const SalesTable: React.FC = () => {
               : null,
         };
 
+        // Replace optimistic record with real record
+        setSales(prev => prev.map(s => s.id === tempId ? addedRecord : s));
+
         addToUndoStack({
           type: "add",
           timestamp: Date.now(),
@@ -847,12 +947,7 @@ const SalesTable: React.FC = () => {
           },
         });
 
-        setSales([addedRecord, ...sales]);
-        setNewSale({});
-        setAddingNew(false);
-
         // Refresh all data to show updated records
-        fetchSales();
         fetchDropdownData();
         fetchMembersWithDues();
 
@@ -869,6 +964,8 @@ const SalesTable: React.FC = () => {
         }
       }
     } catch (error: any) {
+      // Revert optimistic update
+      setSales(prev => prev.filter(s => s.id !== tempId));
       alert("Transaction failed: " + error.message);
       console.error("Transaction error:", error);
     }
@@ -903,6 +1000,10 @@ const SalesTable: React.FC = () => {
       newInventory: number;
     }[] = [];
 
+    // Optimistically update UI
+    setSales(prev => prev.map(s => s.id === id ? updatedRecordForUI : s));
+    setEditingCell(null);
+
     try {
       if (originalSale.transaction_type === "Sale") {
         // Handle Sale record edits
@@ -913,7 +1014,7 @@ const SalesTable: React.FC = () => {
 
           if (
             product &&
-            product.price_ranges &&
+            Array.isArray(product.price_ranges) &&
             product.price_ranges.length > 0
           ) {
             const priceRange = product.price_ranges.find(
@@ -1017,6 +1118,8 @@ const SalesTable: React.FC = () => {
 
           if (currentBalance + paymentChange < 0) {
             alert(`Payment amount would exceed user's available balance`);
+            // Revert optimistic update
+            setSales(prev => prev.map(s => s.id === id ? originalSale : s));
             return;
           }
 
@@ -1042,6 +1145,9 @@ const SalesTable: React.FC = () => {
         }
       }
 
+      // Update the optimistic UI with calculated fields
+      setSales(prev => prev.map(s => s.id === id ? updatedRecordForUI : s));
+
       addToUndoStack({
         type: "edit",
         timestamp: Date.now(),
@@ -1063,9 +1169,6 @@ const SalesTable: React.FC = () => {
         },
       });
 
-      setSales(sales.map((s) => (s.id === id ? updatedRecordForUI : s)));
-      setEditingCell(null);
-
       const { error } = await supabase
         .from("sales")
         .update(updatePayload)
@@ -1076,7 +1179,8 @@ const SalesTable: React.FC = () => {
         if (userBalanceChange !== 0) {
           await updateUserBalance(originalSale.member_id, -userBalanceChange);
         }
-        setSales(sales);
+        // Revert optimistic update
+        setSales(prev => prev.map(s => s.id === id ? originalSale : s));
       } else {
         // Refresh user data to show updated balances
         fetchDropdownData();
@@ -1084,7 +1188,8 @@ const SalesTable: React.FC = () => {
     } catch (error: any) {
       console.error("Edit failed:", error.message);
       alert("Edit failed: " + error.message);
-      setSales(sales);
+      // Revert optimistic update
+      setSales(prev => prev.map(s => s.id === id ? originalSale : s));
     }
   };
 
@@ -1096,6 +1201,11 @@ const SalesTable: React.FC = () => {
       return;
 
     const deletedRecords = sales.filter((s) => selectedRows.includes(s.id));
+
+    // Optimistically remove from UI
+    setSales(prev => prev.filter(s => !selectedRows.includes(s.id)));
+    const originalSelectedRows = [...selectedRows];
+    setSelectedRows([]);
 
     try {
       // Calculate user balance changes and handle clearance reversals
@@ -1213,7 +1323,7 @@ const SalesTable: React.FC = () => {
       const { error } = await supabase
         .from("sales")
         .delete()
-        .in("id", selectedRows);
+        .in("id", originalSelectedRows);
       if (error) {
         // Revert all changes if delete fails
         for (const change of userBalanceChanges) {
@@ -1232,16 +1342,18 @@ const SalesTable: React.FC = () => {
             })
             .eq("id", reversal.id);
         }
+        // Revert optimistic update
+        setSales(prev => [...deletedRecords, ...prev]);
+        setSelectedRows(originalSelectedRows);
         alert("Delete failed: " + error.message);
       } else {
-        setSales(sales.filter((s) => !selectedRows.includes(s.id)));
-        setSelectedRows([]);
-
         // Refresh all data
-        fetchSales();
         fetchDropdownData();
       }
     } catch (error: any) {
+      // Revert optimistic update
+      setSales(prev => [...deletedRecords, ...prev]);
+      setSelectedRows(originalSelectedRows);
       alert("Delete failed: " + error.message);
     }
   };
@@ -1435,13 +1547,13 @@ const SalesTable: React.FC = () => {
         if (transactionType === "Sale") {
           const qty = Number(row.qty || 0);
           let price = 0;
-          if (product!.price_ranges && product!.price_ranges.length > 0) {
-            const priceRange = product!.price_ranges.find(
+          if (product && Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
+            const priceRange = product.price_ranges.find(
               (r) => qty >= r.min && qty <= r.max
             );
-            price = priceRange ? priceRange.price : product!.mrp || 0;
-          } else {
-            price = product!.mrp || 0;
+            price = priceRange ? priceRange.price : product.mrp || 0;
+          } else if (product) {
+            price = product.mrp || 0;
           }
 
           const paid = Number(row.paid || 0);
@@ -1450,6 +1562,7 @@ const SalesTable: React.FC = () => {
           const payment_status = calculatePaymentStatus("Sale", total, paid, 0);
 
           return {
+            id: `temp-${Date.now()}-${Math.random()}`,
             date: row.date,
             member_id: user.id,
             product_id: product!.id,
@@ -1460,6 +1573,8 @@ const SalesTable: React.FC = () => {
             outstanding,
             payment_status,
             transaction_type: "Sale",
+            users: user,
+            products: product,
           };
         } else {
           // Clearance
@@ -1472,6 +1587,7 @@ const SalesTable: React.FC = () => {
           );
 
           return {
+            id: `temp-${Date.now()}-${Math.random()}`,
             date: row.date,
             member_id: user.id,
             product_id: null,
@@ -1482,24 +1598,15 @@ const SalesTable: React.FC = () => {
             outstanding: 0,
             payment_status,
             transaction_type: "Clearance",
+            users: user,
+            products: null,
           };
         }
       })
       .filter(
         (
           row
-        ): row is {
-          date: any;
-          member_id: string;
-          product_id: string | null;
-          qty: number;
-          price: number;
-          total: number;
-          paid: number;
-          outstanding: number;
-          payment_status: PaymentStatus;
-          transaction_type: string;
-        } => row !== null
+        ): row is Sale => row !== null
       );
 
     if (processedData.length === 0) {
@@ -1508,6 +1615,9 @@ const SalesTable: React.FC = () => {
       );
       return;
     }
+
+    // Optimistically add to UI
+    setSales(prev => [...processedData, ...prev]);
 
     try {
       // Calculate and apply user balance changes
@@ -1543,10 +1653,13 @@ const SalesTable: React.FC = () => {
       const { data: newRecords, error } = await supabase
         .from("sales")
         .insert(
-          processedData.map((record) => ({
-            ...record,
-            date: new Date(record.date),
-          }))
+          processedData.map((record) => {
+            const { users, products, ...dbRecord } = record;
+            return {
+              ...dbRecord,
+              date: new Date(record.date),
+            };
+          })
         )
         .select();
 
@@ -1558,6 +1671,8 @@ const SalesTable: React.FC = () => {
             change.oldBalance - change.newBalance
           );
         }
+        // Revert optimistic update
+        setSales(prev => prev.filter(s => !s.id.toString().startsWith('temp-')));
         alert(`Import failed: ${error.message}`);
       } else if (newRecords) {
         alert(`${newRecords.length} rows imported successfully!`);
@@ -1568,6 +1683,12 @@ const SalesTable: React.FC = () => {
           products: null,
         }));
 
+        // Replace optimistic records with real data
+        setSales(prev => {
+          const withoutOptimistic = prev.filter(s => !s.id.toString().startsWith('temp-'));
+          return [...importedSales, ...withoutOptimistic];
+        });
+
         addToUndoStack({
           type: "import",
           timestamp: Date.now(),
@@ -1577,10 +1698,11 @@ const SalesTable: React.FC = () => {
           },
         });
 
-        fetchSales();
         fetchDropdownData(); // Refresh user balances
       }
     } catch (error: any) {
+      // Revert optimistic update
+      setSales(prev => prev.filter(s => !s.id.toString().startsWith('temp-')));
       alert(`Import failed: ${error.message}`);
     }
   };
@@ -1646,7 +1768,7 @@ const SalesTable: React.FC = () => {
         const product = products.find((p) => p.id === newSale.product_id);
         if (
           product &&
-          product.price_ranges &&
+          Array.isArray(product.price_ranges) &&
           product.price_ranges.length > 0
         ) {
           const priceRange = product.price_ranges.find(

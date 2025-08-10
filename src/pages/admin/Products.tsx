@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Trash2, Package, Box } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package, Box, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 import { useNavigate } from "react-router-dom";
@@ -15,6 +15,7 @@ import "react-quill/dist/quill.snow.css";
 
 import ProductForm from '@/components/product_components/ProductForm';
 import SalesDashboard from '@/components/product_components/SalesDashboard';
+import ProductExcelImport from '@/components/product_components/ProductExcelImport';
 
 type Product = Tables<'products'>;
 
@@ -48,6 +49,8 @@ interface ProductFormData {
 }
 
     const AdminProducts = () => {
+        // Hide KPI/Graph state (default: hidden)
+        const [hideKpi, setHideKpi] = useState(true);
 
         const navigate = useNavigate();
         const [products, setProducts] = useState<Product[]>([]);
@@ -81,6 +84,69 @@ interface ProductFormData {
 
         const { toast } = useToast();
 
+        // Bulk import handler
+        const handleBulkImport = async (products: any[]) => {
+            if (!Array.isArray(products) || products.length === 0) {
+                toast({ title: 'Error', description: 'No products found in file.', variant: 'destructive' });
+                return;
+            }
+            // Clean up and normalize fields for DB
+            const normalized = products.map((p, index) => {
+                // Helper function to convert string to number or null
+                const parseNumber = (value: any) => {
+                    if (value === null || value === undefined || value === '') return null;
+                    const num = Number(value);
+                    return isNaN(num) ? null : num;
+                };
+
+                return {
+                    id: `temp-${Date.now()}-${index}`, // Temporary ID for optimistic update
+                    name: p.name || 'Untitled Product',
+                    description: p.description || null,
+                    availability: p.availability || 'In Stock',
+                    created_at: new Date().toISOString(),
+                    image_url: p.image_url || null,
+                    category: p.category || null,
+                    info_link: p.info_link || null,
+                    sku_id: p.sku_id || null,
+                    gross_profit: parseNumber(p.gross_profit),
+                    cost_price: parseNumber(p.cost_price),
+                    mrp: parseNumber(p.mrp),
+                    inventory: parseNumber(p.inventory),
+                    price_ranges: p.price_ranges ? (typeof p.price_ranges === 'string' ? p.price_ranges : JSON.stringify(p.price_ranges)) : null,
+                    media: p.media ? (typeof p.media === 'string' ? p.media : JSON.stringify(p.media)) : null,
+                };
+            });
+
+            // Optimistically add products to UI
+            const optimisticProducts = normalized.map(p => ({ ...p }));
+            setProducts(prev => [...optimisticProducts, ...prev].sort((a, b) =>
+                (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+            ));
+
+            try {
+                // Remove temporary IDs for database insert
+                const dbNormalized = normalized.map(({ id, ...rest }) => rest);
+                const { data, error } = await supabase.from('products').insert(dbNormalized).select();
+                if (error) throw error;
+
+                // Replace optimistic products with real data
+                setProducts(prev => {
+                    const withoutOptimistic = prev.filter(p => !p.id.toString().startsWith('temp-'));
+                    return [...(data as Product[]), ...withoutOptimistic].sort((a, b) =>
+                        (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+                    );
+                });
+
+                toast({ title: 'Success', description: 'Products imported successfully!' });
+            } catch (error) {
+                console.error('Bulk import error:', error);
+                // Revert optimistic update
+                setProducts(prev => prev.filter(p => !p.id.toString().startsWith('temp-')));
+                toast({ title: 'Error', description: 'Bulk import failed.', variant: 'destructive' });
+            }
+        };
+
         // Removed uniqueCategories and uniqueAvailabilities memoization
         // and defined fixed lists for filters as requested.
 
@@ -104,30 +170,73 @@ interface ProductFormData {
         // ];
 
 
+
         useEffect(() => {
             fetchProducts();
 
-            // Set up real-time subscription
-            const channel = supabase
+            // Helper to refetch products on any relevant event
+            const handleRelevantChange = () => {
+                fetchProducts();
+            };
+
+            // Subscribe to products changes (for local UI update)
+            const productsChannel = supabase
                 .channel('products-changes')
                 .on('postgres_changes',
                     { event: '*', schema: 'public', table: 'products' },
                     (payload) => {
-                        if (payload.eventType === 'INSERT') {
-                            setProducts(prev => [payload.new as Product, ...prev]);
-                        } else if (payload.eventType === 'UPDATE') {
-                            setProducts(prev => prev.map(p =>
-                                p.id === payload.new.id ? payload.new as Product : p
-                            ));
-                        } else if (payload.eventType === 'DELETE') {
-                            setProducts(prev => prev.filter(p => p.id !== payload.old.id));
-                        }
+                        setProducts(prev => {
+                            let updated;
+                            if (payload.eventType === 'INSERT') {
+                                updated = [payload.new as Product, ...prev];
+                            } else if (payload.eventType === 'UPDATE') {
+                                updated = prev.map(p =>
+                                    p.id === payload.new.id ? payload.new as Product : p
+                                );
+                            } else if (payload.eventType === 'DELETE') {
+                                updated = prev.filter(p => p.id !== payload.old.id);
+                            } else {
+                                updated = prev;
+                            }
+                            // Sort alphabetically by name (case-insensitive)
+                            return updated.sort((a, b) =>
+                                (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+                            );
+                        });
                     }
                 )
                 .subscribe();
 
+            // Subscribe to sales, expenses, and inventory changes
+            const salesChannel = supabase
+                .channel('sales-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'sales' },
+                    handleRelevantChange
+                )
+                .subscribe();
+
+            const expensesChannel = supabase
+                .channel('expenses-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'expenses' },
+                    handleRelevantChange
+                )
+                .subscribe();
+
+            const inventoryChannel = supabase
+                .channel('inventory-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'inventory' },
+                    handleRelevantChange
+                )
+                .subscribe();
+
             return () => {
-                supabase.removeChannel(channel);
+                supabase.removeChannel(productsChannel);
+                supabase.removeChannel(salesChannel);
+                supabase.removeChannel(expensesChannel);
+                supabase.removeChannel(inventoryChannel);
             };
         }, []);
 
@@ -139,11 +248,14 @@ interface ProductFormData {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+                    .select('*');
 
                 if (error) throw error;
-                setProducts(data as Product[]);
+                // Sort alphabetically by name (case-insensitive)
+                const sorted = (data as Product[]).sort((a, b) =>
+                    (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+                );
+                setProducts(sorted);
             } catch (error) {
                 toast({
                     title: "Error",
@@ -206,19 +318,40 @@ interface ProductFormData {
                 media: formData.media ? JSON.parse(JSON.stringify(formData.media)) : null,
             };
 
+            // Optimistically add product to UI
+            const tempId = `temp-${Date.now()}`;
+            const optimisticProduct = {
+                ...normalizedFormData,
+                id: tempId,
+                created_at: new Date().toISOString(),
+            } as Product;
+
+            setProducts(prev => [optimisticProduct, ...prev].sort((a, b) =>
+                (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+            ));
+
             try {
-                const { error } = await supabase
+                const { data, error } = await supabase
                     .from('products')
-                    .insert([normalizedFormData]);
+                    .insert([normalizedFormData])
+                    .select();
 
                 if (error) throw error;
 
+                // Replace optimistic product with real data
+                setProducts(prev => prev.map(p => 
+                    p.id === tempId ? data[0] as Product : p
+                ));
+
                 setIsAddModalOpen(false);
+                resetForm();
                 toast({
                     title: "Success",
                     description: "Product added successfully"
                 });
             } catch (error) {
+                // Revert optimistic update
+                setProducts(prev => prev.filter(p => p.id !== tempId));
                 toast({
                     title: "Error",
                     description: "Failed to add product",
@@ -239,6 +372,17 @@ interface ProductFormData {
                 return;
             }
 
+            // Store original product for potential revert
+            const originalProduct = editingProduct;
+
+            // Optimistically update product in UI
+            const updatedProduct = { ...editingProduct, ...formData } as Product;
+            setProducts(prev => prev.map(p =>
+                p.id === editingProduct.id ? updatedProduct : p
+            ).sort((a, b) =>
+                (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+            ));
+
             try {
                 const { error } = await supabase
                     .from('products')
@@ -255,6 +399,10 @@ interface ProductFormData {
                     description: "Product updated successfully"
                 });
             } catch (error) {
+                // Revert optimistic update
+                setProducts(prev => prev.map(p =>
+                    p.id === editingProduct.id ? originalProduct : p
+                ));
                 toast({
                     title: "Error",
                     description: "Failed to update product",
@@ -266,6 +414,13 @@ interface ProductFormData {
 
         const deleteProduct = async (id: string) => {
             if (!confirm('Are you sure you want to delete this product?')) return;
+
+            // Store the product being deleted for potential revert
+            const productToDelete = products.find(p => p.id === id);
+            if (!productToDelete) return;
+
+            // Optimistically remove product from UI
+            setProducts(prev => prev.filter(p => p.id !== id));
 
             try {
                 const { error } = await supabase
@@ -280,6 +435,10 @@ interface ProductFormData {
                     description: "Product deleted successfully"
                 });
             } catch (error) {
+                // Revert optimistic update
+                setProducts(prev => [productToDelete, ...prev].sort((a, b) =>
+                    (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+                ));
                 toast({
                     title: "Error",
                     description: "Failed to delete product",
@@ -337,26 +496,7 @@ interface ProductFormData {
             });
         }, []);
 
-        const uploadImageToSupabase = useCallback(async (file: File): Promise<string | null> => {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
 
-            const { error: uploadError } = await supabase.storage
-                .from('product-images')
-                .upload(filePath, file);
-
-            if (uploadError) {
-                console.error('Image upload failed:', uploadError.message);
-                return null;
-            }
-
-            const { data } = supabase.storage
-                .from('product-images')
-                .getPublicUrl(filePath);
-
-            return data?.publicUrl || null;
-        }, []);
 
         const handleAddCancel = useCallback(() => {
             setIsAddModalOpen(false);
@@ -391,90 +531,98 @@ return (
               </p>
           </div>
         </div>
+        <div className="flex gap-2 mt-4 sm:mt-0">
+          {/* Add Product Button */}
+        <Button
+            className="btn-healthcare flex items-center gap-2"
+            size="sm"
+            variant="ghost"
+            aria-label="Add Product"
+            onClick={() => setIsAddModalOpen(true)}
+        >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">Add Product</span>
+        </Button>
+          {/* Hide KPI/Graph Button */}
+          <button
+            title={hideKpi ? 'Show KPI & Graph' : 'Hide KPI & Graph'}
+            onClick={() => setHideKpi(!hideKpi)}
+            className="duration-300"
+          >
+            {hideKpi ? (
+              <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />
+            ) : (
+              <ArrowUpCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />
+            )}
+          </button>
+        </div>
       </div>
-                {/* Sales Dashboard Section - Rendered below header */}
-                <SalesDashboard
-                    currentProductSearchTerm={searchTerm}
-                    categoryFilter={categoryFilter}
-                    availabilityFilter={availabilityFilter}
-                    productsList={products}
-                />
+                {/* Sales Dashboard Section - Collapsible */}
+                <div className={hideKpi ? 'hidden' : ''}>
+                  <SalesDashboard
+                      currentProductSearchTerm={searchTerm}
+                      categoryFilter={categoryFilter}
+                      availabilityFilter={availabilityFilter}
+                      productsList={products}
+                  />
+                </div>
 
 
-                {/* Filters (Search, Category, Availability) */}
+                {/* Filters (Search, Category, Availability) + Bulk Import */}
                 <Card className="healthcare-card">
-                    <CardContent className="pt-6 -mx-4"> {/* Adjusted padding */}
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <div className="relative flex-1 ">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                                <Input
-                                    placeholder="Search products by name, description, or SKU..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10"
-                                />
-                            </div>
-
-                            {/* Category Filter */}
-                            <div className="w-full md:w-auto">
-                                <Select
-                                    value={categoryFilter}
-                                    onValueChange={setCategoryFilter}
-                                >
-                                    <SelectTrigger className="w-full md:w-[180px]">
-                                        <SelectValue placeholder="Filter by Category" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Categories</SelectItem>
-                                        {fixedCategories.map(category => ( // Using fixed categories
-                                            <SelectItem key={category} value={category}>
-                                                {category}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Availability Filter */}
-                            {/* <div className="w-full md:w-auto">
-                                <Select
-                                    value={availabilityFilter}
-                                    onValueChange={setAvailabilityFilter}
-                                >
-                                    <SelectTrigger className="w-full md:w-[180px]">
-                                        <SelectValue placeholder="Filter by Availability" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Availabilities</SelectItem>
-                                        {fixedAvailabilities.map(availability => ( // Using fixed availabilities
-                                            <SelectItem key={availability} value={availability}>
-                                                {availability}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div> */}
-
-                            <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-                                <DialogTrigger asChild>
-                                    <Button className="btn-healthcare">
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Add New Product
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-2xl">
-                                    <DialogHeader>
-                                        <DialogTitle>Add New Product</DialogTitle>
-                                    </DialogHeader>
-                                    <ProductForm
-                                        formData={formData}
-                                        setFormData={setFormData}
-                                        onSubmit={handleAddProduct}
-                                        onCancel={handleAddCancel}
-                                        uploadImageToSupabase={uploadImageToSupabase}
+                    <CardContent className="pt-6 -mx-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4 w-full">
+                            <div className="flex flex-1 w-full gap-2 items-center">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                                    <Input
+                                        placeholder="Search products by name, description, or SKU..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10"
                                     />
-                                </DialogContent>
-                            </Dialog>
+                                </div>
+                                <div className="w-auto min-w-[120px]">
+                                    <Select
+                                        value={categoryFilter}
+                                        onValueChange={setCategoryFilter}
+                                    >
+                                        <SelectTrigger className="w-full md:w-[140px]">
+                                            <SelectValue placeholder="Category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            {fixedCategories.map(category => (
+                                                <SelectItem key={category} value={category}>
+                                                    {category}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 items-center w-full sm:w-auto justify-end">
+                                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button className="btn-healthcare" size="icon" variant="ghost" aria-label="Add Product">
+                                            <Plus className="w-5 h-5" />
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-2xl">
+                                        <DialogHeader>
+                                            <DialogTitle>Add New Product</DialogTitle>
+                                            <DialogDescription>Fill in the product details and submit to add a new product to the system.</DialogDescription>
+                                        </DialogHeader>
+                                        <ProductForm
+                                            formData={formData}
+                                            setFormData={setFormData}
+                                            onSubmit={handleAddProduct}
+                                            onCancel={handleAddCancel}
+                                        />
+                                    </DialogContent>
+                                </Dialog>
+                                <ProductExcelImport onDataParsed={handleBulkImport} products={products} />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -628,6 +776,7 @@ return (
                     <DialogContent className="max-w-2xl">
                         <DialogHeader>
                             <DialogTitle>Edit Product</DialogTitle>
+                            <DialogDescription>Edit the product details and submit to update the product in the system.</DialogDescription>
                         </DialogHeader>
                         <ProductForm
                             formData={formData}
@@ -635,7 +784,6 @@ return (
                             onSubmit={handleEditProduct}
                             isEdit
                             onCancel={handleEditCancel}
-                            uploadImageToSupabase={uploadImageToSupabase}
                         />
                     </DialogContent>
                 </Dialog>

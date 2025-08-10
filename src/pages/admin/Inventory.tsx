@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -77,9 +78,9 @@ interface InventoryTransaction {
   product_name: string;
   type: string;
   quantity: number;
-  cost_per_unit: number;
+  cost_per_unit: number | null;
   transaction_date: string;
-  notes: string;
+  notes: string | null;
 }
 
 interface Request {
@@ -139,27 +140,65 @@ const Inventory: React.FC = () => {
       });
       return;
     }
+
+    const selectedProduct = products.find((p) => p.id === shrinkageProductId);
+    if (!selectedProduct) return;
+
+    const qty = parseInt(shrinkageQty);
+    if (qty <= 0) {
+      toast({
+        title: "Invalid Quantity",
+        description: "Shrinkage quantity must be positive.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Optimistically update inventory
+    const originalInventory = selectedProduct.inventory;
+    const newInventory = (originalInventory || 0) - qty;
+    const updatedProducts = products.map((p) =>
+      p.id === shrinkageProductId
+        ? { ...p, inventory: newInventory }
+        : p
+    );
+    setProducts(updatedProducts);
+
+    // Create optimistic transaction
+    const tempTransactionId = `temp-shrinkage-${Date.now()}`;
+    const optimisticTransaction: InventoryTransaction = {
+      id: tempTransactionId,
+      product_id: shrinkageProductId,
+      product_name: selectedProduct.name,
+      type: "shrinkage",
+      quantity: qty,
+      cost_per_unit: null,
+      transaction_date: new Date().toISOString().split("T")[0],
+      notes: shrinkageNotes || null,
+    };
+    setTransactions(prev => [optimisticTransaction, ...prev]);
+
+    // Reset form optimistically
+    const originalFormState = {
+      shrinkageProductId,
+      shrinkageQty,
+      shrinkageNotes
+    };
+    setShrinkageModalOpen(false);
+    setShrinkageProductId("");
+    setShrinkageQty("");
+    setShrinkageNotes("");
+
     try {
-      const selectedProduct = products.find((p) => p.id === shrinkageProductId);
-      if (!selectedProduct) return;
-      const qty = parseInt(shrinkageQty);
-      if (qty <= 0) {
-        toast({
-          title: "Invalid Quantity",
-          description: "Shrinkage quantity must be positive.",
-          variant: "destructive",
-        });
-        return;
-      }
-      // Subtract from inventory
-      const newInventory = (selectedProduct.inventory || 0) - qty;
+      // Update product inventory
       const { error: updateError } = await supabase
         .from("products")
         .update({ inventory: newInventory })
         .eq("id", shrinkageProductId);
       if (updateError) throw updateError;
+
       // Log inventory transaction
-      await supabase.from("inventory_transactions").insert({
+      const { data: transactionData, error: transactionError } = await supabase.from("inventory_transactions").insert({
         product_id: shrinkageProductId,
         product_name: selectedProduct.name,
         type: "shrinkage",
@@ -167,17 +206,45 @@ const Inventory: React.FC = () => {
         cost_per_unit: null,
         transaction_date: new Date().toISOString().split("T")[0],
         notes: shrinkageNotes || "Shrinkage",
-      });
+      })
+      .select()
+      .single();
+
+      if (transactionError) throw transactionError;
+
+      // Replace optimistic transaction with real data
+      setTransactions(prev => prev.map(t => 
+        t.id === tempTransactionId ? {
+          id: transactionData.id,
+          product_id: transactionData.product_id,
+          product_name: transactionData.product_name,
+          type: transactionData.type,
+          quantity: transactionData.quantity,
+          cost_per_unit: transactionData.cost_per_unit,
+          transaction_date: transactionData.transaction_date,
+          notes: transactionData.notes
+        } : t
+      ));
+
       toast({
         title: "Shrinkage Recorded",
         description: `Shrinkage of ${qty} units for ${selectedProduct.name} recorded.`,
       });
-      setShrinkageModalOpen(false);
-      setShrinkageProductId("");
-      setShrinkageQty("");
-      setShrinkageNotes("");
     } catch (error) {
       console.error("Error recording shrinkage:", error);
+      
+      // Revert optimistic updates
+      setProducts(prev => prev.map(p => 
+        p.id === shrinkageProductId ? { ...p, inventory: originalInventory } : p
+      ));
+      setTransactions(prev => prev.filter(t => t.id !== tempTransactionId));
+      
+      // Restore form state
+      setShrinkageModalOpen(true);
+      setShrinkageProductId(originalFormState.shrinkageProductId);
+      setShrinkageQty(originalFormState.shrinkageQty);
+      setShrinkageNotes(originalFormState.shrinkageNotes);
+      
       toast({
         title: "Error",
         description: "Failed to record shrinkage.",
@@ -303,10 +370,36 @@ const Inventory: React.FC = () => {
       )
       .subscribe();
 
+    // Listen to sales changes
+    const salesChannel = supabase
+      .channel("sales-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales" },
+        () => {
+          fetchAllData();
+        }
+      )
+      .subscribe();
+
+    // Listen to expenses changes
+    const expensesChannel = supabase
+      .channel("expenses-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "expenses" },
+        () => {
+          fetchAllData();
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(productsChannel);
       supabase.removeChannel(transactionsChannel);
       supabase.removeChannel(requestsChannel);
+      supabase.removeChannel(salesChannel);
+      supabase.removeChannel(expensesChannel);
     };
   };
 
@@ -364,7 +457,7 @@ const Inventory: React.FC = () => {
       const stockValue = products.reduce((totalValue, product) => {
         const inventory = Number(product.inventory) || 0;
         let averagePrice = product.price || 0;
-        if (product.price_ranges && product.price_ranges.length > 0) {
+        if (product.price_ranges && Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
           const totalPrice = product.price_ranges.reduce(
             (sum, range) => sum + range.price,
             0
@@ -458,10 +551,49 @@ const Inventory: React.FC = () => {
       return;
     }
 
-    try {
-      const selectedProduct = products.find((p) => p.id === selectedProductId);
-      if (!selectedProduct) return;
+    const selectedProduct = products.find((p) => p.id === selectedProductId);
+    if (!selectedProduct) return;
 
+    const qtyToAdd = parseInt(quantity);
+    const costPerUnitValue = costPerUnit ? parseFloat(costPerUnit) : null;
+
+    // Optimistically update product inventory
+    const originalInventory = selectedProduct.inventory;
+    const updatedProducts = products.map((p) =>
+      p.id === selectedProductId
+        ? { ...p, inventory: p.inventory + qtyToAdd }
+        : p
+    );
+    setProducts(updatedProducts);
+
+    // Create optimistic transaction
+    const tempTransactionId = `temp-${Date.now()}`;
+    const optimisticTransaction: InventoryTransaction = {
+      id: tempTransactionId,
+      product_id: selectedProductId,
+      product_name: selectedProduct.name,
+      type: "purchase",
+      quantity: qtyToAdd,
+      cost_per_unit: costPerUnitValue,
+      transaction_date: purchaseDate,
+      notes: notes || null,
+    };
+    setTransactions(prev => [optimisticTransaction, ...prev]);
+
+    // Reset form optimistically
+    const originalFormState = {
+      selectedProductId,
+      quantity,
+      costPerUnit,
+      notes
+    };
+    setSelectedProductId("");
+    setQuantity("");
+    setCostPerUnit("");
+    setNotes("");
+    setIsModalOpen(false);
+
+    try {
       // Create inventory transaction and get its ID
       const { data: transactionData, error: transactionError } = await supabase
         .from("inventory_transactions")
@@ -469,8 +601,8 @@ const Inventory: React.FC = () => {
           product_id: selectedProductId,
           product_name: selectedProduct.name,
           type: "purchase",
-          quantity: parseInt(quantity),
-          cost_per_unit: costPerUnit ? parseFloat(costPerUnit) : null,
+          quantity: qtyToAdd,
+          cost_per_unit: costPerUnitValue,
           transaction_date: purchaseDate,
           notes: notes || null,
         })
@@ -479,24 +611,39 @@ const Inventory: React.FC = () => {
 
       if (transactionError) throw transactionError;
 
+      // Replace optimistic transaction with real data
+      setTransactions(prev => prev.map(t => 
+        t.id === tempTransactionId ? {
+          id: transactionData.id,
+          product_id: transactionData.product_id,
+          product_name: transactionData.product_name,
+          type: transactionData.type,
+          quantity: transactionData.quantity,
+          cost_per_unit: transactionData.cost_per_unit,
+          transaction_date: transactionData.transaction_date,
+          notes: transactionData.notes
+        } : t
+      ));
+
       // Create expense record for the purchase, linking to inventory_transaction_id
       if (
-        costPerUnit &&
-        parseFloat(costPerUnit) > 0 &&
+        costPerUnitValue &&
+        costPerUnitValue > 0 &&
         transactionData &&
         transactionData.id
       ) {
-        const totalCost = parseFloat(costPerUnit) * parseInt(quantity);
+        const totalCost = costPerUnitValue * qtyToAdd;
 
         const { data: expenseData, error: expenseError } = await supabase
           .from("expenses")
           .insert({
+            type: "expense",
             category: "Stock Purchase",
             amount: totalCost,
             date: new Date(purchaseDate).toISOString(),
             description: `Stock purchase: ${quantity} units of ${
               selectedProduct.name
-            } at ₹${costPerUnit} per unit${notes ? ` - ${notes}` : ""}`,
+            } at ₹${costPerUnitValue} per unit${notes ? ` - ${notes}` : ""}`,
             inventory_transaction_id: transactionData.id,
           })
           .select()
@@ -519,34 +666,33 @@ const Inventory: React.FC = () => {
       const { error: updateError } = await supabase
         .from("products")
         .update({
-          inventory: selectedProduct.inventory + parseInt(quantity),
+          inventory: originalInventory + qtyToAdd,
         })
         .eq("id", selectedProductId);
 
       if (updateError) throw updateError;
 
-      // // Create notification
-      // await supabase.from('notifications').insert({
-      //   user_id: user?.id,
-      //   type: 'stock_received',
-      //   message: `New stock received for ${selectedProduct.name}: +${quantity} units. Inventory updated.`,
-      //   related_entity_id: selectedProductId,
-      //   role: 'admin',
-      // });
-
       toast({
         title: "Stock Updated",
-        description: `Successfully added ${quantity} units to ${selectedProduct.name}`,
+        description: `Successfully added ${qtyToAdd} units to ${selectedProduct.name}`,
       });
 
-      // Reset form
-      setSelectedProductId("");
-      setQuantity("");
-      setCostPerUnit("");
-      setNotes("");
-      setIsModalOpen(false);
     } catch (error) {
       console.error("Error recording stock purchase:", error);
+      
+      // Revert optimistic updates
+      setProducts(prev => prev.map(p => 
+        p.id === selectedProductId ? { ...p, inventory: originalInventory } : p
+      ));
+      setTransactions(prev => prev.filter(t => t.id !== tempTransactionId));
+      
+      // Restore form state
+      setSelectedProductId(originalFormState.selectedProductId);
+      setQuantity(originalFormState.quantity);
+      setCostPerUnit(originalFormState.costPerUnit);
+      setNotes(originalFormState.notes);
+      setIsModalOpen(true);
+      
       toast({
         title: "Error",
         description: "Failed to record stock purchase.",
@@ -670,6 +816,7 @@ const Inventory: React.FC = () => {
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Record Stock Purchase</DialogTitle>
+                <DialogDescription>Add new inventory by recording a stock purchase with quantity and cost details.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -753,6 +900,7 @@ const Inventory: React.FC = () => {
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Record Inventory Shrinkage</DialogTitle>
+                <DialogDescription>Record inventory loss due to damage, theft, or other shrinkage reasons.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -999,6 +1147,7 @@ const Inventory: React.FC = () => {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Select Custom Date Range</DialogTitle>
+              <DialogDescription>Choose a custom date range to filter inventory transactions and analytics.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
