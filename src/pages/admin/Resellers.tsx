@@ -1548,13 +1548,16 @@ onChange={handleImport}
                                                             filteredResellerSalesForTable.map((sale) => {
                                                                 const total = typeof sale.total === 'number' ? sale.total : 0;
                                                                 const paid = typeof sale.paid === 'number' ? sale.paid : 0;
-                                                                const outstanding = typeof sale.outstanding === 'number' ? sale.outstanding : 0;
-                                                                return (
+                                                                // Outstanding should be taken from users table (due_balance field)
+                                                                const outstanding = typeof selectedReseller?.payment_amount_remaining === 'number' ? selectedReseller.payment_amount_remaining : 0;
+                                                                  return (
                                                                     <TableRow key={sale.id}>
                                                                         <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
                                                                         <TableCell className="text-right">₹{total.toFixed(2)}</TableCell>
                                                                         <TableCell className="text-right">₹{paid.toFixed(2)}</TableCell>
-                                                                        <TableCell className="text-right font-medium">₹{outstanding.toFixed(2)}</TableCell>
+                                                                        <TableCell className="text-right">
+                                                                            ₹{outstanding.toFixed(2)}
+                                                                        </TableCell>
                                                                     </TableRow>
                                                                 );
                                                             })

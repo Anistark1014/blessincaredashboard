@@ -95,6 +95,15 @@ interface ProductSummary extends Product {
   sold_this_month: number;
 }
 
+interface ShrinkageLog {
+  id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  date: string;
+  notes: string | null;
+}
+
 const Inventory: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -130,6 +139,8 @@ const Inventory: React.FC = () => {
   const [shrinkageProductId, setShrinkageProductId] = useState("");
   const [shrinkageQty, setShrinkageQty] = useState("");
   const [shrinkageNotes, setShrinkageNotes] = useState("");
+  const [shrinkageLogsOpen, setShrinkageLogsOpen] = useState(false);
+  const [shrinkageLogs, setShrinkageLogs] = useState<ShrinkageLog[]>([]);
   // Handle Shrinkage
   const handleShrinkage = async () => {
     if (!shrinkageProductId || !shrinkageQty) {
@@ -170,7 +181,7 @@ const Inventory: React.FC = () => {
       id: tempTransactionId,
       product_id: shrinkageProductId,
       product_name: selectedProduct.name,
-      type: "shrinkage",
+      type: "loss",
       quantity: qty,
       cost_per_unit: null,
       transaction_date: new Date().toISOString().split("T")[0],
@@ -197,34 +208,37 @@ const Inventory: React.FC = () => {
         .eq("id", shrinkageProductId);
       if (updateError) throw updateError;
 
-      // Log inventory transaction
-      const { data: transactionData, error: transactionError } = await supabase.from("inventory_transactions").insert({
-        product_id: shrinkageProductId,
-        product_name: selectedProduct.name,
-        type: "shrinkage",
-        quantity: qty,
-        cost_per_unit: null,
-        transaction_date: new Date().toISOString().split("T")[0],
-        notes: shrinkageNotes || "Shrinkage",
-      })
-      .select()
-      .single();
+      // Remove the optimistic transaction since we're not storing it in the database
+      setTransactions(prev => prev.filter(t => t.id !== tempTransactionId));
 
-      if (transactionError) throw transactionError;
+      // Save shrinkage log to database
+      const { error: logError } = await supabase
+        .from('shrinkage_logs')
+        .insert({
+          product_id: shrinkageProductId,
+          product_name: selectedProduct.name,
+          quantity: qty,
+          notes: shrinkageNotes || null,
+        });
+      
+      if (logError) {
+        console.error("Error saving shrinkage log:", logError);
+        toast({
+          title: "Warning",
+          description: "Stock updated but failed to save log.",
+          variant: "destructive",
+        });
+      }
 
-      // Replace optimistic transaction with real data
-      setTransactions(prev => prev.map(t => 
-        t.id === tempTransactionId ? {
-          id: transactionData.id,
-          product_id: transactionData.product_id,
-          product_name: transactionData.product_name,
-          type: transactionData.type,
-          quantity: transactionData.quantity,
-          cost_per_unit: transactionData.cost_per_unit,
-          transaction_date: transactionData.transaction_date,
-          notes: transactionData.notes
-        } : t
-      ));
+      // Refresh logs
+      const { data: updatedLogs } = await supabase
+        .from('shrinkage_logs')
+        .select('*')
+        .order('date', { ascending: false });
+      
+      if (updatedLogs) {
+        setShrinkageLogs(updatedLogs);
+      }
 
       toast({
         title: "Shrinkage Recorded",
@@ -264,6 +278,29 @@ const Inventory: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+
+  // Load shrinkage logs
+  const fetchShrinkageLogs = async () => {
+    const { data: logs, error } = await supabase
+      .from('shrinkage_logs')
+      .select('*')
+      .order('date', { ascending: false });
+    
+    if (error) {
+      console.error("Error fetching shrinkage logs:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load shrinkage history.",
+        variant: "destructive",
+      });
+    } else if (logs) {
+      setShrinkageLogs(logs);
+    }
+  };
+
+  useEffect(() => {
+    fetchShrinkageLogs();
+  }, []);
 
   // Check if user is admin
   useEffect(() => {
@@ -941,13 +978,171 @@ const Inventory: React.FC = () => {
                     placeholder="Enter any notes about this shrinkage"
                   />
                 </div>
-                <Button
-                  onClick={handleShrinkage}
-                  className="w-full"
-                  variant="destructive"
-                >
-                  Record Shrinkage
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleShrinkage}
+                    className="flex-1"
+                    variant="destructive"
+                  >
+                    Record Shrinkage
+                  </Button>
+                  <Button
+                    onClick={() => setShrinkageLogsOpen(true)}
+                    variant="outline"
+                  >
+                    View Logs
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Shrinkage Logs Dialog */}
+          <Dialog open={shrinkageLogsOpen} onOpenChange={setShrinkageLogsOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Shrinkage History</DialogTitle>
+                <DialogDescription>View all recorded inventory shrinkage entries.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="h-[400px] overflow-y-auto">
+                  {shrinkageLogs.length === 0 ? (
+                    <p className="text-center text-muted-foreground">No shrinkage records found.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {shrinkageLogs.map(log => (
+                        <Card key={log.id}>
+                          <CardContent className="p-4">
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <h3 className="font-medium">{log.product_name}</h3>
+                                <span className="text-destructive">{log.quantity} units</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{new Date(log.date).toLocaleDateString()}</p>
+                              {log.notes && (
+                                <p className="text-sm border-t pt-2 mt-2">{log.notes}</p>
+                              )}
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={async () => {
+                                    const newQty = window.prompt("Enter new quantity:", log.quantity.toString());
+                                    if (!newQty) return;
+                                    
+                                    const qty = parseInt(newQty);
+                                    if (isNaN(qty) || qty <= 0) {
+                                      toast({
+                                        title: "Invalid Quantity",
+                                        description: "Please enter a valid positive number.",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+
+                                    try {
+                                      // Start transaction
+                                      const product = products.find(p => p.id === log.product_id);
+                                      if (!product) throw new Error("Product not found");
+
+                                      // Calculate inventory adjustment
+                                      const qtyDiff = log.quantity - qty; // positive means we're reducing shrinkage
+                                      const newInventory = product.inventory + qtyDiff;
+
+                                      // Update inventory
+                                      const { error: updateError } = await supabase
+                                        .from("products")
+                                        .update({ inventory: newInventory })
+                                        .eq("id", log.product_id);
+                                      
+                                      if (updateError) throw updateError;
+
+                                      // Update shrinkage log
+                                      const { error: logError } = await supabase
+                                        .from('shrinkage_logs')
+                                        .update({ quantity: qty })
+                                        .eq('id', log.id);
+
+                                      if (logError) throw logError;
+
+                                      fetchShrinkageLogs();
+                                      fetchAllData();
+                                      
+                                      toast({
+                                        title: "Success",
+                                        description: "Shrinkage record updated and inventory adjusted.",
+                                      });
+                                    } catch (error) {
+                                      console.error("Error updating shrinkage:", error);
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to update shrinkage record.",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Update Quantity
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!window.confirm("Are you sure you want to delete this shrinkage record? This will restore the quantity back to inventory.")) {
+                                      return;
+                                    }
+
+                                    try {
+                                      // Start transaction
+                                      const product = products.find(p => p.id === log.product_id);
+                                      if (!product) throw new Error("Product not found");
+
+                                      // Calculate new inventory (restore shrinkage quantity)
+                                      const newInventory = product.inventory + log.quantity;
+
+                                      // Update inventory
+                                      const { error: updateError } = await supabase
+                                        .from("products")
+                                        .update({ inventory: newInventory })
+                                        .eq("id", log.product_id);
+                                      
+                                      if (updateError) throw updateError;
+
+                                      // Delete shrinkage log
+                                      const { error: deleteError } = await supabase
+                                        .from('shrinkage_logs')
+                                        .delete()
+                                        .eq('id', log.id);
+                                      
+                                      if (deleteError) throw deleteError;
+
+                                      fetchShrinkageLogs();
+                                      fetchAllData();
+                                      
+                                      toast({
+                                        title: "Success",
+                                        description: "Shrinkage record deleted and inventory restored.",
+                                      });
+                                    } catch (error) {
+                                      console.error("Error deleting shrinkage:", error);
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to delete shrinkage record.",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Delete Record
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </DialogContent>
           </Dialog>
