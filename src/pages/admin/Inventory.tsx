@@ -1,18 +1,46 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
-import { Warehouse, AlertTriangle, Package, TrendingUp, TrendingDown, SortAsc, SortDesc, Box } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Warehouse,
+  AlertTriangle,
+  Package,
+  TrendingUp,
+  TrendingDown,
+  SortAsc,
+  SortDesc,
+  Box,
+} from "lucide-react";
 // import { cn } from '@/lib/utils';
 
 interface Product {
@@ -72,7 +100,9 @@ const Inventory: React.FC = () => {
   const { toast } = useToast();
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [productSummaries, setProductSummaries] = useState<ProductSummary[]>([]);
+  const [productSummaries, setProductSummaries] = useState<ProductSummary[]>(
+    []
+  );
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,19 +113,22 @@ const Inventory: React.FC = () => {
   const [totalStockValue, setTotalStockValue] = useState(0);
   const [totalStockPurchased, setTotalStockPurchased] = useState(0);
   const [totalStockSold, setTotalStockSold] = useState(0);
+  const [sales, setSales] = useState<any[]>([]);
 
   // Form states
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [costPerUnit, setCostPerUnit] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [costPerUnit, setCostPerUnit] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [notes, setNotes] = useState("");
 
   // Shrinkage states
   const [shrinkageModalOpen, setShrinkageModalOpen] = useState(false);
-  const [shrinkageProductId, setShrinkageProductId] = useState('');
-  const [shrinkageQty, setShrinkageQty] = useState('');
-  const [shrinkageNotes, setShrinkageNotes] = useState('');
+  const [shrinkageProductId, setShrinkageProductId] = useState("");
+  const [shrinkageQty, setShrinkageQty] = useState("");
+  const [shrinkageNotes, setShrinkageNotes] = useState("");
   // Handle Shrinkage
   const handleShrinkage = async () => {
     if (!shrinkageProductId || !shrinkageQty) {
@@ -107,68 +140,79 @@ const Inventory: React.FC = () => {
       return;
     }
     try {
-      const selectedProduct = products.find(p => p.id === shrinkageProductId);
+      const selectedProduct = products.find((p) => p.id === shrinkageProductId);
       if (!selectedProduct) return;
       const qty = parseInt(shrinkageQty);
       if (qty <= 0) {
-        toast({ title: "Invalid Quantity", description: "Shrinkage quantity must be positive.", variant: "destructive" });
+        toast({
+          title: "Invalid Quantity",
+          description: "Shrinkage quantity must be positive.",
+          variant: "destructive",
+        });
         return;
       }
       // Subtract from inventory
       const newInventory = (selectedProduct.inventory || 0) - qty;
       const { error: updateError } = await supabase
-        .from('products')
+        .from("products")
         .update({ inventory: newInventory })
-        .eq('id', shrinkageProductId);
+        .eq("id", shrinkageProductId);
       if (updateError) throw updateError;
       // Log inventory transaction
-      await supabase.from('inventory_transactions').insert({
+      await supabase.from("inventory_transactions").insert({
         product_id: shrinkageProductId,
         product_name: selectedProduct.name,
-        type: 'shrinkage',
+        type: "shrinkage",
         quantity: qty,
         cost_per_unit: null,
-        transaction_date: new Date().toISOString().split('T')[0],
-        notes: shrinkageNotes || 'Shrinkage',
+        transaction_date: new Date().toISOString().split("T")[0],
+        notes: shrinkageNotes || "Shrinkage",
       });
-      toast({ title: "Shrinkage Recorded", description: `Shrinkage of ${qty} units for ${selectedProduct.name} recorded.` });
+      toast({
+        title: "Shrinkage Recorded",
+        description: `Shrinkage of ${qty} units for ${selectedProduct.name} recorded.`,
+      });
       setShrinkageModalOpen(false);
-      setShrinkageProductId('');
-      setShrinkageQty('');
-      setShrinkageNotes('');
+      setShrinkageProductId("");
+      setShrinkageQty("");
+      setShrinkageNotes("");
     } catch (error) {
-      console.error('Error recording shrinkage:', error);
-      toast({ title: "Error", description: "Failed to record shrinkage.", variant: "destructive" });
+      console.error("Error recording shrinkage:", error);
+      toast({
+        title: "Error",
+        description: "Failed to record shrinkage.",
+        variant: "destructive",
+      });
     }
   };
 
   // Filter and sort states
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
-  const [sortField, setSortField] = useState<keyof ProductSummary>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<keyof ProductSummary>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Time range filter states
-  const [timeRange, setTimeRange] = useState('all'); // Default to all time
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [timeRange, setTimeRange] = useState("all"); // Default to all time
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
 
   // Check if user is admin
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && user.role !== "admin") {
       toast({
         title: "Access Denied",
         description: "You don't have permission to access this page.",
         variant: "destructive",
       });
-      navigate('/reseller');
+      navigate("/reseller");
     }
   }, [user, navigate, toast]);
 
   // Fetch data and set up real-time listeners
   useEffect(() => {
-    if (!user || user.role !== 'admin') return;
+    if (!user || user.role !== "admin") return;
 
     fetchAllData();
     setupRealtimeListeners();
@@ -180,31 +224,38 @@ const Inventory: React.FC = () => {
 
       // Fetch products
       const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('*');
+        .from("products")
+        .select("*");
 
       if (productsError) throw productsError;
       setProducts(productsData as any[]);
 
       // Fetch transactions
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('inventory_transactions')
-        .select('*')
-        .order('transaction_date', { ascending: false });
+      const { data: transactionsData, error: transactionsError } =
+        await supabase
+          .from("inventory_transactions")
+          .select("*")
+          .order("transaction_date", { ascending: false });
 
       if (transactionsError) throw transactionsError;
       setTransactions(transactionsData as any[]);
 
       // Fetch requests
       const { data: requestsData, error: requestsError } = await supabase
-        .from('requests')
-        .select('*');
+        .from("requests")
+        .select("*");
 
       if (requestsError) throw requestsError;
       setRequests(requestsData as any[]);
 
+      // Fetch sales
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select("*");
+      if (salesError) throw salesError;
+      setSales(salesData as any[]);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error("Error fetching data:", error);
       toast({
         title: "Error",
         description: "Failed to fetch inventory data.",
@@ -218,26 +269,38 @@ const Inventory: React.FC = () => {
   const setupRealtimeListeners = () => {
     // Listen to products changes
     const productsChannel = supabase
-      .channel('products-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-        fetchAllData();
-      })
+      .channel("products-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => {
+          fetchAllData();
+        }
+      )
       .subscribe();
 
     // Listen to inventory transactions changes
     const transactionsChannel = supabase
-      .channel('transactions-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_transactions' }, () => {
-        fetchAllData();
-      })
+      .channel("transactions-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "inventory_transactions" },
+        () => {
+          fetchAllData();
+        }
+      )
       .subscribe();
 
     // Listen to requests changes
     const requestsChannel = supabase
-      .channel('requests-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
-        fetchAllData();
-      })
+      .channel("requests-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "requests" },
+        () => {
+          fetchAllData();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -254,22 +317,22 @@ const Inventory: React.FC = () => {
     let endDate: Date = now;
 
     switch (timeRange) {
-      case '1':
+      case "1":
         startDate = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
         break;
-      case '2':
+      case "2":
         startDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
         break;
-      case '7':
+      case "7":
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
-      case '30':
+      case "30":
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
-      case '90':
+      case "90":
         startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
-      case 'custom':
+      case "custom":
         if (customStartDate && customEndDate) {
           startDate = new Date(customStartDate);
           // Set end date to end of day for more accurate filtering
@@ -280,7 +343,7 @@ const Inventory: React.FC = () => {
           startDate = new Date(2000, 0, 1);
         }
         break;
-      case 'all':
+      case "all":
         startDate = new Date(2000, 0, 1);
         break;
       default:
@@ -294,96 +357,77 @@ const Inventory: React.FC = () => {
   useEffect(() => {
     if (products.length > 0) {
       // Calculate total stock number and value
-      const stockNumber = products.reduce((sum, product) => sum + (Number(product.inventory) || 0), 0);
-      // console.log(stockNumber);
-
-      // Calculate stock value by multiplying each product's inventory with its own average price
+      const stockNumber = products.reduce(
+        (sum, product) => sum + (Number(product.inventory) || 0),
+        0
+      );
       const stockValue = products.reduce((totalValue, product) => {
         const inventory = Number(product.inventory) || 0;
-
-        // Calculate average price for this specific product
-        let averagePrice = product.price || 0; // fallback to product.price
-
+        let averagePrice = product.price || 0;
         if (product.price_ranges && product.price_ranges.length > 0) {
-          const totalPrice = product.price_ranges.reduce((sum, range) => sum + range.price, 0);
+          const totalPrice = product.price_ranges.reduce(
+            (sum, range) => sum + range.price,
+            0
+          );
           averagePrice = totalPrice / product.price_ranges.length;
         }
-
-        // Calculate value for this product: inventory * average price
-        const productValue = inventory * averagePrice;
-        // console.log(productValue);
-
-        // console.log(`Product: ${product.name}, Inventory: ${inventory}, Avg Price: ${averagePrice}, Value: ${productValue}`);
-
-        return totalValue + productValue;
+        return totalValue + inventory * averagePrice;
       }, 0);
-
       setTotalStockNumber(stockNumber);
       setTotalStockValue(stockValue);
 
       const { startDate, endDate } = getDateRange();
 
       const totalStockPurchased = transactions
-        .filter(t => t.type === 'purchase' && new Date(t.transaction_date) >= startDate && new Date(t.transaction_date) <= endDate)
+        .filter(
+          (t) =>
+            t.type === "purchase" &&
+            new Date(t.transaction_date) >= startDate &&
+            new Date(t.transaction_date) <= endDate
+        )
         .reduce((sum, t) => sum + t.quantity, 0);
 
-      // Calculate total sold units - improved logic
-      const totalStockSold = requests
-        .filter(r =>
-          (r.status === 'Shipped' || r.status === 'Delivered') &&
-          new Date(r.request_date) >= startDate &&
-          new Date(r.request_date) <= endDate
-        )
-        .reduce((sum, request) => {
-          if (!Array.isArray(request.products_ordered)) return sum;
-
-          const requestTotal = request.products_ordered.reduce((subtotal: number, p: any) => {
-            return subtotal + (p.quantity || 0);
-          }, 0);
-
-          return sum + requestTotal;
-        }, 0);
+      // Calculate total sold units using sales table
+      const totalStockSold = sales
+        .filter((sale) => {
+          const saleDate = new Date(
+            sale.date || sale.created_at || sale.transaction_date
+          );
+          return saleDate >= startDate && saleDate <= endDate;
+        })
+        .reduce((sum, sale) => sum + (sale.qty || sale.quantity || 0), 0);
 
       setTotalStockPurchased(totalStockPurchased);
       setTotalStockSold(totalStockSold);
 
       // Calculate monthly data using the selected date range
-      const summaries = products.map(product => {
+      const summaries = products.map((product) => {
         // Calculate purchased in selected time range
         const purchasedInRange = transactions
-          .filter(t => {
+          .filter((t) => {
             const transactionDate = new Date(t.transaction_date);
-            return t.product_id === product.id &&
-              t.type === 'purchase' &&
+            return (
+              t.product_id === product.id &&
+              t.type === "purchase" &&
               transactionDate >= startDate &&
-              transactionDate <= endDate;
+              transactionDate <= endDate
+            );
           })
           .reduce((sum, t) => sum + t.quantity, 0);
 
-        // Calculate sold in selected time range
-        const soldInRange = requests
-          .filter(r => {
-            const requestDate = new Date(r.request_date);
-            return (r.status === 'Shipped' || r.status === 'Delivered') &&
-              requestDate >= startDate &&
-              requestDate <= endDate;
+        // Calculate sold in selected time range using sales table
+        const soldInRange = sales
+          .filter((sale) => {
+            const saleDate = new Date(
+              sale.date || sale.created_at || sale.transaction_date
+            );
+            return (
+              sale.product_id === product.id &&
+              saleDate >= startDate &&
+              saleDate <= endDate
+            );
           })
-          .reduce((sum, request) => {
-            if (!request.products_ordered || !Array.isArray(request.products_ordered)) return sum;
-
-            // Try multiple ways to match the product
-            const productInOrder = request.products_ordered.find((p: any) => {
-              // Check for productId first (if it exists)
-              if (p.productId && p.productId === product.id) return true;
-              // Check for product_name as fallback
-              if (p.product_name && p.product_name.toLowerCase() === product.name.toLowerCase()) return true;
-              // Check for name field as another fallback
-              if (p.name && p.name.toLowerCase() === product.name.toLowerCase()) return true;
-              return false;
-            });
-
-            return sum + (productInOrder?.quantity || 0);
-          }, 0);
+          .reduce((sum, sale) => sum + (sale.qty || sale.quantity || 0), 0);
 
         return {
           ...product,
@@ -394,7 +438,15 @@ const Inventory: React.FC = () => {
 
       setProductSummaries(summaries);
     }
-  }, [products, transactions, requests, timeRange, customStartDate, customEndDate]);
+  }, [
+    products,
+    transactions,
+    requests,
+    sales,
+    timeRange,
+    customStartDate,
+    customEndDate,
+  ]);
 
   const handleStockPurchase = async () => {
     if (!selectedProductId || !quantity) {
@@ -406,19 +458,17 @@ const Inventory: React.FC = () => {
       return;
     }
 
-
     try {
-      const selectedProduct = products.find(p => p.id === selectedProductId);
+      const selectedProduct = products.find((p) => p.id === selectedProductId);
       if (!selectedProduct) return;
-
 
       // Create inventory transaction and get its ID
       const { data: transactionData, error: transactionError } = await supabase
-        .from('inventory_transactions')
+        .from("inventory_transactions")
         .insert({
           product_id: selectedProductId,
           product_name: selectedProduct.name,
-          type: 'purchase',
+          type: "purchase",
           quantity: parseInt(quantity),
           cost_per_unit: costPerUnit ? parseFloat(costPerUnit) : null,
           transaction_date: purchaseDate,
@@ -430,23 +480,30 @@ const Inventory: React.FC = () => {
       if (transactionError) throw transactionError;
 
       // Create expense record for the purchase, linking to inventory_transaction_id
-      if (costPerUnit && parseFloat(costPerUnit) > 0 && transactionData && transactionData.id) {
+      if (
+        costPerUnit &&
+        parseFloat(costPerUnit) > 0 &&
+        transactionData &&
+        transactionData.id
+      ) {
         const totalCost = parseFloat(costPerUnit) * parseInt(quantity);
 
         const { data: expenseData, error: expenseError } = await supabase
-          .from('expenses')
+          .from("expenses")
           .insert({
             category: "Stock Purchase",
             amount: totalCost,
             date: new Date(purchaseDate).toISOString(),
-            description: `Stock purchase: ${quantity} units of ${selectedProduct.name} at ₹${costPerUnit} per unit${notes ? ` - ${notes}` : ''}`,
+            description: `Stock purchase: ${quantity} units of ${
+              selectedProduct.name
+            } at ₹${costPerUnit} per unit${notes ? ` - ${notes}` : ""}`,
             inventory_transaction_id: transactionData.id,
           })
           .select()
           .single();
 
         if (expenseError) {
-          console.error('Error creating expense record:', expenseError);
+          console.error("Error creating expense record:", expenseError);
           // Don't throw error here as the main transaction was successful
           toast({
             title: "Warning",
@@ -454,17 +511,17 @@ const Inventory: React.FC = () => {
             variant: "destructive",
           });
         } else {
-          console.log('Expense record created:', expenseData);
+          console.log("Expense record created:", expenseData);
         }
       }
 
       // Update product inventory
       const { error: updateError } = await supabase
-        .from('products')
+        .from("products")
         .update({
-          inventory: selectedProduct.inventory + parseInt(quantity)
+          inventory: selectedProduct.inventory + parseInt(quantity),
         })
-        .eq('id', selectedProductId);
+        .eq("id", selectedProductId);
 
       if (updateError) throw updateError;
 
@@ -483,14 +540,13 @@ const Inventory: React.FC = () => {
       });
 
       // Reset form
-      setSelectedProductId('');
-      setQuantity('');
-      setCostPerUnit('');
-      setNotes('');
+      setSelectedProductId("");
+      setQuantity("");
+      setCostPerUnit("");
+      setNotes("");
       setIsModalOpen(false);
-
     } catch (error) {
-      console.error('Error recording stock purchase:', error);
+      console.error("Error recording stock purchase:", error);
       toast({
         title: "Error",
         description: "Failed to record stock purchase.",
@@ -503,12 +559,12 @@ const Inventory: React.FC = () => {
     let filtered = productSummaries;
 
     // Apply filters
-    if (categoryFilter && categoryFilter !== 'all') {
-      filtered = filtered.filter(p => p.category === categoryFilter);
+    if (categoryFilter && categoryFilter !== "all") {
+      filtered = filtered.filter((p) => p.category === categoryFilter);
     }
 
     if (lowStockOnly) {
-      filtered = filtered.filter(p => p.inventory <= p.min_stock_alert);
+      filtered = filtered.filter((p) => p.inventory <= p.min_stock_alert);
     }
 
     // Apply sorting
@@ -516,29 +572,45 @@ const Inventory: React.FC = () => {
       let aValue: any = a[sortField];
       let bValue: any = b[sortField];
 
-      if (typeof aValue === 'string') {
+      if (typeof aValue === "string") {
         aValue = aValue.toLowerCase();
         bValue = (bValue as string).toLowerCase();
       }
 
-      if (sortDirection === 'asc') {
-        return (aValue ?? 0) < (bValue ?? 0) ? -1 : (aValue ?? 0) > (bValue ?? 0) ? 1 : 0;
+      if (sortDirection === "asc") {
+        return (aValue ?? 0) < (bValue ?? 0)
+          ? -1
+          : (aValue ?? 0) > (bValue ?? 0)
+          ? 1
+          : 0;
       } else {
-        return (aValue ?? 0) > (bValue ?? 0) ? -1 : (aValue ?? 0) < (bValue ?? 0) ? 1 : 0;
+        return (aValue ?? 0) > (bValue ?? 0)
+          ? -1
+          : (aValue ?? 0) < (bValue ?? 0)
+          ? 1
+          : 0;
       }
     });
 
     return filtered;
   };
 
-  const categories = [...new Set(products.map(p => p.category).filter(category => category && category.trim() !== ''))];
+  const categories = [
+    ...new Set(
+      products
+        .map((p) => p.category)
+        .filter((category) => category && category.trim() !== "")
+    ),
+  ];
 
   if (loading) {
     return (
       <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="flex items-center space-x-3">
           <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Inventory Management</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            Inventory Management
+          </h1>
         </div>
 
         {/* Loading KPI Cards */}
@@ -578,9 +650,12 @@ const Inventory: React.FC = () => {
         <div className="flex items-center space-x-3">
           <Warehouse className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              Inventory Management
+            </h1>
             <p className="text-muted-foreground mt-1">
-              Manage your healthcare product inventory with real-time tracking & analytics
+              Manage your healthcare product inventory with real-time tracking &
+              analytics
             </p>
           </div>
         </div>
@@ -599,12 +674,15 @@ const Inventory: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="product">Product</Label>
-                  <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                  <Select
+                    value={selectedProductId}
+                    onValueChange={setSelectedProductId}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map(product => (
+                      {products.map((product) => (
                         <SelectItem key={product.id} value={product.id}>
                           {product.name}
                         </SelectItem>
@@ -659,9 +737,15 @@ const Inventory: React.FC = () => {
             </DialogContent>
           </Dialog>
           {/* Shrinkage Button and Modal */}
-          <Dialog open={shrinkageModalOpen} onOpenChange={setShrinkageModalOpen}>
+          <Dialog
+            open={shrinkageModalOpen}
+            onOpenChange={setShrinkageModalOpen}
+          >
             <DialogTrigger asChild>
-              <Button variant="destructive" className="flex items-center space-x-2 w-full sm:w-auto">
+              <Button
+                variant="destructive"
+                className="flex items-center space-x-2 w-full sm:w-auto"
+              >
                 <AlertTriangle className="h-4 w-4" />
                 <span>Add Shrinkage</span>
               </Button>
@@ -673,12 +757,15 @@ const Inventory: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="shrinkage_product">Product</Label>
-                  <Select value={shrinkageProductId} onValueChange={setShrinkageProductId}>
+                  <Select
+                    value={shrinkageProductId}
+                    onValueChange={setShrinkageProductId}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map(product => (
+                      {products.map((product) => (
                         <SelectItem key={product.id} value={product.id}>
                           {product.name}
                         </SelectItem>
@@ -706,7 +793,11 @@ const Inventory: React.FC = () => {
                     placeholder="Enter any notes about this shrinkage"
                   />
                 </div>
-                <Button onClick={handleShrinkage} className="w-full" variant="destructive">
+                <Button
+                  onClick={handleShrinkage}
+                  className="w-full"
+                  variant="destructive"
+                >
                   Record Shrinkage
                 </Button>
               </div>
@@ -714,22 +805,21 @@ const Inventory: React.FC = () => {
           </Dialog>
         </div>
       </div>
-      <div className="space-y-6">
-
-
-
-        
-      </div>
+      <div className="space-y-6"></div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         <Card className="bg-gradient-to-r from-lavender/20 to-blush/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Stock Units</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Stock Units
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{totalStockNumber.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {totalStockNumber.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
               Total units within all products
             </p>
@@ -738,11 +828,15 @@ const Inventory: React.FC = () => {
 
         <Card className="bg-gradient-to-r from-mint/20 to-sage/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Stock Value</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Stock Value
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">₹{totalStockValue.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              ₹{totalStockValue.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
               Total monetary value of inventory
             </p>
@@ -750,36 +844,45 @@ const Inventory: React.FC = () => {
         </Card>
         <Card className="bg-gradient-to-r from-lavender/20 to-blush/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Purchased Units</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Purchased Units
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{totalStockPurchased.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {totalStockPurchased.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {timeRange === '1' && 'Total units purchased in last 1 day'}
-              {timeRange === '2' && 'Total units purchased in last 2 days'}
-              {timeRange === '7' && 'Total units purchased in last 7 days'}
-              {timeRange === '30' && 'Total units purchased in last 30 days'}
-              {timeRange === '90' && 'Total units purchased in last 90 days'}
-              {timeRange === 'custom' && 'Total units purchased in custom range'}
+              {timeRange === "1" && "Total units purchased in last 1 day"}
+              {timeRange === "2" && "Total units purchased in last 2 days"}
+              {timeRange === "7" && "Total units purchased in last 7 days"}
+              {timeRange === "30" && "Total units purchased in last 30 days"}
+              {timeRange === "90" && "Total units purchased in last 90 days"}
+              {timeRange === "custom" &&
+                "Total units purchased in custom range"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-mint/20 to-sage/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sold Units</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Sold Units
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{totalStockSold.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {totalStockSold.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {timeRange === '1' && 'Total units sold in last 1 day'}
-              {timeRange === '2' && 'Total units sold in last 2 days'}
-              {timeRange === '7' && 'Total units sold in last 7 days'}
-              {timeRange === '30' && 'Total units sold in last 30 days'}
-              {timeRange === '90' && 'Total units sold in last 90 days'}
-              {timeRange === 'custom' && 'Total units sold in custom range'}
+              {timeRange === "1" && "Total units sold in last 1 day"}
+              {timeRange === "2" && "Total units sold in last 2 days"}
+              {timeRange === "7" && "Total units sold in last 7 days"}
+              {timeRange === "30" && "Total units sold in last 30 days"}
+              {timeRange === "90" && "Total units sold in last 90 days"}
+              {timeRange === "custom" && "Total units sold in custom range"}
             </p>
           </CardContent>
         </Card>
@@ -826,12 +929,15 @@ const Inventory: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             {/* Time Range Filter */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-              <Select value={timeRange} onValueChange={(value) => {
-                setTimeRange(value);
-                if (value !== 'custom') {
-                  setShowCustomDatePicker(false);
-                }
-              }}>
+              <Select
+                value={timeRange}
+                onValueChange={(value) => {
+                  setTimeRange(value);
+                  if (value !== "custom") {
+                    setShowCustomDatePicker(false);
+                  }
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-32">
                   <SelectValue placeholder="Time Range" />
                 </SelectTrigger>
@@ -847,7 +953,7 @@ const Inventory: React.FC = () => {
               </Select>
 
               {/* Custom Range Button */}
-              {timeRange === 'custom' && (
+              {timeRange === "custom" && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -865,8 +971,10 @@ const Inventory: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -884,7 +992,10 @@ const Inventory: React.FC = () => {
         </div>
 
         {/* Custom Date Range Dialog */}
-        <Dialog open={showCustomDatePicker} onOpenChange={setShowCustomDatePicker}>
+        <Dialog
+          open={showCustomDatePicker}
+          onOpenChange={setShowCustomDatePicker}
+        >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Select Custom Date Range</DialogTitle>
@@ -915,7 +1026,7 @@ const Inventory: React.FC = () => {
                   variant="outline"
                   onClick={() => {
                     setShowCustomDatePicker(false);
-                    setTimeRange('30'); // Reset to default
+                    setTimeRange("30"); // Reset to default
                   }}
                 >
                   Cancel
@@ -960,126 +1071,160 @@ const Inventory: React.FC = () => {
                   <TableHead
                     className="cursor-pointer"
                     onClick={() => {
-                      if (sortField === 'name') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      if (sortField === "name") {
+                        setSortDirection(
+                          sortDirection === "asc" ? "desc" : "asc"
+                        );
                       } else {
-                        setSortField('name');
-                        setSortDirection('asc');
+                        setSortField("name");
+                        setSortDirection("asc");
                       }
                     }}
                   >
                     <div className="flex items-center">
                       Product
-                      {sortField === 'name' && (
-                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
-                      )}
+                      {sortField === "name" &&
+                        (sortDirection === "asc" ? (
+                          <SortAsc className="h-4 w-4 ml-1" />
+                        ) : (
+                          <SortDesc className="h-4 w-4 ml-1" />
+                        ))}
                     </div>
                   </TableHead>
                   <TableHead
                     className="cursor-pointer"
                     onClick={() => {
-                      if (sortField === 'category') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      if (sortField === "category") {
+                        setSortDirection(
+                          sortDirection === "asc" ? "desc" : "asc"
+                        );
                       } else {
-                        setSortField('category');
-                        setSortDirection('asc');
+                        setSortField("category");
+                        setSortDirection("asc");
                       }
                     }}
                   >
                     <div className="flex items-center">
                       Category
-                      {sortField === 'category' && (
-                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
-                      )}
+                      {sortField === "category" &&
+                        (sortDirection === "asc" ? (
+                          <SortAsc className="h-4 w-4 ml-1" />
+                        ) : (
+                          <SortDesc className="h-4 w-4 ml-1" />
+                        ))}
                     </div>
                   </TableHead>
                   <TableHead
                     className="cursor-pointer"
                     onClick={() => {
-                      if (sortField === 'purchased_this_month') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      if (sortField === "purchased_this_month") {
+                        setSortDirection(
+                          sortDirection === "asc" ? "desc" : "asc"
+                        );
                       } else {
-                        setSortField('purchased_this_month');
-                        setSortDirection('desc');
+                        setSortField("purchased_this_month");
+                        setSortDirection("desc");
                       }
                     }}
                   >
                     <div className="flex items-center">
-                      {timeRange === '1' && 'Purchased (1 Day)'}
-                      {timeRange === '2' && 'Purchased (2 Days)'}
-                      {timeRange === '7' && 'Purchased (7 Days)'}
-                      {timeRange === '30' && 'Purchased (30 Days)'}
-                      {timeRange === '90' && 'Purchased (90 Days)'}
-                      {timeRange === 'custom' && 'Purchased (Custom)'}
-                      {sortField === 'purchased_this_month' && (
-                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
-                      )}
+                      {timeRange === "1" && "Purchased (1 Day)"}
+                      {timeRange === "2" && "Purchased (2 Days)"}
+                      {timeRange === "7" && "Purchased (7 Days)"}
+                      {timeRange === "30" && "Purchased (30 Days)"}
+                      {timeRange === "90" && "Purchased (90 Days)"}
+                      {timeRange === "custom" && "Purchased (Custom)"}
+                      {sortField === "purchased_this_month" &&
+                        (sortDirection === "asc" ? (
+                          <SortAsc className="h-4 w-4 ml-1" />
+                        ) : (
+                          <SortDesc className="h-4 w-4 ml-1" />
+                        ))}
                     </div>
                   </TableHead>
                   <TableHead
                     className="cursor-pointer"
                     onClick={() => {
-                      if (sortField === 'inventory') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      if (sortField === "inventory") {
+                        setSortDirection(
+                          sortDirection === "asc" ? "desc" : "asc"
+                        );
                       } else {
-                        setSortField('inventory');
-                        setSortDirection('desc');
+                        setSortField("inventory");
+                        setSortDirection("desc");
                       }
                     }}
                   >
                     <div className="flex items-center">
                       Current Stock
-                      {sortField === 'inventory' && (
-                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
-                      )}
+                      {sortField === "inventory" &&
+                        (sortDirection === "asc" ? (
+                          <SortAsc className="h-4 w-4 ml-1" />
+                        ) : (
+                          <SortDesc className="h-4 w-4 ml-1" />
+                        ))}
                     </div>
                   </TableHead>
                   <TableHead
                     className="cursor-pointer"
                     onClick={() => {
-                      if (sortField === 'sold_this_month') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      if (sortField === "sold_this_month") {
+                        setSortDirection(
+                          sortDirection === "asc" ? "desc" : "asc"
+                        );
                       } else {
-                        setSortField('sold_this_month');
-                        setSortDirection('desc');
+                        setSortField("sold_this_month");
+                        setSortDirection("desc");
                       }
                     }}
                   >
                     <div className="flex items-center">
-                      {timeRange === '1' && 'Sold (1 Day)'}
-                      {timeRange === '2' && 'Sold (2 Days)'}
-                      {timeRange === '7' && 'Sold (7 Days)'}
-                      {timeRange === '30' && 'Sold (30 Days)'}
-                      {timeRange === '90' && 'Sold (90 Days)'}
-                      {timeRange === 'custom' && 'Sold (Custom)'}
-                      {sortField === 'sold_this_month' && (
-                        sortDirection === 'asc' ? <SortAsc className="h-4 w-4 ml-1" /> : <SortDesc className="h-4 w-4 ml-1" />
-                      )}
+                      {timeRange === "1" && "Sold (1 Day)"}
+                      {timeRange === "2" && "Sold (2 Days)"}
+                      {timeRange === "7" && "Sold (7 Days)"}
+                      {timeRange === "30" && "Sold (30 Days)"}
+                      {timeRange === "90" && "Sold (90 Days)"}
+                      {timeRange === "custom" && "Sold (Custom)"}
+                      {sortField === "sold_this_month" &&
+                        (sortDirection === "asc" ? (
+                          <SortAsc className="h-4 w-4 ml-1" />
+                        ) : (
+                          <SortDesc className="h-4 w-4 ml-1" />
+                        ))}
                     </div>
                   </TableHead>
-
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {getFilteredAndSortedProducts().length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      {products.length === 0 ? 'No products found' : 'No products match the current filters'}
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-8 text-muted-foreground"
+                    >
+                      {products.length === 0
+                        ? "No products found"
+                        : "No products match the current filters"}
                     </TableCell>
                   </TableRow>
                 ) : (
                   getFilteredAndSortedProducts().map((product) => {
-                    const isLowStock = product.inventory <= product.min_stock_alert;
+                    const isLowStock =
+                      product.inventory <= product.min_stock_alert;
                     return (
                       <TableRow
                         key={product.id}
-                        className={`cursor-pointer hover:bg-muted/50 ${isLowStock ? 'bg-destructive/5' : ''}`}
-                        onClick={() => navigate('/admin/products')}
+                        className={`cursor-pointer hover:bg-muted/50 ${
+                          isLowStock ? "bg-destructive/5" : ""
+                        }`}
+                        onClick={() => navigate("/admin/products")}
                       >
                         <TableCell className="font-medium">
                           <div className="flex items-center space-x-2">
                             {product.name}
-                            {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                            {isLowStock && (
+                              <AlertTriangle className="h-4 w-4 text-destructive" />
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>{product.category}</TableCell>
@@ -1090,8 +1235,14 @@ const Inventory: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell className="flex items-center">
-                          {product.inventory < 200 ? <Box className="h-4 w-4 text-red-500 mr-1" /> : <Box className="h-4 w-4 text-green-500 mr-1" />}
-                          <Badge variant={isLowStock ? "destructive" : "secondary"}>
+                          {product.inventory < 200 ? (
+                            <Box className="h-4 w-4 text-red-500 mr-1" />
+                          ) : (
+                            <Box className="h-4 w-4 text-green-500 mr-1" />
+                          )}
+                          <Badge
+                            variant={isLowStock ? "destructive" : "secondary"}
+                          >
                             {product.inventory || 0} units
                           </Badge>
                         </TableCell>
