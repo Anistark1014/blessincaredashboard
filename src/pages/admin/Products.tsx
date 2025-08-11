@@ -49,6 +49,30 @@ interface ProductFormData {
 }
 
     const AdminProducts = () => {
+        // Listen for command palette events to open modals
+        useEffect(() => {
+            const handleOpenAdd = () => setIsAddModalOpen(true);
+            const handleOpenImport = () => {
+                const importBtn = document.querySelector('[data-command-import-btn]');
+                if (importBtn) (importBtn as HTMLElement).click();
+                else {
+                  const importSection = document.getElementById('import-products-section');
+                  if (importSection) importSection.scrollIntoView({ behavior: 'smooth' });
+                }
+            };
+            const handleOpenExport = () => {
+                const exportBtn = document.querySelector('[data-command-export-btn]');
+                if (exportBtn) (exportBtn as HTMLElement).click();
+            };
+            window.addEventListener('open-add-product-modal', handleOpenAdd);
+            window.addEventListener('open-import-product', handleOpenImport);
+            window.addEventListener('open-export-product', handleOpenExport);
+            return () => {
+                window.removeEventListener('open-add-product-modal', handleOpenAdd);
+                window.removeEventListener('open-import-product', handleOpenImport);
+                window.removeEventListener('open-export-product', handleOpenExport);
+            };
+        }, []);
         // Hide KPI/Graph state (default: hidden)
         const [hideKpi, setHideKpi] = useState(true);
 
@@ -621,7 +645,10 @@ return (
                                         />
                                     </DialogContent>
                                 </Dialog>
-                                <ProductExcelImport onDataParsed={handleBulkImport} products={products} />
+                                {/* Add a data attribute for command palette import trigger */}
+                                <div data-command-import-products>
+                                  <ProductExcelImport onDataParsed={handleBulkImport} products={products} />
+                                </div>
                             </div>
                         </div>
                     </CardContent>

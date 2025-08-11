@@ -16,6 +16,7 @@ import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import {AdminSettings} from '@/components/AdminSettings';
 
+
 const AdminDashboard = () => {
   const [requests, setRequests] = useState<any[]>([]);
   const [resellers, setResellers] = useState<any>([]);
@@ -128,29 +129,29 @@ const AdminDashboard = () => {
   );
 
 
-  // console.log("Requests", requests);
-  // console.log("Resellers", resellers);
+
 
   return (
-    <div className="space-y-6 fade-in-up">
+    <>
+    <div className="space-y-6 fade-in-up" tabIndex={-1} aria-label="Admin Dashboard Main Content">
       {/* Header */}
-      <div className="healthcare-card">
+      <div className="healthcare-card" role="region" aria-labelledby="dashboard-header">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+            <h1 id="dashboard-header" className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
             <p className="text-muted-foreground mt-1">
               Monitor your women&apos;s healthcare business performance
             </p>
           </div>
           <div className="flex md:flex-row flex-col gap-2">
             <Link to="/admin/products">
-              <Button variant="outline">
+            <Button variant="outline" aria-label="Manage Products (Alt+P)" tabIndex={0}>
                 <Package className="w-4 h-4 mr-2" />
                 Manage Products
               </Button>
             </Link>
             <Link to="/admin/resellers">
-              <Button className="btn-healthcare">
+              <Button className="btn-healthcare" aria-label="View Resellers (Alt+R)" tabIndex={0}>
                 <Users className="w-4 h-4 mr-2" />
                 View Resellers
               </Button>
@@ -161,9 +162,9 @@ const AdminDashboard = () => {
 
       {/* Alerts */}
       {(pendingRequests > 0 || resellersWithDues > 0 || lowStockProducts.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4" role="region" aria-label="Alerts">
           {pendingRequests > 0 && (
-            <Card className="border-warning/20 bg-warning/5">
+            <Card className="border-warning/20 bg-warning/5" role="alert" aria-live="polite">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <Calendar className="w-5 h-5 text-warning" />
@@ -177,7 +178,7 @@ const AdminDashboard = () => {
           )}
 
           {resellersWithDues > 0 && (
-            <Card className="border-error/20 bg-error/5">
+            <Card className="border-error/20 bg-error/5" role="alert" aria-live="polite">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <CreditCard className="w-5 h-5 text-error" />
@@ -191,7 +192,7 @@ const AdminDashboard = () => {
           )}
 
           {lowStockProducts.length > 0 && (
-            <Card className="border-warning/20 bg-warning/5">
+            <Card className="border-warning/20 bg-warning/5" role="alert" aria-live="polite">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-5 h-5 text-warning" />
@@ -207,21 +208,21 @@ const AdminDashboard = () => {
       )}
 
       {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" role="region" aria-label="Recent Activity">
         {/* Recent Requests */}
-        <Card className="healthcare-card">
+        <Card className="healthcare-card" role="region" aria-labelledby="recent-requests-header">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Recent Requests</CardTitle>
+              <CardTitle id="recent-requests-header">Recent Requests</CardTitle>
               <Link to="/admin/resellers">
-                <Button variant="ghost" size="sm">View All</Button>
+                <Button variant="ghost" size="sm" aria-label="View All Requests">View All</Button>
               </Link>
             </div>
             <CardDescription>Latest product requests from resellers</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {recentRequests.map((request) => (
-              <div key={request.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40">
+              <div key={request.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40 focus:outline focus:outline-2 focus:outline-primary" tabIndex={0} aria-label={`Request by ${resellers.find((reseller: any) => reseller.id === request.reseller_id)?.name || "Unknown"}`}> 
                 <div className="flex-1">
                   <p className="font-medium text-foreground">
                     {resellers.find((reseller: any) => reseller.id === request.reseller_id)?.name || "hello"}
@@ -237,6 +238,7 @@ const AdminDashboard = () => {
                         ? 'bg-green-200 text-green-800'
                         : 'bg-yellow-200 text-yellow-800'
                     }`}
+                    aria-label={`Status: ${request.status}`}
                   >
                     {request.status}
                   </Badge>
@@ -244,27 +246,29 @@ const AdminDashboard = () => {
                   <select
                     value={request.status}
                     onChange={(e) => handleStatusChange(request.id, e.target.value)}
-                    className="text-xs border border-border rounded px-2 py-1 mt-1 bg-background text-foreground"
+                    className="text-xs border border-border rounded px-2 py-1 mt-1 bg-background text-foreground focus:outline focus:outline-2 focus:outline-primary"
+                    aria-label="Change request status"
                   >
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
                   </select>
                 </div>
-
               </div>
             ))}
           </CardContent>
         </Card>
         
         <div className="flex flex-col justify-start items-start gap-2 w-full">
-            <AdminSettings/>
+            <button id="admin-settings-btn" aria-label="Open Admin Settings (Alt+/)" tabIndex={0} className="focus:outline focus:outline-2 focus:outline-primary">
+              <AdminSettings />
+            </button>
           {/* Inventory Alerts */}
-          <Card className="healthcare-card w-full">
+          <Card className="healthcare-card w-full" role="region" aria-labelledby="inventory-alerts-header">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Inventory Alerts</CardTitle>
+                <CardTitle id="inventory-alerts-header">Inventory Alerts</CardTitle>
                 <Link to="/admin/products">
-                  <Button variant="ghost" size="sm">Manage</Button>
+                  <Button variant="ghost" size="sm" aria-label="Manage Products">Manage</Button>
                 </Link>
               </div>
               <CardDescription>Products requiring attention</CardDescription>
@@ -272,7 +276,7 @@ const AdminDashboard = () => {
             <CardContent className="space-y-4">
               {lowStockProducts.length > 0 ? (
                 lowStockProducts.map((product) => (
-                  <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40">
+                  <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/40 focus:outline focus:outline-2 focus:outline-primary" tabIndex={0} aria-label={`Product ${product.name}, ${product.availability.replace('-', ' ')}`}> 
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{product.name}</p>
                       <p className="text-sm text-muted-foreground">{product.category}</p>
@@ -282,7 +286,7 @@ const AdminDashboard = () => {
                       product.availability === 'out-of-stock'
                         ? 'status-error'
                         : 'status-warning'
-                    }>
+                    } aria-label={product.availability.replace('-', ' ')}>
                       {product.availability.replace('-', ' ')}
                     </Badge>
                   </div>
@@ -298,6 +302,7 @@ const AdminDashboard = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

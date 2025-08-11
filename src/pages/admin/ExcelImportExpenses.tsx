@@ -31,21 +31,28 @@ const ExcelImportExpenses = ({ onDataParsed }: { onDataParsed: (data: any[]) => 
     e.target.value = ''; // Reset file input
   };
 
+  const handleButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
-        <Button asChild variant="outline" size="icon">
-          <label htmlFor="excel-upload" className="cursor-pointer inline-flex items-center justify-center">
-            <Download className="h-4 w-4" />
-            <input 
-              id="excel-upload" 
-              type="file" 
-              accept=".xlsx, .xls" 
-              className="hidden" 
-              onChange={handleFileChange} 
-              ref={fileInputRef}
-            />
-          </label>
+        <Button 
+          variant="outline" 
+          size="icon" 
+          data-command-import-btn
+          onClick={handleButtonClick}
+        >
+          <Download className="h-4 w-4" />
+          <input 
+            id="excel-upload" 
+            type="file" 
+            accept=".xlsx, .xls" 
+            className="hidden" 
+            onChange={handleFileChange} 
+            ref={fileInputRef}
+          />
         </Button>
       </TooltipTrigger>
       <TooltipContent><p>Import from Excel</p></TooltipContent>

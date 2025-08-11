@@ -225,6 +225,34 @@ const AdminExpenses: React.FC = () => {
       supabase.removeChannel(productsChannel);
     };
   }, [date]);
+
+  // Command palette event listeners
+  useEffect(() => {
+    const handleAddExpenseModal = () => {
+      setAddingNew(true);
+    };
+
+    const handleImportExpense = () => {
+      const importBtn = document.querySelector('[data-command-import-btn]') as HTMLElement;
+      if (importBtn) {
+        importBtn.click();
+      }
+    };
+
+    const handleExportExpense = () => {
+      handleExportToExcel();
+    };
+
+    window.addEventListener('open-add-expense-modal', handleAddExpenseModal);
+    window.addEventListener('open-import-expense', handleImportExpense);
+    window.addEventListener('open-export-expense', handleExportExpense);
+
+    return () => {
+      window.removeEventListener('open-add-expense-modal', handleAddExpenseModal);
+      window.removeEventListener('open-import-expense', handleImportExpense);
+      window.removeEventListener('open-export-expense', handleExportExpense);
+    };
+  }, []);
   useEffect(() => {
     const checkDarkMode = () =>
       setIsDarkMode(document.documentElement.classList.contains("dark"));
@@ -798,6 +826,7 @@ const AdminExpenses: React.FC = () => {
                           onClick={handleExportToExcel}
                           variant="outline"
                           size="icon"
+                          data-command-export-btn
                         >
                           <Upload className="h-4 w-4" />
                         </Button>

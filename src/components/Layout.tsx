@@ -1,3 +1,4 @@
+import { GlobalShortcuts } from './GlobalShortcuts';
 import { useState, useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -493,43 +494,46 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navItems = user?.role === 'admin' ? adminNavItems : resellerNavItems;
 
-  const useKeyboardPageNavigation = (navItems: any) => {
-    const location = useLocation();
-    const navigate = useNavigate();
+  // const useKeyboardPageNavigation = (navItems: any) => {
+  //   const location = useLocation();
+  //   const navigate = useNavigate();
 
-    useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (!e.ctrlKey) return;
+  //   useEffect(() => {
+  //     const handleKeyDown = (e: KeyboardEvent) => {
+  //       if (!e.ctrlKey) return;
 
-        const active = document.activeElement;
-        if (
-          active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement ||
-          active?.getAttribute('contenteditable') === 'true'
-        ) return;
+  //       // Prevent navigation if command palette is open
+  //       if (document.querySelector('[aria-label="Command Palette"]')) return;
 
-        const currentIndex = navItems.findIndex((item: any) => item.to === location.pathname);
-        if (currentIndex === -1) return;
+  //       const active = document.activeElement;
+  //       if (
+  //         active instanceof HTMLInputElement ||
+  //         active instanceof HTMLTextAreaElement ||
+  //         active?.getAttribute('contenteditable') === 'true'
+  //       ) return;
 
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          const nextIndex = (currentIndex + 1) % navItems.length;
-          navigate(navItems[nextIndex].to);
-        }
+  //       const currentIndex = navItems.findIndex((item: any) => item.to === location.pathname);
+  //       if (currentIndex === -1) return;
 
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
-          navigate(navItems[prevIndex].to);
-        }
-      };
+  //       if (e.key === 'ArrowDown') {
+  //         e.preventDefault();
+  //         const nextIndex = (currentIndex + 1) % navItems.length;
+  //         navigate(navItems[nextIndex].to);
+  //       }
 
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [navItems, location.pathname, navigate]);
-  };
+  //       if (e.key === 'ArrowUp') {
+  //         e.preventDefault();
+  //         const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
+  //         navigate(navItems[prevIndex].to);
+  //       }
+  //     };
 
-  useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavItems);
+  //     window.addEventListener('keydown', handleKeyDown);
+  //     return () => window.removeEventListener('keydown', handleKeyDown);
+  //   }, [navItems, location.pathname, navigate]);
+  // };
+
+  // useKeyboardPageNavigation(user?.role === 'admin' ? adminNavItems : resellerNavItems);
 
   // collapse when clicking outside
   useEffect(() => {
@@ -545,7 +549,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-lavender/5 to-blush/5">
+    <>
+      <GlobalShortcuts />
+      <div className="min-h-screen bg-gradient-to-br from-background via-lavender/5 to-blush/5">
       {/* Top Navigation */}
       <nav className="bg-card/80 backdrop-blur-sm border-b border-lavender/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -679,6 +685,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Mobile Bottom Navigation */}
       <MobileBottomNavigation navItems={navItems} />
     </div>
+    </>
   );
 };
 

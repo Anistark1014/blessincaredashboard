@@ -102,7 +102,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
       <TooltipProvider>
   <Tooltip delayDuration={0}> {/* <--- Add this prop */}
     <TooltipTrigger asChild>
-      <Button onClick={handleButtonClick} variant="outline" size="sm">
+      <Button onClick={handleButtonClick} variant="outline" size="sm" data-command-import-btn>
         <Download className="h-4 w-4" />
       </Button>
     </TooltipTrigger>

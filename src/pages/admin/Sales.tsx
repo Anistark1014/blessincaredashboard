@@ -549,6 +549,34 @@ const SalesTable: React.FC = () => {
     };
   }, [date]);
 
+  // Command palette event listeners
+  useEffect(() => {
+    const handleAddSaleModal = () => {
+      setAddingNew(true);
+    };
+
+    const handleImportSale = () => {
+      const importBtn = document.querySelector('[data-command-import-btn]') as HTMLElement;
+      if (importBtn) {
+        importBtn.click();
+      }
+    };
+
+    const handleExportSale = () => {
+      handleExportToExcel();
+    };
+
+    window.addEventListener('open-add-sale-modal', handleAddSaleModal);
+    window.addEventListener('open-import-sale', handleImportSale);
+    window.addEventListener('open-export-sale', handleExportSale);
+
+    return () => {
+      window.removeEventListener('open-add-sale-modal', handleAddSaleModal);
+      window.removeEventListener('open-import-sale', handleImportSale);
+      window.removeEventListener('open-export-sale', handleExportSale);
+    };
+  }, []);
+
   useEffect(() => {
     fetchDropdownData();
   }, []);
@@ -2741,6 +2769,7 @@ return (
                       onClick={handleExportToExcel}
                       variant="outline"
                       size="sm"
+                      data-command-export-btn
                     >
                       <Upload className="h-4 w-4" />
                     </Button>

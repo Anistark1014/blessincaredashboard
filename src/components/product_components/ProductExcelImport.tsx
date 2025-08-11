@@ -135,7 +135,7 @@ const ProductExcelImport: React.FC<ProductExcelImportProps> = ({ onDataParsed, p
         <div className="flex gap-2">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
-              <Button onClick={handleButtonClick} variant="ghost" size="icon" aria-label="Import Products">
+              <Button data-command-import-btn onClick={handleButtonClick} variant="ghost" size="icon" aria-label="Import Products">
                 <Download className="h-5 w-5" />
               </Button>
             </TooltipTrigger>
@@ -145,7 +145,7 @@ const ProductExcelImport: React.FC<ProductExcelImportProps> = ({ onDataParsed, p
           </Tooltip>
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
-              <Button onClick={handleExport} variant="ghost" size="icon" aria-label="Export Products">
+              <Button data-command-export-btn onClick={handleExport} variant="ghost" size="icon" aria-label="Export Products">
                 <Download className="h-5 w-5 rotate-180" />
               </Button>
             </TooltipTrigger>
