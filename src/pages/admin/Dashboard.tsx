@@ -128,8 +128,8 @@ const AdminDashboard = () => {
   );
 
 
-  console.log("Requests", requests);
-  console.log("Resellers", resellers);
+  // console.log("Requests", requests);
+  // console.log("Resellers", resellers);
 
   return (
     <div className="space-y-6 fade-in-up">
