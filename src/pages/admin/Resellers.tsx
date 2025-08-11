@@ -155,6 +155,23 @@ const TierIcon: React.FC<TierIconProps> = ({ svgName, tier }) => {
 };
 
 const AdminResellers: React.FC = () => {
+  // Product map for product_id -> product_name
+  const [productMap, setProductMap] = useState<Record<string, string>>({});
+
+  // Fetch all products on mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      const { data, error } = await supabase.from('products').select('id, name');
+      if (!error && data) {
+        const map: Record<string, string> = {};
+        data.forEach((prod: { id: string; name: string }) => {
+          map[prod.id] = prod.name;
+        });
+        setProductMap(map);
+      }
+    };
+    fetchProducts();
+  }, []);
   const [resellers, setResellers] = useState<Reseller[]>([]);
   const [selectedReseller, setSelectedReseller] = useState<Reseller | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -238,7 +255,7 @@ const AdminResellers: React.FC = () => {
   const fetchSalesByMemberId = useCallback(async (memberId: string): Promise<Sale[]> => {
     const { data, error } = await supabase
       .from('sales')
-      .select('*')
+      .select('*, product_id, qty') // Ensure product_id and qty are included
       .eq('member_id', memberId)
       .order('date', { ascending: false }); // Ensure consistent order
     if (error) {
@@ -250,7 +267,7 @@ const AdminResellers: React.FC = () => {
 
   const fetchClearanceByMemberId = useCallback(async (memberId: string): Promise<Clearance[]> => {
     const { data, error } = await supabase
-      .from('clearance')
+      .from('clearances')
       .select('*')
       .eq('member_id', memberId)
       .order('date', { ascending: false }); // Ensure consistent order
@@ -293,7 +310,7 @@ const AdminResellers: React.FC = () => {
           totalRevenue += clearanceData.reduce((sum, clearance) => sum + (clearance.paid_amount ?? 0), 0);
 
           const rewardPoints = Math.floor(RP / 5);
-          console.log(RP,rewardPoints)
+          // console.log(RP,rewardPoints);
 
           return {
             ...reseller,
@@ -401,7 +418,7 @@ useEffect(() => {
 
     let query = supabase
       .from('sales')
-      .select('date, total, paid')
+      .select('*,date, total, paid')
       .eq('member_id', resellerId);
 
     const now = new Date();
@@ -570,7 +587,7 @@ useEffect(() => {
 
     const handleAddResellerSubmit = async () => {
       const { name, email, phone, region, coverage,sub_region } = formData;
-      console.log('Form: ',formData);
+      // console.log('Form: ',formData);
       if (!name) {
         toast({
           title: "Missing Information",
@@ -965,7 +982,7 @@ const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const key = header.toLowerCase().replace(/\s/g, '_');
         reseller[key] = (row as any)[index];
       });
-      console.log(reseller)
+      // console.log(reseller)
       await handleAddResellerFromImport(reseller);
     }
 
@@ -1318,9 +1335,11 @@ onChange={handleImport}
                               </DialogHeader>
 
                               {selectedReseller && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
+                                <div
+                                  className="flex flex-col gap-6 py-4 md:grid md:grid-cols-3 md:gap-6 md:flex-row md:py-4 max-h-[80vh] overflow-y-auto"
+                                >
                                   {/* Left Column: Editable Information */}
-                                  <div className="md:col-span-1 space-y-4 border rounded-lg p-4 h-fit">
+                                  <div className="md:col-span-1 space-y-4 border rounded-lg p-4 h-fit bg-background min-w-0">
                                     <h3 className="text-lg font-semibold mb-2">Basic Information (Editable)</h3>
                                     <div>
                                       <Label htmlFor="reseller-name">Name</Label>
@@ -1389,12 +1408,12 @@ onChange={handleImport}
                                   </div>
 
                                   {/* Right Column: Financial & Performance (Chart first) */}
-                                  <div className="md:col-span-2 space-y-6">
+                                  <div className="md:col-span-2 flex flex-col gap-6 min-w-0">
                                     {/* Sales Performance Graph */}
-                                    <div className="space-y-4 border rounded-lg p-4">
+                                    <div className="space-y-4 border rounded-lg p-4 bg-background min-w-0">
                                       <h3 className="text-lg font-semibold mb-2">Sales Performance Graph</h3>
                                       <div className="flex flex-col gap-4 mb-4">
-                                        <div className="flex items-center flex-wrap gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                           <Button
                                             variant={timeRange === '7d' ? 'secondary' : 'outline'}
                                             size="sm"
@@ -1478,7 +1497,7 @@ onChange={handleImport}
                                     </div>
 
                                     {/* Non-Editable Information & Financial Summary */}
-                                    <div className="space-y-4 border rounded-lg p-4">
+                                    <div className="space-y-4 border rounded-lg p-4 bg-background min-w-0">
                                       <h3 className="text-lg font-semibold mb-2">Financial Summary & Other Details</h3>
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 truncate">
                                         <InfoItem label="Reseller ID" value={`${selectedReseller.name?.replace(/\s/g, '') || ''}-${selectedReseller.region?.replace(/\s/g, '') || ''}-${selectedReseller.id.slice(0, 4)}`} />
@@ -1497,10 +1516,9 @@ onChange={handleImport}
                                       </div>
                                     </div>
 
-
                                   </div>
                                     {/* Recent Sales Table (with Month/Year Filter) */}
-                                    <div className="space-y-4 border rounded-lg col-span-3 p-4">
+                                    <div className="col-span-3 space-y-4 border rounded-lg p-4 bg-background w-full">
                                         <h3 className="text-lg font-semibold mb-2">Recent Sales</h3>
                                         <div className="flex flex-wrap items-center gap-4 mb-4">
                                             <Label htmlFor="sales-month" className="min-w-[40px]">Month:</Label>
@@ -1538,6 +1556,9 @@ onChange={handleImport}
                                                     <TableHeader>
                                                         <TableRow>
                                                             <TableHead>Date</TableHead>
+                                                            <TableHead>Transaction Type</TableHead>
+                                                            <TableHead>Product</TableHead>
+                                                            <TableHead>QTY</TableHead>
                                                             <TableHead className="text-right">Payables</TableHead>
                                                             <TableHead className="text-right">Paid</TableHead>
                                                             <TableHead className="text-right">Outstanding</TableHead>
@@ -1546,24 +1567,50 @@ onChange={handleImport}
                                                     <TableBody>
                                                         {filteredResellerSalesForTable.length > 0 ? (
                                                             filteredResellerSalesForTable.map((sale) => {
-                                                                const total = typeof sale.total === 'number' ? sale.total : 0;
-                                                                const paid = typeof sale.paid === 'number' ? sale.paid : 0;
-                                                                // Outstanding should be taken from users table (due_balance field)
-                                                                const outstanding = typeof selectedReseller?.payment_amount_remaining === 'number' ? selectedReseller.payment_amount_remaining : 0;
-                                                                  return (
+                                                                // Debug logs for troubleshooting product name display
+                                                                // Type guards for Sale and Clearance
+                                                                const isClearance = sale.type === 'clearance' || sale.transaction_type === 'clearance';
+                                                                const isSale = !isClearance;
+                                                                let product = '-';
+                                                                let qty: string | number = '-';
+                                                                let payables = 0;
+                                                                let paid = 0;
+                                                                let outstanding: number | string = '-';
+                                                                if (isSale) {
+                                                                    if (sale.product_id && productMap[sale.product_id]) {
+                                                                        product = productMap[sale.product_id];
+                                                                    } else if (sale.product_id) {
+                                                                        product = sale.product_id;
+                                                                    } else {
+                                                                        product = '-';
+                                                                    }
+                                                                    qty = sale.qty;
+                                                                    payables = typeof sale.total === 'number' ? sale.total : 0;
+                                                                    paid = typeof sale.paid === 'number' ? sale.paid : 0;
+                                                                    outstanding = (typeof sale.total === 'number' && typeof sale.paid === 'number') ? (sale.total - sale.paid) : '-';
+                                                                } else if ('paid_amount' in sale && typeof sale.paid_amount === 'number') {
+                                                                    // Clearance
+                                                                    product = '-';
+                                                                    qty = '-';
+                                                                    payables = sale.paid_amount;
+                                                                    paid = sale.paid_amount;
+                                                                    outstanding = 0;
+                                                                }
+                                                                return (
                                                                     <TableRow key={sale.id}>
-                                                                        <TableCell><p>{new Date(sale.date).toLocaleDateString()}</p></TableCell>
-                                                                        <TableCell className="text-right">₹{total.toFixed(2)}</TableCell>
+                                                                        <TableCell><p>{sale.date ? new Date(sale.date).toLocaleDateString() : '-'}</p></TableCell>
+                                                                        <TableCell>{isClearance ? 'Clear' : 'Sale'}</TableCell>
+                                                                        <TableCell>{product}</TableCell>
+                                                                        <TableCell>{qty}</TableCell>
+                                                                        <TableCell className="text-right">₹{payables.toFixed(2)}</TableCell>
                                                                         <TableCell className="text-right">₹{paid.toFixed(2)}</TableCell>
-                                                                        <TableCell className="text-right">
-                                                                            ₹{outstanding.toFixed(2)}
-                                                                        </TableCell>
+                                                                        <TableCell className="text-right">₹{typeof outstanding === 'number' ? outstanding.toFixed(2) : '-'}</TableCell>
                                                                     </TableRow>
                                                                 );
                                                             })
                                                         ) : (
                                                             <TableRow>
-                                                                <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                                                <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
                                                                     No sales found for the selected month/year.
                                                                 </TableCell>
                                                             </TableRow>

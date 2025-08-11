@@ -927,7 +927,10 @@ const SalesTable: React.FC = () => {
                   name: rawRecord.products.name,
                   mrp: rawRecord.products.mrp,
                   sku_id: rawRecord.products.sku_id || undefined,
-                  price_ranges: rawRecord.products.price_ranges,
+                  price_ranges: typeof rawRecord.products.price_ranges === "string"
+                    ? JSON.parse(rawRecord.products.price_ranges)
+                    : rawRecord.products.price_ranges,
+                  inventory: rawRecord.products.inventory ?? null,
                 }
               : null,
         };
@@ -2409,7 +2412,7 @@ const SalesTable: React.FC = () => {
         .insert(
           recordsToInsert.map((record) => ({
             ...record,
-            date: new Date(record.date),
+            date: typeof record.date === "string" ? record.date : new Date(record.date).toISOString(),
           }))
         )
         .select("*, users(*), products(*)");
