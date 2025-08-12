@@ -494,7 +494,7 @@ const Inventory: React.FC = () => {
       const stockValue = products.reduce((totalValue, product) => {
         const inventory = Number(product.inventory) || 0;
         let averagePrice = product.price || 0;
-        if (product.price_ranges && Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
+        if (Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
           const totalPrice = product.price_ranges.reduce(
             (sum, range) => sum + range.price,
             0

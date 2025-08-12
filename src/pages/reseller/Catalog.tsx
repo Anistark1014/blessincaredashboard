@@ -31,7 +31,7 @@ const ProductCatalog = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  // Removed unused categoryFilter
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [selectedProductQuantities, setSelectedProductQuantities] = useState<Map<string, number>>(new Map());
@@ -43,7 +43,19 @@ const ProductCatalog = () => {
       if (error) {
         console.error('Error fetching products:', error);
       } else {
-        setProducts(data as Product[]);
+        // Convert price_ranges to PriceRange[] if possible
+        const safeProducts = (data || []).map((prod) => ({
+          ...prod,
+          description: prod.description ?? undefined,
+          category: prod.category ?? undefined,
+          availability: prod.availability ?? undefined,
+          created_at: prod.created_at ?? undefined,
+          image_url: prod.image_url ?? undefined,
+          price_ranges: Array.isArray(prod.price_ranges)
+            ? (prod.price_ranges as unknown as PriceRange[])
+            : undefined,
+        }));
+        setProducts(safeProducts as Product[]);
       }
       setLoading(false);
     };
@@ -132,14 +144,14 @@ const ProductCatalog = () => {
       if (requestError) throw requestError;
 
       const itemsToInsert = products
-  .filter((p) => selectedProducts.has(p.id))
+  .filter((p) => p.id && selectedProducts.has(p.id!))
   .map((p) => {
-    const quantity = selectedProductQuantities.get(p.id) || 1;
+    const quantity = selectedProductQuantities.get(p.id!) || 1;
 
     // Determine the correct price based on quantity
-    const matchingRange = p.price_ranges?.find(
-      (range) => quantity >= range.min && quantity <= range.max
-    );
+    const matchingRange = Array.isArray(p.price_ranges)
+      ? p.price_ranges.find((range) => quantity >= range.min && quantity <= range.max)
+      : undefined;
 
     const price = matchingRange ? matchingRange.price : 0;
 
@@ -278,8 +290,8 @@ const { error: itemsError } = await supabase
                   </div>
 
                   <div className="pt-2 border-t border-border/40 space-y-1">
-                    {product.price_ranges?.length! > 0 ? (
-                      product.price_ranges!.map((range, idx) => (
+                    {Array.isArray(product.price_ranges) && product.price_ranges.length > 0 ? (
+                      product.price_ranges.map((range, idx) => (
                         <div
                           key={idx}
                           className="flex justify-between items-center text-sm text-muted-foreground"
@@ -346,7 +358,6 @@ const { error: itemsError } = await supabase
               variant="outline"
               onClick={() => {
                 setSearchTerm('');
-                setCategoryFilter('all');
                 setAvailabilityFilter('all');
               }}
             >
