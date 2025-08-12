@@ -395,10 +395,51 @@ const AdminResellers: React.FC = () => {
       )
       .subscribe();
 
+    // Add event listeners for command palette import/export actions
+    const handleExportResellers = () => {
+      console.log('🚀 Export Resellers command received from command palette');
+      handleExport();
+    };
+
+    const handleImportResellers = () => {
+      console.log('🚀 Import Resellers command received from command palette');
+      // Trigger the file input click
+      const fileInput = document.getElementById('import-file') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.click();
+      }
+    };
+
+    const handleAddNewReseller = () => {
+      console.log('🚀 Add New Reseller command received from command palette');
+      // Find and click the Add Reseller button
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const addResellerBtn = buttons.find(btn => 
+        btn.textContent?.trim() === '+ Add Reseller' ||
+        btn.textContent?.includes('Add Reseller')
+      );
+      
+      if (addResellerBtn) {
+        console.log('✅ Clicking Add Reseller button from event');
+        (addResellerBtn as HTMLElement).click();
+      } else {
+        console.log('❌ Add Reseller button not found via event');
+      }
+    };
+
+    // Listen for command palette events
+    window.addEventListener('open-export-reseller', handleExportResellers);
+    window.addEventListener('open-import-reseller', handleImportResellers);
+    window.addEventListener('open-add-reseller', handleAddNewReseller);
+
     return () => {
       subscription.unsubscribe();
       salesSubscription.unsubscribe();
       clearanceSubscription.unsubscribe();
+      // Remove command palette event listeners
+      window.removeEventListener('open-export-reseller', handleExportResellers);
+      window.removeEventListener('open-import-reseller', handleImportResellers);
+      window.removeEventListener('open-add-reseller', handleAddNewReseller);
     };
   }, [fetchResellers, selectedReseller]); // Added selectedReseller and fetchResellers to dependency array for clarity and correctness
 

@@ -259,9 +259,9 @@ const AdminDashboard = () => {
         </Card>
         
         <div className="flex flex-col justify-start items-start gap-2 w-full">
-            <button id="admin-settings-btn" aria-label="Open Admin Settings (Alt+/)" tabIndex={0} className="focus:outline focus:outline-2 focus:outline-primary">
+            <div id="admin-settings-section" className="w-full">
               <AdminSettings />
-            </button>
+            </div>
           {/* Inventory Alerts */}
           <Card className="healthcare-card w-full" role="region" aria-labelledby="inventory-alerts-header">
             <CardHeader>
