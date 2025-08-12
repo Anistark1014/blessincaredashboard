@@ -545,33 +545,42 @@ interface ProductFormData {
 return (
 
     <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
-      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <Box className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-          <div>
-              <h1 className="text-3xl font-bold text-foreground">Product Management</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your healthcare products portfolio, including adding, editing, and deleting products. 
-              </p>
+      <div className="healthcare-card fade-in-up flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Box className="h-12 w-12 sm:h-14 sm:w-14 text-primary flex-shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="text-lg sm:text-xl font-bold text-foreground leading-tight truncate">Product Management</span>
+            <span className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-snug truncate max-w-[220px] sm:max-w-none">Manage your healthcare products portfolio, including adding, editing, and deleting products.</span>
           </div>
         </div>
-        <div className="flex gap-2 mt-4 sm:mt-0">
-          {/* Add Product Button */}
-        <Button
-            className="btn-healthcare flex items-center gap-2"
-            size="sm"
-            variant="ghost"
-            aria-label="Add Product"
-            onClick={() => setIsAddModalOpen(true)}
-        >
-            <Plus className="w-5 h-5" />
-            <span className="hidden sm:inline">Add Product</span>
-        </Button>
-          {/* Hide KPI/Graph Button */}
+        <div className="flex flex-row gap-2 items-center mt-2 sm:mt-0 w-full sm:w-auto justify-start sm:justify-end">
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+            <DialogTrigger asChild>
+              <Button
+                className="min-w-[85%] max-w-[90%] px-4 py-2 text-sm font-semibold"
+                variant="default"
+              >
+                + Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Add New Product</DialogTitle>
+                <DialogDescription>Fill in the product details and submit to add a new product to the system.</DialogDescription>
+              </DialogHeader>
+              <ProductForm
+                formData={formData}
+                setFormData={setFormData}
+                onSubmit={handleAddProduct}
+                onCancel={handleAddCancel}
+              />
+            </DialogContent>
+          </Dialog>
           <button
             title={hideKpi ? 'Show KPI & Graph' : 'Hide KPI & Graph'}
             onClick={() => setHideKpi(!hideKpi)}
-            className="duration-300"
+            className="duration-300 sm:max-w-[20%] flex items-center justify-center rounded-md p-2 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={hideKpi ? 'Show KPI & Graph' : 'Hide KPI & Graph'}
           >
             {hideKpi ? (
               <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />

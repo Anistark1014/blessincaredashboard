@@ -375,6 +375,17 @@ export function GlobalShortcuts() {
           window.dispatchEvent(new Event('open-import-reseller'));
         }
       }},
+      { label: 'Import Rewards', action: () => {
+        if (window.location.pathname !== '/admin/rewards') {
+          navigate('/admin/rewards');
+          setTimeout(() => {
+            console.log('Dispatching import rewards event');
+            window.dispatchEvent(new Event('open-import-reward'));
+          }, 500);
+        } else {
+          window.dispatchEvent(new Event('open-import-reward'));
+        }
+      }},
     ],
     'Export Data': [
       { label: 'Export Products', action: () => {
@@ -419,6 +430,17 @@ export function GlobalShortcuts() {
           }, 1000); // Increased timeout
         } else {
           window.dispatchEvent(new Event('open-export-reseller'));
+        }
+      }},
+      { label: 'Export Rewards', action: () => {
+        if (window.location.pathname !== '/admin/rewards') {
+          navigate('/admin/rewards');
+          setTimeout(() => {
+            console.log('Dispatching export rewards event');
+            window.dispatchEvent(new Event('open-export-reward'));
+          }, 500);
+        } else {
+          window.dispatchEvent(new Event('open-export-reward'));
         }
       }},
     ],

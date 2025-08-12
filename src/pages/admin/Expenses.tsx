@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
+
 import { useToast } from "@/hooks/use-toast";
 import { format, subMonths, subYears, addDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import * as XLSX from "xlsx";
 import ExcelImportExpenses from "./ExcelImportExpenses";
 import ExpenseKPICards from "./ExpensesKpi"; // Import the separated KPI component
+import {ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 
 // UI & Icons
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,24 +106,34 @@ const formatCurrency = (amount: number) =>
   );
 
 const getSelectStyles = (isDark: boolean) => ({
-  control: (p: any) => ({
-    ...p,
+  control: (provided: any) => ({
+    ...provided,
     backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
     borderColor: isDark ? "#4B5563" : "#D1D5DB",
   }),
-  menu: (p: any) => ({ ...p, backgroundColor: isDark ? "#1F2937" : "#FFFFFF" }),
-  option: (p: any, s: any) => ({
-    ...p,
-    backgroundColor: s.isSelected
+  menu: (provided: any) => ({
+    ...provided,
+    backgroundColor: isDark ? "#1F2937" : "#FFFFFF",
+  }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: state.isSelected
       ? "#3B82F6"
-      : s.isFocused
+      : state.isFocused
       ? isDark
         ? "#374151"
         : "#F3F4F6"
       : "transparent",
-    color: s.isSelected ? "#FFFFFF" : isDark ? "#F9FAFB" : "#111827",
+    color: isDark ? "#F9FAFB" : "#111827",
   }),
-  singleValue: (p: any) => ({ ...p, color: isDark ? "#F9FAFB" : "#111827" }),
+  singleValue: (provided: any) => ({
+    ...provided,
+    color: isDark ? "#F9FAFB" : "#111827",
+  }),
+  placeholder: (provided: any) => ({
+    ...provided,
+    color: isDark ? "#9CA3AF" : "#6B7280",
+  }),
 });
 
 // --- MAIN COMPONENT ---
@@ -155,6 +167,7 @@ const AdminExpenses: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const { toast } = useToast();
   const [isPopoverOpen, setPopoverOpen] = useState(false);
+  const [hideKpi, setHideKpi] = useState(true);
 
   // --- DATA FETCHING & SIDE EFFECTS ---
 
@@ -786,17 +799,55 @@ const AdminExpenses: React.FC = () => {
             </p>
           </div>
         </div>
+        {/* Add Expense & KPI Button Here */}
+        <div className="flex flex-row gap-2 items-center mt-2 sm:mt-0 w-full sm:w-auto justify-start sm:justify-end">
+          <Button
+            // variant="solid"
+            size="lg"
+            // className="min-w-[85%] max-w-[90%] px-4 py-2 text-sm font-semibold"
+                // variant="default"
+            onClick={() => setAddingNew(true)}
+            disabled={addingNew}
+                className="min-w-[85%] max-w-[90%] px-4 py-2 text-sm font-semibold"
+                variant="default"
+              >
+                + Add Expense
+              </Button>
+          {/* <Button
+            variant="solid"
+            size="lg"
+            className="bg-primary text-white rounded-md px-4 py-2"
+            onClick={() => setHideKpi(!hideKpi)}
+          >
+            {hideKpi ? "Expand KPI" : "Collapse KPI"}
+          </Button> */}
+
+                    <button
+            title={hideKpi ? 'Show KPI & Graph' : 'Hide KPI & Graph'}
+           onClick={() => setHideKpi(!hideKpi)}
+            className="duration-300 sm:max-w-[20%] flex items-center justify-center rounded-md p-2 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={hideKpi ? 'Show KPI & Graph' : 'Hide KPI & Graph'}
+          >
+            {hideKpi ? (
+              <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />
+            ) : (
+              <ArrowUpCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />
+            )}
+          </button>
+        </div>
       </div>
       <div className="space-y-6">
         <TooltipProvider>
           <div className="p-4 md:p-1 space-y-6">
             {/* KPI Section - Now using the separated component */}
-            <ExpenseKPICards
-              expenses={sortedExpenses.map((e) => ({
-                ...e,
-                description: e.description ?? "",
-              }))}
-            />
+            {!hideKpi && (
+              <ExpenseKPICards
+                expenses={sortedExpenses.map((e) => ({
+                  ...e,
+                  description: e.description ?? "",
+                }))}
+              />
+            )}
 
             {/* Main Table Card */}
             <Card>
@@ -804,51 +855,21 @@ const AdminExpenses: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <CardTitle>Expense Records</CardTitle>
                   <div className="flex items-center gap-2">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleUndo}
-                          variant="outline"
-                          size="icon"
-                          disabled={undoStack.length === 0}
-                        >
-                          <Undo className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Undo</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <ExcelImportExpenses onDataParsed={handleImportedData} />
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleExportToExcel}
-                          variant="outline"
-                          size="icon"
-                          data-command-export-btn
-                        >
-                          <Upload className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Export</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          onClick={() => setAddingNew(true)}
-                          disabled={addingNew}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Add new</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAddingNew(true)}
+                      disabled={addingNew}
+                    >
+                      Add Expense
+                    </Button>
+                    {/* <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setHideKpi(!hideKpi)}
+                    >
+                      {hideKpi ? "Expand KPI" : "Collapse KPI"}
+                    </Button> */}
                   </div>
                 </div>
                 <div className="flex flex-col md:flex-row items-center gap-2 mt-4">

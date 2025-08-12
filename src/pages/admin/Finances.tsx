@@ -739,22 +739,18 @@ const Finance = () => {
 
 
   return (
-    <div>
-      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-        <div className="healthcare-card fade-in-up flex flex-col gap-4">
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-      {/* Title */}
-      <div className="flex items-center gap-3">
-        <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Finance Management</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            Manage investments, loans, and financial transactions efficiently.
-          </p>
+
+    
+    <div  className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 "  >
+      <div className="healthcare-card fade-in-up flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Users className="h-12 w-12 sm:h-14 sm:w-14 text-primary flex-shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="text-lg sm:text-xl font-bold text-foreground leading-tight truncate">Finance Management</span>
+            <span className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-snug truncate max-w-[220px] sm:max-w-none">Manage investments, loans, and financial transactions efficiently.</span>
+          </div>
         </div>
-      </div>
-      {/* Calendar & KPI Toggle */}
-      <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-end">
         <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -929,15 +925,14 @@ const Finance = () => {
             </PopoverContent>
           </Popover>
           {displayDate && (
-            <span className="text-muted-foreground text-sm">{displayDate}</span>
+            <span className="text-muted-foreground text-sm"></span>
           )}
           <button title={hideKpi ? "Show KPI" : "Hide KPI"} onClick={() => setHideKpi(!hideKpi)} className="ml-auto duration-300">{hideKpi ? <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" /> : <ArrowUpCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />}</button>
 
         </div>
+      </div>
 
-      </div>
-        </div>
-      </div>
+
 
     <div className="space-y-6">
 

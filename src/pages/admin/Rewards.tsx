@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Tables } from '@/types/supabase';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Edit, Trash2, Gift, Gem, Sparkles, Diamond, Award, Trophy, Link, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit, Trash2, Gift, Link, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-// import { v4 as uuidv4 } from 'uuid';
+import RewardExcelImport from '@/components/reward_components/RewardExcelImport';
+import { v4 as uuidv4 } from 'uuid';
 
 // Assuming you have a types file for Supabase tables
 type Reward = Tables<'rewards'>;
@@ -40,20 +41,20 @@ interface RewardFormProps {
 }
 
 // Tier information function (same as provided)
-const getTierInfo = (totalSold: number): { tier: string; svg: string } => {
-    if (totalSold < 1000) return { tier: "Base", svg: "Base" };
-    if (totalSold < 2000) return { tier: "Bronze", svg: "Bronze" };
-    if (totalSold < 4000) return { tier: "Silver I", svg: "Silver" };
-    if (totalSold < 6000) return { tier: "Silver II", svg: "Silver" };
-    if (totalSold < 10000) return { tier: "Silver III", svg: "Silver" };
-    if (totalSold < 15000) return { tier: "Gold I", svg: "Gold" };
-    if (totalSold < 20000) return { tier: "Gold II", svg: "Gold" };
-    if (totalSold < 26000) return { tier: "Gold III", svg: "Gold" };
-    if (totalSold < 32000) return { tier: "Crystal I", svg: "Crystal" };
-    if (totalSold < 38000) return { tier: "Crystal II", svg: "Crystal" };
-    if (totalSold < 45000) return { tier: "Crystal III", svg: "Crystal" };
-    return { tier: "Diamond", svg: "Diamond" };
-};
+// const getTierInfo = (totalSold: number): { tier: string; svg: string } => {
+//     if (totalSold < 1000) return { tier: "Base", svg: "Base" };
+//     if (totalSold < 2000) return { tier: "Bronze", svg: "Bronze" };
+//     if (totalSold < 4000) return { tier: "Silver I", svg: "Silver" };
+//     if (totalSold < 6000) return { tier: "Silver II", svg: "Silver" };
+//     if (totalSold < 10000) return { tier: "Silver III", svg: "Silver" };
+//     if (totalSold < 15000) return { tier: "Gold I", svg: "Gold" };
+//     if (totalSold < 20000) return { tier: "Gold II", svg: "Gold" };
+//     if (totalSold < 26000) return { tier: "Gold III", svg: "Gold" };
+//     if (totalSold < 32000) return { tier: "Crystal I", svg: "Crystal" };
+//     if (totalSold < 38000) return { tier: "Crystal II", svg: "Crystal" };
+//     if (totalSold < 45000) return { tier: "Crystal III", svg: "Crystal" };
+//     return { tier: "Diamond", svg: "Diamond" };
+// };
 
 const tierOrder = ["Base", "Bronze", "Silver", "Gold", "Crystal", "Diamond"];
 const allTiers = [
@@ -173,6 +174,17 @@ const RewardForm: React.FC<RewardFormProps> = ({ onSubmit, onCancel, isEdit = fa
                             setImageFile(file);
                         }}
                     />
+                    <div className="text-center text-muted-foreground text-sm">OR</div>
+                    <Input
+                        id="image_url"
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        value={formData.image_url || ''}
+                        onChange={(e) => setFormData({ ...formData, image_url: e.target.value || null })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Upload a file or provide an image URL. URL will be used if both are provided.
+                    </p>
                     {previewUrl ? (
                         <div className="border border-input rounded-md p-2 mt-2">
                             <p className="text-sm text-muted-foreground mb-2">Image Preview</p>
@@ -250,6 +262,57 @@ const Rewards = () => {
 
     const { toast } = useToast();
 
+    const handleBulkImport = async (importedData: any[]) => {
+        if (!importedData || importedData.length === 0) {
+            toast({
+                title: "Error",
+                description: "No data found in the imported file.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const rewardData of importedData) {
+            try {
+                // Validate required fields
+                if (!rewardData.title || !rewardData.description) {
+                    errorCount++;
+                    continue;
+                }
+
+                let imageUrl = rewardData.image_url;
+                
+                // If image_url is provided, use it directly (no need to upload)
+                // The user can provide direct image URLs now
+                
+                const { error } = await supabase.from('rewards').insert([{
+                    tier: rewardData.tier || 'Base',
+                    title: rewardData.title,
+                    description: rewardData.description,
+                    points_required: rewardData.points_required || 0,
+                    is_active: rewardData.is_active ?? true,
+                    link: rewardData.link || null,
+                    image_url: imageUrl || null,
+                }]);
+
+                if (error) throw error;
+                successCount++;
+            } catch (error) {
+                console.error('Error importing reward:', error);
+                errorCount++;
+            }
+        }
+
+        toast({
+            title: "Import Complete",
+            description: `Successfully imported ${successCount} rewards. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
+            variant: successCount > 0 ? "default" : "destructive"
+        });
+    };
+
     const uploadImage = useCallback(async (file: File): Promise<string | null> => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExt}`;
@@ -296,8 +359,26 @@ const Rewards = () => {
             )
             .subscribe();
 
+        // Add event listeners for command palette import/export actions
+        const handleExportRewards = () => {
+            console.log('🚀 Export Rewards command received from command palette');
+            const exportBtn = document.querySelector('[data-command-export-btn]');
+            if (exportBtn) (exportBtn as HTMLElement).click();
+        };
+
+        const handleImportRewards = () => {
+            console.log('🚀 Import Rewards command received from command palette');
+            const importBtn = document.querySelector('[data-command-import-btn]');
+            if (importBtn) (importBtn as HTMLElement).click();
+        };
+
+        window.addEventListener('open-export-reward', handleExportRewards);
+        window.addEventListener('open-import-reward', handleImportRewards);
+
         return () => {
             supabase.removeChannel(channel);
+            window.removeEventListener('open-export-reward', handleExportRewards);
+            window.removeEventListener('open-import-reward', handleImportRewards);
         };
     }, []);
 
@@ -333,7 +414,9 @@ const Rewards = () => {
         }
 
         let imageUrl = formData.image_url;
-        if (imageFile) {
+        
+        // Only upload file if no image_url is provided and a file is selected
+        if (!imageUrl && imageFile) {
             const uploadedUrl = await uploadImage(imageFile);
             if (!uploadedUrl) return;
             imageUrl = uploadedUrl;
@@ -371,7 +454,9 @@ const Rewards = () => {
         }
 
         let imageUrl = formData.image_url;
-        if (imageFile) {
+        
+        // Only upload file if no image_url is provided and a file is selected
+        if (!imageUrl && imageFile) {
             const uploadedUrl = await uploadImage(imageFile);
             if (!uploadedUrl) return;
             imageUrl = uploadedUrl;
@@ -430,7 +515,7 @@ const Rewards = () => {
             title: reward.title,
             description: reward.description,
             points_required: reward.points_required,
-            is_active: reward.is_active,
+            is_active: reward.is_active ?? true,
             link: reward.link,
             image_url: reward.image_url,
         });
@@ -488,27 +573,30 @@ const Rewards = () => {
                             Create and manage rewards for different loyalty tiers.
                         </p>
                     </div>
-                    <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="btn-healthcare">
-                                <Plus className="w-4 h-4 mr-2" />
-                                Add New Reward
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                                <DialogTitle>Add New Reward</DialogTitle>
-                            </DialogHeader>
-                            <RewardForm
-                                onSubmit={handleAddReward}
-                                onCancel={handleAddCancel}
-                                formData={formData}
-                                setFormData={setFormData}
-                                imageFile={imageFile}
-                                setImageFile={setImageFile}
-                            />
-                        </DialogContent>
-                    </Dialog>
+                    <div className="flex gap-2 items-center">
+                        <RewardExcelImport onDataParsed={handleBulkImport} rewards={rewards} />
+                        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                            <DialogTrigger asChild>
+                                <Button className="btn-healthcare">
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add New Reward
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                    <DialogTitle>Add New Reward</DialogTitle>
+                                </DialogHeader>
+                                <RewardForm
+                                    onSubmit={handleAddReward}
+                                    onCancel={handleAddCancel}
+                                    formData={formData}
+                                    setFormData={setFormData}
+                                    imageFile={imageFile}
+                                    setImageFile={setImageFile}
+                                />
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </div>
             </div>
 

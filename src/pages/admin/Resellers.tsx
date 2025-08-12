@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle, Upload, Download, HandCoins } from 'lucide-react';
+import { Eye, Search, Users, UserCheck, CheckCircle2, XCircle, Upload, Download, HandCoins, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -177,6 +177,7 @@ const AdminResellers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [hideKpi, setHideKpi] = useState(true);
 
   // Sorting state for the main table
   const [sortKey, setSortKey] = useState<keyof Reseller | null>('name'); // Default to 'name'
@@ -1082,34 +1083,51 @@ const getMonthOptions = () => {
 return (
 
     <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
-      <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-          <div>
-              <h1 className="text-3xl font-bold text-foreground">Reseller  Management</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your Reseller Network, track performance, and optimize your reseller relationships.
-              </p>
+
+      
+      <div className="healthcare-card fade-in-up flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Users className="h-12 w-12 sm:h-14 sm:w-14 text-primary flex-shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="text-lg sm:text-xl font-bold text-foreground leading-tight truncate">Reseller Management</span>
+            <span className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-snug truncate max-w-[220px] sm:max-w-none">Manage your Reseller Network, track performance, and optimize your reseller relationships.</span>
           </div>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="w-full md:w-auto">+ Add Reseller</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Reseller</DialogTitle>
-            </DialogHeader>
-            <AddResellerForm onClose={() => setDetailsOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex flex-row gap-2 items-center mt-2 sm:mt-0 w-full sm:w-auto justify-start sm:justify-end">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="min-w-[85%] max-w-[90%] px-4 py-2 text-sm font-semibold"
+              variant="default">
+                + Add Reseller
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add New Reseller</DialogTitle>
+              </DialogHeader>
+              <AddResellerForm onClose={() => setDetailsOpen(false)} />
+            </DialogContent>
+          </Dialog>
+                    <button
+                      title={hideKpi ? 'Show KPIs' : 'Hide KPIs'}
+                      onClick={() => setHideKpi(!hideKpi)}
+                      className="duration-300 sm:max-w-[20%] flex items-center justify-center rounded-md p-2 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      aria-label={hideKpi ? 'Show KPIs' : 'Hide KPIs'}
+                    >
+                      {hideKpi ? (
+                        <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />
+                      ) : (
+                        <ArrowUpCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />
+                      )}
+                    </button>
+        </div>
       </div>
       <div className="space-y-6">
         
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={`${hideKpi ? 'hidden' : ''} grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6`}>
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Resellers</CardTitle>

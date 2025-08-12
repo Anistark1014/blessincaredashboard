@@ -2519,15 +2519,15 @@ const SalesTable: React.FC = () => {
 
 return (
 
-      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
-        <div className="healthcare-card fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-  <div className="flex items-center space-x-3">
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6 ">
+      <div className="healthcare-card fade-in-up flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4">
+        <div className="flex items-center gap-3 min-w-0">
     <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-    <div>
-      <h1 className="text-3xl font-bold text-foreground">Sales Management</h1>
-      <p className="text-muted-foreground mt-1">
-        Manage your sales transactions, track payments, and analyze performance.
-      </p>
+              <div className="flex flex-col min-w-0">
+            <span className="text-lg sm:text-xl font-bold text-foreground leading-tight truncate">Sales Management</span>
+            <span className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-snug truncate max-w-[220px] sm:max-w-none">Manage your sales transactions, track payments, and analyze performance.</span>
+          </div>
+          <div>
     </div>
   </div>
   
@@ -2556,12 +2556,12 @@ return (
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
               <CardTitle className="text-2xl">Transaction Records</CardTitle>
-              {displayDate && (
+              {/* {displayDate && (
                 <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
                   <CalendarIcon className="h-4 w-4" />
                   <span className="font-semibold">{displayDate}</span>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
