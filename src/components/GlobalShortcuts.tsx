@@ -15,6 +15,12 @@ const adminNavItems = [
 ];
 
 export function GlobalShortcuts() {
+  // Listen for custom event to open the command palette (from button)
+  useEffect(() => {
+    const handler = () => setShowCommandPalette(true);
+    window.addEventListener('open-global-command-palette', handler);
+    return () => window.removeEventListener('open-global-command-palette', handler);
+  }, []);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const [commandIndex, setCommandIndex] = useState(0);
@@ -928,7 +934,17 @@ export function GlobalShortcuts() {
   // Command Palette Modal
   return showCommandPalette ? (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-background rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl border border-border" tabIndex={0} aria-label="Command Palette">
+      <div className="bg-background rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl border border-border relative" tabIndex={0} aria-label="Command Palette">
+        {/* Close (X) button */}
+        <button
+          onClick={() => setShowCommandPalette(false)}
+          aria-label="Close Command Palette"
+          className="absolute top-3 right-3 p-2 rounded hover:bg-muted focus:outline-none"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
         <h2 className="text-xl font-bold mb-4 text-foreground">Command Palette</h2>
         <input
           ref={inputRef}
@@ -951,18 +967,12 @@ export function GlobalShortcuts() {
             } else if (e.key === 'Enter') {
               e.preventDefault();
               if (flattenedForNavigation[commandIndex]) {
-                // console.log('Enter pressed for command:', flattenedForNavigation[commandIndex].label);
                 try {
                   flattenedForNavigation[commandIndex].action();
-                //   console.log('Action executed successfully via Enter');
-                } catch (error) {
-                //   console.error('Error executing action via Enter:', error);
-                }
+                } catch (error) {}
                 setShowCommandPalette(false);
                 setCommandQuery('');
                 setCommandIndex(0);
-              } else {
-                // console.log('No command selected at index:', commandIndex);
               }
             }
           }}

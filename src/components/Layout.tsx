@@ -1,3 +1,180 @@
+// (Removed DesktopCommandPaletteModal, will use MobileCommandPaletteModal for both platforms)
+import React from 'react';
+// Simple Mobile Command Palette Modal with Options
+const MobileCommandPaletteModal = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  if (!open) return null;
+  // All possible options for mobile command palette
+  let options: { label: string; icon: React.ReactNode; action: () => void }[] = [];
+  // Helper for haptic feedback
+  const vibrate = () => {
+    if (typeof window !== 'undefined' && 'vibrate' in window.navigator) {
+      window.navigator.vibrate(30);
+    }
+  };
+  if (user?.role === 'admin') {
+    options = [
+      {
+        label: 'Dashboard',
+        icon: <Home className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin'); onClose(); },
+      },
+      {
+        label: 'Profile',
+        icon: <User2 className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin-profile'); onClose(); },
+      },
+      {
+        label: 'Products',
+        icon: <Package className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/products'); onClose(); },
+      },
+      {
+        label: 'Resellers',
+        icon: <Users className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/resellers'); onClose(); },
+      },
+      {
+        label: 'Sales',
+        icon: <TrendingUp className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/sales'); onClose(); },
+      },
+      {
+        label: 'Expenses',
+        icon: <TrendingDown className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/expenses'); onClose(); },
+      },
+      {
+        label: 'Inventory',
+        icon: <Warehouse className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/inventory'); onClose(); },
+      },
+      {
+        label: 'Finance',
+        icon: <Wallet className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/finance'); onClose(); },
+      },
+      {
+        label: 'Cash Balance',
+        icon: <IndianRupee className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/CashBalancePage'); onClose(); },
+      },
+      {
+        label: 'Gross Profit Analysis',
+        icon: <BarChart3 className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/GrossProfitAnalysis'); onClose(); },
+      },
+      {
+        label: 'Rewards',
+        icon: <Award className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/admin/rewards'); onClose(); },
+      },
+      {
+        label: 'Logout',
+        icon: <LogOut className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); logout(); onClose(); },
+      },
+      {
+        label: 'Close',
+        icon: <svg className="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>,
+        action: () => { vibrate(); onClose(); },
+      },
+    ];
+  } else {
+    options = [
+      {
+        label: 'Dashboard',
+        icon: <Home className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/reseller'); onClose(); },
+      },
+      {
+        label: 'Profile',
+        icon: <User2 className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/reseller-profile'); onClose(); },
+      },
+      {
+        label: 'Catalog',
+        icon: <Package className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/reseller/catalog'); onClose(); },
+      },
+      {
+        label: 'Requests',
+        icon: <ShoppingCart className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/reseller/requests'); onClose(); },
+      },
+      {
+        label: 'Payments',
+        icon: <CreditCard className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); navigate('/reseller/payments'); onClose(); },
+      },
+      {
+        label: 'Logout',
+        icon: <LogOut className="w-5 h-5 mr-2 text-primary" />, 
+        action: () => { vibrate(); logout(); onClose(); },
+      },
+      {
+        label: 'Close',
+        icon: <svg className="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>,
+        action: () => { vibrate(); onClose(); },
+      },
+    ];
+  }
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end md:hidden">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Modal */}
+      <div className="relative w-full bg-card rounded-t-2xl p-4 shadow-xl animate-slide-up">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-semibold text-lg">Command Palette</span>
+          <button onClick={onClose} aria-label="Close" className="p-2 rounded hover:bg-muted">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex flex-col gap-2 mt-2">
+          {options.map((opt, i) => (
+            <button
+              key={opt.label}
+              onClick={opt.action}
+              className="w-full py-3 rounded-lg bg-muted text-foreground font-medium text-base active:bg-lavender/20 transition-all border border-lavender/10 flex items-center"
+            >
+              {opt.icon}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+// Floating Command Palette Button for Mobile
+const MobileCommandPaletteButton = () => {
+  // Try to open the VS Code command palette if available, else dispatch a custom event
+  const handleOpenCommandPalette = () => {
+    // If you have a custom command palette, trigger it here
+    // For now, dispatch a custom event that can be handled globally
+    const event = new CustomEvent('open-command-palette');
+    window.dispatchEvent(event);
+  };
+  return (
+    <button
+      className="fixed z-50 bottom-20 right-4 bg-gradient-to-br from-lavender to-blush text-white shadow-lg rounded-full p-3 flex items-center justify-center md:hidden active:scale-95 transition-all"
+      style={{ boxShadow: '0 4px 16px rgba(100,100,255,0.18)' }}
+      aria-label="Open Command Palette"
+      onClick={handleOpenCommandPalette}
+    >
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 9h8M8 15h6M4 19V5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2z" />
+      </svg>
+    </button>
+  );
+};
 import { GlobalShortcuts } from './GlobalShortcuts';
 import { useState, useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -513,6 +690,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   //       ) return;
 
   //       const currentIndex = navItems.findIndex((item: any) => item.to === location.pathname);
+    const [desktopPaletteOpen, setDesktopPaletteOpen] = React.useState(false);
   //       if (currentIndex === -1) return;
 
   //       if (e.key === 'ArrowDown') {
@@ -521,12 +699,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   //         navigate(navItems[nextIndex].to);
   //       }
 
+    // Listen for Ctrl+Space to open command palette (desktop)
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.code === 'Space') {
+                e.preventDefault();
+                setMobilePaletteOpen(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
   //       if (e.key === 'ArrowUp') {
   //         e.preventDefault();
   //         const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
   //         navigate(navItems[prevIndex].to);
   //       }
   //     };
+
 
   //     window.addEventListener('keydown', handleKeyDown);
   //     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -548,9 +738,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, []);
   const navigate = useNavigate();
 
+  // State for mobile command palette modal
+  const [mobilePaletteOpen, setMobilePaletteOpen] = React.useState(false);
+
+  // Listen for the custom event to open the palette
+  React.useEffect(() => {
+    const handler = () => setMobilePaletteOpen(true);
+    window.addEventListener('open-command-palette', handler);
+    return () => window.removeEventListener('open-command-palette', handler);
+  }, []);
+
   return (
     <>
       <GlobalShortcuts />
+      {/* Command Palette Modal (used for both desktop and mobile) */}
+      <MobileCommandPaletteModal open={mobilePaletteOpen} onClose={() => setMobilePaletteOpen(false)} />
       <div className="min-h-screen bg-gradient-to-br from-background via-lavender/5 to-blush/5">
       {/* Top Navigation */}
       <nav className="bg-card/80 backdrop-blur-sm border-b border-lavender/20 sticky top-0 z-50">
@@ -588,52 +790,58 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <Heart className="w-5 h-5 text-lavender-foreground" />
               </div>
               <div>
-                <h1 className="text-sm md:text-lg font-semibold text-foreground">Blessin Care</h1>
-                <p className="text-xs text-muted-foreground capitalize">{user?.role} Portal</p>
-              </div>
-            </div>
-
-            {/* Middle Section - Cash Balance (only for admin) */}
-            <div className="flex-1 flex justify-center">
-              {user?.role === 'admin' && (
-                <div className="hidden md:block">
-                  <CashBalanceNavbar />
-                </div>
-              )}
+        <h1 className="text-sm md:text-lg font-semibold text-foreground">Blessin Care</h1>
+        <p className="text-xs text-muted-foreground capitalize">{user?.role} Portal</p>
+      </div>
             </div>
 
             {/* User Actions */}
             <div className="flex items-center gap-4">
-              <ToggleTheme />
-              <div className="items-center gap-3 hidden md:flex">
-                <div className="text-right hidden sm:block">
-                  <p className="text-sm font-medium text-foreground">{user?.name}</p>
-                  <p className="text-xs text-muted-foreground">{user?.email}</p>
-                </div>
-                <div className="w-8 h-8 bg-gradient-to-br from-mint to-mint-dark rounded-full flex items-center justify-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (user?.role === 'admin') {
-                        navigate('/admin-profile');
-                      } else {
-                        navigate('/reseller-profile');
-                      }
-                    }}
-                  >
-                    <User2 className="w-4 h-4 text-mint-foreground" />
-                  </Button>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={logout}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="w-4 h-4" />
-              </Button>
+        <ToggleTheme />
+        <div className="items-center gap-3 hidden md:flex">
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-medium text-foreground">{user?.name}</p>
+            <p className="text-xs text-muted-foreground">{user?.email}</p>
+          </div>
+          <div className="w-8 h-8 bg-gradient-to-br from-mint to-mint-dark rounded-full flex items-center justify-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (user?.role === 'admin') {
+                  navigate('/admin-profile');
+                } else {
+                  navigate('/reseller-profile');
+                }
+              }}
+            >
+              <User2 className="w-4 h-4 text-mint-foreground" />
+            </Button>
+          </div>
+        </div>
+        {/* Desktop Command Palette Shortcut Button (moved here) */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground hidden md:inline-flex"
+          aria-label="Open Command Palette"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-global-command-palette'));
+          }}
+          title="Open Command Palette (Ctrl+Space)"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 9h8M8 15h6M4 19V5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2z" />
+          </svg>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={logout}
+          className="text-muted-foreground hover:text-foreground hidden md:inline-flex"
+        >
+          <LogOut className="w-4 h-4" />
+        </Button>
             </div>
           </div>
         </div>
@@ -684,6 +892,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNavigation navItems={navItems} />
+      {/* Mobile Command Palette Button */}
+      <MobileCommandPaletteButton />
     </div>
     </>
   );
