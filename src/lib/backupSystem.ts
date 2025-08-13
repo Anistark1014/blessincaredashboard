@@ -39,21 +39,35 @@ interface FullBackup {
 }
 
 export class BackupSystem {
-  private static async fetchTableData(tableName: string): Promise<{ data: any[] | null; count: number }> {
+  private static async fetchTableData(tableName: typeof BACKUP_TABLES[number]): Promise<{ data: any[] | null; count: number }> {
     try {
       console.log(`📥 Fetching data from ${tableName}...`);
       
-      const { data, error, count } = await supabase
-        .from(tableName as any)
-        .select('*', { count: 'exact' });
+      const query = supabase.from(tableName);
+      
+      if (tableName === 'sales') {
+        const response = await query
+          .select('*, users!sales_customer_id_fkey (first_name, last_name, email)');
 
-      if (error) {
-        console.error(`❌ Error fetching ${tableName}:`, error);
+        if (response.error) {
+          console.error(`❌ Error fetching ${tableName}:`, response.error);
+          return { data: [], count: 0 };
+        }
+
+        console.log(`✅ Fetched ${response.data?.length || 0} sales records`);
+        return { data: response.data || [], count: response.data?.length || 0 };
+      } 
+      
+      const response = await query.select('*');
+
+      if (response.error) {
+        console.error(`❌ Error fetching ${tableName}:`, response.error);
         return { data: [], count: 0 };
       }
 
-      console.log(`✅ Fetched ${count || data?.length || 0} records from ${tableName}`);
-      return { data: data || [], count: count || data?.length || 0 };
+      const count = response.data?.length || 0;
+      console.log(`✅ Fetched ${count} records from ${tableName}`);
+      return { data: response.data || [], count };
     } catch (error) {
       console.error(`❌ Exception fetching ${tableName}:`, error);
       return { data: [], count: 0 };
@@ -121,8 +135,20 @@ export class BackupSystem {
     URL.revokeObjectURL(url);
   }
 
-  private static generateEnhancedDashboardHTML(metadata: BackupMetadata): string {
-    return `<!DOCTYPE html>
+  private static generateEnhancedDashboardHTML(fullBackup: FullBackup): string {
+    try {
+      const metadata = fullBackup.metadata;
+      const backupData = fullBackup.data;
+      
+      console.log('🎨 Generating dashboard with data keys:', Object.keys(backupData));
+      
+      const navigationTabs = this.generateNavigationTabs(backupData);
+      const tabContents = this.generateTabContents(backupData);
+      
+      console.log('📑 Generated navigation tabs:', navigationTabs.length, 'characters');
+      console.log('📋 Generated tab contents:', tabContents.length, 'characters');
+      
+      return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -328,9 +354,10 @@ export class BackupSystem {
             <p><strong>Generated:</strong> ${metadata.exportedAt}</p>
             <p><strong>Data Version:</strong> ${metadata.version} | <strong>Export ID:</strong> ${metadata.timestamp.slice(0, 8)}</p>
             <p><strong>Coverage:</strong> ${metadata.tableCount} data sources | <strong>Total Records:</strong> ${metadata.totalRecords.toLocaleString()}</p>
+            <p style="margin-top: 10px; font-size: 0.9rem; color: #6b7280;"><strong>⌨️ Keyboard Shortcuts:</strong> Use Ctrl + ← / → to navigate between tabs</p>
         </div>
 
-        <div class="json-upload" id="jsonUpload">
+        <div class="json-upload" id="jsonUpload" style="display: none;">
             <div style="margin-bottom: 15px;">
                 <h3 style="color: #374151; margin-bottom: 8px;">📁 Load Backup Data</h3>
                 <p style="color: #6b7280; font-size: 14px;">Drop your JSON backup file here or click to select</p>
@@ -342,13 +369,13 @@ export class BackupSystem {
             <div id="uploadStatus" style="margin-top: 10px; font-size: 14px;"></div>
         </div>
 
-        <div id="dashboardContent" class="dashboard-content">
+        <div id="dashboardContent" class="dashboard-content active">
             <div class="nav-tabs" id="navTabs">
-                <!-- Navigation tabs will be generated dynamically -->
+                ${this.generateNavigationTabs(backupData)}
             </div>
 
             <div id="tabContents">
-                <!-- Tab contents will be generated dynamically -->
+                ${this.generateTabContents(backupData)}
             </div>
         </div>
 
@@ -1175,10 +1202,31 @@ export class BackupSystem {
             if (firstTab) {
                 firstTab.click();
             }
+
+            // Add keyboard shortcuts for tab navigation
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey) {
+                    const tabs = Array.from(document.querySelectorAll('.nav-tab'));
+                    const activeTab = document.querySelector('.nav-tab.active');
+                    const currentIndex = tabs.indexOf(activeTab);
+                    
+                    if (e.key === 'ArrowRight' && currentIndex < tabs.length - 1) {
+                        tabs[currentIndex + 1].click();
+                        e.preventDefault();
+                    } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+                        tabs[currentIndex - 1].click();
+                        e.preventDefault();
+                    }
+                }
+            });
         });
     </script>
 </body>
 </html>`;
+    } catch (error) {
+      console.error('❌ Error generating HTML dashboard:', error);
+      return `<!DOCTYPE html><html><head><title>Error</title></head><body><h1>Error generating dashboard</h1><p>${error}</p></body></html>`;
+    }
   }
 
   private static generateNavigationTabs(backupData: BackupData): string {
@@ -1441,15 +1489,15 @@ export class BackupSystem {
     return `
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value amount-positive">$${totalRevenue.toLocaleString()}</div>
+          <div class="stat-value amount-positive">₹${totalRevenue.toLocaleString()}</div>
           <div class="stat-label">Total Revenue</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-negative">$${totalCosts.toLocaleString()}</div>
+          <div class="stat-value amount-negative">₹${totalCosts.toLocaleString()}</div>
           <div class="stat-label">Total Costs</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value ${netIncome >= 0 ? 'amount-positive' : 'amount-negative'}">$${Math.abs(netIncome).toLocaleString()}</div>
+          <div class="stat-value ${netIncome >= 0 ? 'amount-positive' : 'amount-negative'}">₹${Math.abs(netIncome).toLocaleString()}</div>
           <div class="stat-label">Net ${netIncome >= 0 ? 'Profit' : 'Loss'}</div>
         </div>
         <div class="stat-card">
@@ -1457,11 +1505,11 @@ export class BackupSystem {
           <div class="stat-label">Profit Margin</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">$${investmentValue.toLocaleString()}</div>
+          <div class="stat-value">₹${investmentValue.toLocaleString()}</div>
           <div class="stat-label">Investment Value</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-negative">$${loansOutstanding.toLocaleString()}</div>
+          <div class="stat-value amount-negative">₹${loansOutstanding.toLocaleString()}</div>
           <div class="stat-label">Loans Outstanding</div>
         </div>
       </div>
@@ -1555,11 +1603,11 @@ export class BackupSystem {
           <div class="stat-label">Total Sales</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-positive">$${totalRevenue.toLocaleString()}</div>
+          <div class="stat-value amount-positive">₹${totalRevenue.toLocaleString()}</div>
           <div class="stat-label">Total Revenue</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">$${avgSale.toFixed(2)}</div>
+          <div class="stat-value">₹${avgSale.toFixed(2)}</div>
           <div class="stat-label">Average Sale Value</div>
         </div>
         <div class="stat-card">
@@ -1567,7 +1615,7 @@ export class BackupSystem {
           <div class="stat-label">Sales This Month</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-positive">$${thisMonthRevenue.toLocaleString()}</div>
+          <div class="stat-value amount-positive">₹${thisMonthRevenue.toLocaleString()}</div>
           <div class="stat-label">Monthly Revenue</div>
         </div>
         <div class="stat-card">
@@ -1576,7 +1624,7 @@ export class BackupSystem {
         </div>
         ${bestDay ? `
         <div class="stat-card" style="grid-column: span 2;">
-          <div class="stat-value amount-positive">$${bestDay[1].toLocaleString()}</div>
+          <div class="stat-value amount-positive">₹${bestDay[1].toLocaleString()}</div>
           <div class="stat-label">Best Sales Day: ${new Date(bestDay[0]).toLocaleDateString()}</div>
         </div>
         ` : ''}
@@ -1640,7 +1688,7 @@ export class BackupSystem {
           <div class="stat-label">Out of Stock</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">$${totalValue.toLocaleString()}</div>
+          <div class="stat-value">₹${totalValue.toLocaleString()}</div>
           <div class="stat-label">Total Value</div>
         </div>
       </div>
@@ -1666,7 +1714,7 @@ export class BackupSystem {
               <td><strong>${product.name || 'Unnamed Product'}</strong></td>
               <td>${product.category || 'Uncategorized'}</td>
               <td>${product.brand || 'N/A'}</td>
-              <td><strong>$${product.price || 0}</strong></td>
+              <td><strong>₹${product.price || 0}</strong></td>
               <td><span class="status-badge ${product.availability === 'in-stock' ? 'status-in-stock' : product.availability === 'low-stock' ? 'status-low-stock' : 'status-out-of-stock'}">${product.availability || 'Unknown'}</span></td>
               <td>${product.created_at ? new Date(product.created_at).toLocaleDateString() : 'N/A'}</td>
             </tr>
@@ -1684,7 +1732,6 @@ export class BackupSystem {
             <th>Sale ID</th>
             <th>Customer</th>
             <th>Amount</th>
-            <th>Payment Method</th>
             <th>Status</th>
             <th>Date</th>
           </tr>
@@ -1693,9 +1740,8 @@ export class BackupSystem {
           ${sales.map(sale => `
             <tr>
               <td><strong>#${sale.id || 'N/A'}</strong></td>
-              <td>${sale.customer_name || sale.customer_id || 'Unknown'}</td>
-              <td><span class="amount-positive">$${sale.total_amount || 0}</span></td>
-              <td>${sale.payment_method || 'N/A'}</td>
+              <td>${sale.users ? `${sale.users.first_name} ${sale.users.last_name}` : (sale.customer_name || '-')}</td>
+              <td><span class="amount-positive">₹${sale.total_amount || 0}</span></td>
               <td><span class="status-badge status-active">${sale.status || 'Completed'}</span></td>
               <td>${sale.date ? new Date(sale.date).toLocaleDateString() : sale.created_at ? new Date(sale.created_at).toLocaleDateString() : 'N/A'}</td>
             </tr>
@@ -1721,11 +1767,11 @@ export class BackupSystem {
           <div class="stat-label">Total Expenses</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">$${totalExpenses.toLocaleString()}</div>
+          <div class="stat-value">₹${totalExpenses.toLocaleString()}</div>
           <div class="stat-label">Total Amount</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">$${avgExpense.toFixed(2)}</div>
+          <div class="stat-value">₹${avgExpense.toFixed(2)}</div>
           <div class="stat-label">Average Expense</div>
         </div>
         <div class="stat-card">
@@ -1755,7 +1801,7 @@ export class BackupSystem {
               <td><strong>#${expense.id || 'N/A'}</strong></td>
               <td>${expense.description || expense.title || 'No description'}</td>
               <td>${expense.category || 'Uncategorized'}</td>
-              <td><span class="amount-negative">-$${expense.amount || 0}</span></td>
+              <td><span class="amount-negative">-₹${expense.amount || 0}</span></td>
               <td>${expense.date ? new Date(expense.date).toLocaleDateString() : expense.created_at ? new Date(expense.created_at).toLocaleDateString() : 'N/A'}</td>
               <td>${expense.added_by || 'System'}</td>
             </tr>
@@ -1777,15 +1823,15 @@ export class BackupSystem {
           <div class="stat-label">Total Transactions</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-positive">$${income.toLocaleString()}</div>
+          <div class="stat-value amount-positive">₹${income.toLocaleString()}</div>
           <div class="stat-label">Total Income</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-negative">$${expenses.toLocaleString()}</div>
+          <div class="stat-value amount-negative">₹${expenses.toLocaleString()}</div>
           <div class="stat-label">Total Expenses</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value ${netFlow >= 0 ? 'amount-positive' : 'amount-negative'}">$${Math.abs(netFlow).toLocaleString()}</div>
+          <div class="stat-value ${netFlow >= 0 ? 'amount-positive' : 'amount-negative'}">₹${Math.abs(netFlow).toLocaleString()}</div>
           <div class="stat-label">Net ${netFlow >= 0 ? 'Income' : 'Loss'}</div>
         </div>
       </div>
@@ -1811,7 +1857,7 @@ export class BackupSystem {
               <td><strong>#${transaction.id || 'N/A'}</strong></td>
               <td><span class="status-badge ${transaction.type === 'income' ? 'status-in-stock' : 'status-low-stock'}">${transaction.type || 'N/A'}</span></td>
               <td>${transaction.description || transaction.title || 'No description'}</td>
-              <td><span class="${transaction.type === 'income' ? 'amount-positive' : 'amount-negative'}">${transaction.type === 'income' ? '+' : '-'}$${transaction.amount || 0}</span></td>
+              <td><span class="${transaction.type === 'income' ? 'amount-positive' : 'amount-negative'}">${transaction.type === 'income' ? '+' : '-'}₹${transaction.amount || 0}</span></td>
               <td>${transaction.date ? new Date(transaction.date).toLocaleDateString() : transaction.created_at ? new Date(transaction.created_at).toLocaleDateString() : 'N/A'}</td>
               <td><span class="status-badge status-active">${transaction.status || 'Completed'}</span></td>
             </tr>
@@ -1841,9 +1887,9 @@ export class BackupSystem {
               <tr>
                 <td><strong>${investment.name || investment.title || 'Investment'}</strong></td>
                 <td>${investment.type || 'N/A'}</td>
-                <td>$${investment.amount || 0}</td>
-                <td>$${investment.current_value || 0}</td>
-                <td><span class="${returns >= 0 ? 'amount-positive' : 'amount-negative'}">${returns >= 0 ? '+' : ''}$${returns.toFixed(2)}</span></td>
+                <td>₹${investment.amount || 0}</td>
+                <td>₹${investment.current_value || 0}</td>
+                <td><span class="${returns >= 0 ? 'amount-positive' : 'amount-negative'}">${returns >= 0 ? '+' : ''}₹${returns.toFixed(2)}</span></td>
                 <td>${investment.date ? new Date(investment.date).toLocaleDateString() : investment.created_at ? new Date(investment.created_at).toLocaleDateString() : 'N/A'}</td>
               </tr>
             `;
@@ -1871,7 +1917,7 @@ export class BackupSystem {
             <tr>
               <td><strong>#${loan.id || 'N/A'}</strong></td>
               <td>${loan.borrower_name || loan.borrower || 'N/A'}</td>
-              <td>$${loan.amount || 0}</td>
+              <td>₹${loan.amount || 0}</td>
               <td>${loan.interest_rate || 0}%</td>
               <td><span class="status-badge ${loan.status === 'active' ? 'status-active' : loan.status === 'paid' ? 'status-in-stock' : 'status-out-of-stock'}">${loan.status || 'N/A'}</span></td>
               <td>${loan.due_date ? new Date(loan.due_date).toLocaleDateString() : 'N/A'}</td>
@@ -1912,20 +1958,40 @@ export class BackupSystem {
   }
 
   private static downloadVisualization(data: FullBackup, filename: string): void {
-    const htmlContent = this.generateEnhancedDashboardHTML(data.metadata);
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.replace('.json', '-dashboard.html');
-    a.style.display = 'none';
-    
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    URL.revokeObjectURL(url);
+    try {
+      console.log('🎨 Generating HTML dashboard content...');
+      const htmlContent = this.generateEnhancedDashboardHTML(data);
+      console.log(`📄 HTML content generated: ${htmlContent.length} characters`);
+      
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      console.log(`📦 Blob created: ${blob.size} bytes`);
+      
+      const url = URL.createObjectURL(blob);
+      console.log(`🔗 Blob URL created: ${url}`);
+      
+      const downloadFilename = filename.replace('.json', '-dashboard.html');
+      console.log(`💾 Download filename: ${downloadFilename}`);
+      
+      // Create download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = downloadFilename;
+      a.style.display = 'none';
+      
+      console.log('🖱️ Triggering download...');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      // Clean up URL after download
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        console.log('✅ HTML dashboard download completed');
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Error downloading HTML dashboard:', error);
+    }
   }
 
   private static formatBytes(bytes: number): string {
@@ -2234,8 +2300,8 @@ export class BackupSystem {
                 <td>${transaction.product_name || transaction.product_id || 'Unknown'}</td>
                 <td><span class="status-badge ${transaction.type === 'in' || transaction.transaction_type === 'in' ? 'status-in-stock' : 'status-out-of-stock'}">${transaction.type || transaction.transaction_type || 'N/A'}</span></td>
                 <td>${transaction.quantity || 0}</td>
-                <td>$${transaction.unit_price || transaction.price || 0}</td>
-                <td><span class="${transaction.type === 'in' ? 'amount-positive' : 'amount-negative'}">$${(transaction.quantity || 0) * (transaction.unit_price || transaction.price || 0)}</span></td>
+                <td>₹${transaction.unit_price || transaction.price || 0}</td>
+                <td><span class="${transaction.type === 'in' ? 'amount-positive' : 'amount-negative'}">₹${(transaction.quantity || 0) * (transaction.unit_price || transaction.price || 0)}</span></td>
                 <td>${transaction.date ? new Date(transaction.date).toLocaleDateString() : transaction.created_at ? new Date(transaction.created_at).toLocaleDateString() : 'N/A'}</td>
               </tr>
             `).join('')}
