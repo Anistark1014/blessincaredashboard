@@ -1750,6 +1750,72 @@ const SalesTable: React.FC = () => {
   };
 
   // --- UI HANDLERS & MEMOS ---
+  const calculatePriceForQuantity = (productId: string, quantity: number): number => {
+    const product = products.find((p) => p.id === productId);
+    console.log(`calculatePriceForQuantity - Product ID: ${productId}, Quantity: ${quantity}`);
+    console.log(`Found product:`, product);
+    
+    if (!product) return 0;
+
+    // Check if product has price ranges
+    if (Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
+      console.log(`Product has price ranges:`, product.price_ranges);
+      
+      // Find the appropriate price range for the given quantity
+      const priceRange = product.price_ranges.find(
+        (range) => quantity >= range.min && quantity <= range.max
+      );
+      
+      console.log(`Found price range for qty ${quantity}:`, priceRange);
+      
+      if (priceRange) {
+        console.log(`Returning price from range: ${priceRange.price}`);
+        return priceRange.price;
+      }
+      
+      // If no exact range found, try to find the best fit
+      // Sort ranges by min value and find the closest applicable range
+      const sortedRanges = [...product.price_ranges].sort((a, b) => a.min - b.min);
+      console.log(`Sorted ranges:`, sortedRanges);
+      
+      // If quantity is below the lowest range, use the lowest range price
+      if (quantity < sortedRanges[0].min) {
+        console.log(`Quantity below lowest range, using lowest price: ${sortedRanges[0].price}`);
+        return sortedRanges[0].price;
+      }
+      
+      // If quantity is above all ranges, use the highest range price
+      const lastRange = sortedRanges[sortedRanges.length - 1];
+      if (quantity > lastRange.max) {
+        console.log(`Quantity above highest range, using highest price: ${lastRange.price}`);
+        return lastRange.price;
+      }
+      
+      // Find the range where quantity fits (if ranges have gaps)
+      for (let i = 0; i < sortedRanges.length - 1; i++) {
+        const currentRange = sortedRanges[i];
+        const nextRange = sortedRanges[i + 1];
+        
+        if (quantity >= currentRange.min && quantity <= currentRange.max) {
+          console.log(`Found fitting range: ${currentRange.price}`);
+          return currentRange.price;
+        }
+        
+        // If quantity falls between ranges, use the lower range price
+        if (quantity > currentRange.max && quantity < nextRange.min) {
+          console.log(`Quantity between ranges, using lower range price: ${currentRange.price}`);
+          return currentRange.price;
+        }
+      }
+    } else {
+      console.log(`Product has no price ranges, falling back to MRP: ${product.mrp}`);
+    }
+
+    // Fallback to MRP if no price ranges or no suitable range found
+    console.log(`Fallback to MRP: ${product.mrp || 0}`);
+    return product.mrp || 0;
+  };
+
   const handleNewChange = (field: keyof Sale, value: any) => {
     setNewSale((prev) => {
       const updated = { ...prev, [field]: value };
@@ -1763,12 +1829,21 @@ const SalesTable: React.FC = () => {
         };
       }
 
+      // Handle product selection - set initial price based on current quantity or 1
       if (field === "product_id" && value) {
-        const product = products.find((p) => p.id === value);
-        if (product) {
-          updated.price = product.mrp || 0;
-        }
+        const currentQty = prev.qty || 1; // Use current qty or default to 1
+        const calculatedPrice = calculatePriceForQuantity(value, currentQty);
+        console.log(`Product selected: ${value}, Qty: ${currentQty}, Calculated Price: ${calculatedPrice}`);
+        updated.price = calculatedPrice;
       }
+
+      // Handle quantity change - update price based on new quantity
+      if (field === "qty" && value && prev.product_id) {
+        const calculatedPrice = calculatePriceForQuantity(prev.product_id, value);
+        console.log(`Quantity changed: ${value}, Product: ${prev.product_id}, Calculated Price: ${calculatedPrice}`);
+        updated.price = calculatedPrice;
+      }
+
       return updated;
     });
   };
@@ -1796,26 +1871,10 @@ const SalesTable: React.FC = () => {
         payment_status,
       }));
     } else {
-      // Sale transaction logic
+      // Sale transaction logic - calculate totals based on current values
+      // Don't recalculate price here, use the existing price value
       const qty = newSale.qty || 0;
-      let price = newSale.price || 0;
-
-      if (newSale.product_id && qty > 0) {
-        const product = products.find((p) => p.id === newSale.product_id);
-        if (
-          product &&
-          Array.isArray(product.price_ranges) &&
-          product.price_ranges.length > 0
-        ) {
-          const priceRange = product.price_ranges.find(
-            (range) => qty >= range.min && qty <= range.max
-          );
-          price = priceRange ? priceRange.price : product.mrp || 0;
-        } else if (product) {
-          price = product.mrp || 0;
-        }
-      }
-
+      const price = newSale.price || 0;
       const paid = newSale.paid || 0;
       const total = qty * price;
       const outstanding = total - paid;
@@ -1823,7 +1882,6 @@ const SalesTable: React.FC = () => {
 
       setNewSale((prev) => ({
         ...prev,
-        price,
         total,
         outstanding,
         payment_status,
@@ -1831,12 +1889,11 @@ const SalesTable: React.FC = () => {
     }
   }, [
     newSale.qty,
-    newSale.product_id,
+    newSale.price,
     newSale.paid,
     newSale.transaction_type,
     newSale.member_id,
-    products,
-    users,
+    users, // Removed products from dependencies to prevent price recalculation
   ]);
 
   const sortedSales = useMemo(() => {
@@ -1894,26 +1951,6 @@ const SalesTable: React.FC = () => {
       setSelectedRows(sortedSales.map((s) => s.id));
     }
   };
-
-  const displayDate = useMemo(() => {
-    if (!date?.from) {
-      return null;
-    }
-    const fromMonth = format(date.from, "MMM");
-    const fromYear = format(date.from, "yyyy");
-    if (date.to && format(date.from, "yyyyMM") === format(date.to, "yyyyMM")) {
-      return `${fromMonth.toUpperCase()} ${fromYear}`;
-    }
-    if (date.to) {
-      const toMonth = format(date.to, "MMM");
-      const toYear = format(date.to, "yyyy");
-      if (fromYear === toYear) {
-        return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
-      }
-      return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
-    }
-    return `${fromMonth.toUpperCase()} ${fromYear}`;
-  }, [date]);
 
   // --- RENDER LOGIC ---
 
@@ -2485,6 +2522,7 @@ const SalesTable: React.FC = () => {
                   mrp: rawRecord.products.mrp,
                   sku_id: rawRecord.products.sku_id || undefined,
                   price_ranges: rawRecord.products.price_ranges,
+                  inventory: rawRecord.products.inventory || 0,
                 }
               : null,
         }));

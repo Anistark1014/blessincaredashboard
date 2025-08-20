@@ -352,6 +352,28 @@ const useCashBalance = () => {
 // Enhanced Cash Balance Component for Navbar
 const CashBalanceNavbar = () => {
   const { balance, loading, error, refetch } = useCashBalance();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Auto refresh every 60 seconds - moved to top to avoid hook order violations
+  useEffect(() => {
+    const interval = setInterval(refetch, 60000);
+    return () => clearInterval(interval);
+  }, [refetch]);
+
+  // Optimistic refresh handler
+  const handleOptimisticRefresh = async () => {
+    if (isRefreshing || loading) return;
+    
+    setIsRefreshing(true);
+    
+    // Add a small delay for better UX (minimum 300ms)
+    await Promise.allSettled([
+      refetch(),
+      new Promise(resolve => setTimeout(resolve, 300))
+    ]);
+    
+    setIsRefreshing(false);
+  };
   
   // const formatCompactCurrency = (amount: number) => {
   const formatCompactCurrency = (amount: number) => {
@@ -396,11 +418,12 @@ const CashBalanceNavbar = () => {
           <span className="text-xs text-red-500">Failed to load</span>
         </div>
         <button
-          onClick={refetch}
-          className="ml-1 p-1 hover:bg-red-100 rounded transition-colors"
+          onClick={handleOptimisticRefresh}
+          disabled={isRefreshing}
+          className="ml-1 p-1 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
           title="Retry"
         >
-          <RefreshCw className="w-3 h-3 text-red-500" />
+          <RefreshCw className={`w-3 h-3 text-red-500 ${isRefreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
     );
@@ -412,19 +435,37 @@ const CashBalanceNavbar = () => {
   return (
     <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
       {/* Main Cash Balance Display */}
-      <div className="flex items-center gap-2 px-2 sm:px-3 lg:px-4 py-2 bg-card/50 rounded-lg border border-lavender/20 backdrop-blur-sm">        <Wallet className={`w-4 h-4 ${isPositive ? 'text-green-500' : 'text-red-500'}`} />
+      <div className={`flex items-center gap-2 px-2 sm:px-3 lg:px-4 py-2 rounded-lg border backdrop-blur-sm transition-all ${
+        isRefreshing 
+          ? 'bg-blue-50/60 border-blue-200 animate-pulse' 
+          : 'bg-card/50 border-lavender/20'
+      }`}>
+        <Wallet className={`w-4 h-4 ${
+          isRefreshing 
+            ? 'text-blue-500' 
+            : isPositive ? 'text-green-500' : 'text-red-500'
+        }`} />
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">Balance</span>
-          <span className={`text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+          <span className="text-xs text-muted-foreground">
+            {isRefreshing ? 'Updating...' : 'Balance'}
+          </span>
+          <span className={`text-sm font-semibold ${
+            isRefreshing 
+              ? 'text-blue-600' 
+              : isPositive ? 'text-green-600' : 'text-red-600'
+          }`}>
             {formatCompactCurrency(balance?.availableCashBalance || 0)}
           </span>
         </div>
         <button
-          onClick={refetch}
-          className="ml-1 p-1 hover:bg-muted rounded transition-colors"
-          title="Refresh balance"
+          onClick={handleOptimisticRefresh}
+          disabled={isRefreshing || loading}
+          className="ml-1 p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
+          title={isRefreshing ? 'Updating...' : 'Refresh balance'}
         >
-          <RefreshCw className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+          <RefreshCw className={`w-3 h-3 text-muted-foreground hover:text-foreground ${
+            isRefreshing ? 'animate-spin' : ''
+          }`} />
         </button>
       </div>
 
