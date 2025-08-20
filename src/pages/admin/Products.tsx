@@ -81,7 +81,7 @@ interface ProductFormData {
         const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
         const [searchTerm, setSearchTerm] = useState('');
         const [categoryFilter, setCategoryFilter] = useState('all');
-        const [availabilityFilter, setAvailabilityFilter] = useState('all'); // Renamed from statusFilter for clarity in UI
+        const [sortOption, setSortOption] = useState('name_desc'); // Default sort option
         const [loading, setLoading] = useState(true);
         const [isAddModalOpen, setIsAddModalOpen] = useState(false);
         const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -176,15 +176,13 @@ interface ProductFormData {
 
         const fixedCategories = [
             "Sanitary Napkins",
+            "Baby Care",
+            "Adult Diapers",
+            "Machines",
             "Maternity Pads",
             "Period Underwear",
             "Tampons",
             "Menstrual Cups",
-            "Wet Wipes",
-            "Baby Diapers",
-            "Adult Diapers",
-            "Vending Machine",
-            "Incinerator Machine"
         ];
 
         // const fixedAvailabilities = [
@@ -266,7 +264,7 @@ interface ProductFormData {
 
         useEffect(() => {
             filterProducts();
-        }, [products, searchTerm, categoryFilter, availabilityFilter]); // Depend on new filter states
+        }, [products, searchTerm, categoryFilter, sortOption]); // Depend on new filter states
 
         const fetchProducts = async () => {
             try {
@@ -306,11 +304,40 @@ interface ProductFormData {
                 filtered = filtered.filter(product => product.category === categoryFilter);
             }
 
-            if (availabilityFilter !== 'all') {
-                filtered = filtered.filter(product => product.availability === availabilityFilter);
-            }
 
-            setFilteredProducts(filtered);
+            // Apply sorting
+            const sortedFiltered = [...filtered].sort((a, b) => {
+                switch (sortOption) {
+                    case 'name_asc':
+                        return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+                    case 'name_desc':
+                        return (b.name || '').toLowerCase().localeCompare((a.name || '').toLowerCase());
+                    case 'date_newest':
+                        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                    case 'date_oldest':
+                        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+                    case 'price_low_high':
+                        const priceA = a.mrp || 0;
+                        const priceB = b.mrp || 0;
+                        return priceA - priceB;
+                    case 'price_high_low':
+                        const priceC = a.mrp || 0;
+                        const priceD = b.mrp || 0;
+                        return priceD - priceC;
+                    case 'inventory_low_high':
+                        return (a.inventory || 0) - (b.inventory || 0);
+                    case 'inventory_high_low':
+                        return (b.inventory || 0) - (a.inventory || 0);
+                    case 'category_asc':
+                        return (a.category || '').toLowerCase().localeCompare((b.category || '').toLowerCase());
+                    case 'category_desc':
+                        return (b.category || '').toLowerCase().localeCompare((a.category || '').toLowerCase());
+                    default:
+                        return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+                }
+            });
+
+            setFilteredProducts(sortedFiltered);
         };
 
         const handleAddProduct = async (e: React.FormEvent) => {
@@ -595,7 +622,7 @@ return (
                   <SalesDashboard
                       currentProductSearchTerm={searchTerm}
                       categoryFilter={categoryFilter}
-                      availabilityFilter={availabilityFilter}
+                      availabilityFilter="all"
                       productsList={products}
                   />
                 </div>
@@ -630,6 +657,28 @@ return (
                                                     {category}
                                                 </SelectItem>
                                             ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-auto min-w-[140px]">
+                                    <Select
+                                        value={sortOption}
+                                        onValueChange={setSortOption}
+                                    >
+                                        <SelectTrigger className="w-full md:w-[160px]">
+                                            <SelectValue placeholder="Sort by" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                                            <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                                            <SelectItem value="date_newest">Newest First</SelectItem>
+                                            <SelectItem value="date_oldest">Oldest First</SelectItem>
+                                            <SelectItem value="price_low_high">Price (Low-High)</SelectItem>
+                                            <SelectItem value="price_high_low">Price (High-Low)</SelectItem>
+                                            <SelectItem value="inventory_low_high">Stock (Low-High)</SelectItem>
+                                            <SelectItem value="inventory_high_low">Stock (High-Low)</SelectItem>
+                                            <SelectItem value="category_asc">Category (A-Z)</SelectItem>
+                                            <SelectItem value="category_desc">Category (Z-A)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

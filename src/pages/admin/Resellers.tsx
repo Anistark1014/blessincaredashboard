@@ -56,6 +56,7 @@ interface Reseller {
   // --- NEW: For main table date filtering (client-side) ---
   all_sales_data?: Sale[];
   all_clearance_data?: Clearance[];
+  // due_balance?: number; // Added for main table date filtering
 }
 
 // New interfaces for sales and clearance
@@ -305,6 +306,7 @@ const AdminResellers: React.FC = () => {
           totalRevenue += salesData.reduce((sum, sale) => sum + (sale.total ?? 0), 0);
           RP += salesData.reduce((sum, sale) => sum + (sale.gross_profit ?? 0), 0);
           totalOutstanding += salesData.reduce((sum, sale) => sum + (sale.outstanding ?? 0), 0);
+          // reseller.due_balance = totalOutstanding; // Store due balance for main table date filtering
           totalProductsSold += salesData.reduce((sum, sale) => sum + (sale.qty ?? 0), 0);
 
           // Sum paid_amount from clearance

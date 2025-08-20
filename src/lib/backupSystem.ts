@@ -47,7 +47,7 @@ export class BackupSystem {
       
       if (tableName === 'sales') {
         const response = await query
-          .select('*, users!sales_customer_id_fkey (first_name, last_name, email)');
+          .select('*, users!member_id (name, region, email)');
 
         if (response.error) {
           console.error(`❌ Error fetching ${tableName}:`, response.error);
@@ -348,25 +348,17 @@ export class BackupSystem {
     </style>
 </head>
 <body>
+
     <div class="container">
         <div class="header">
-            <h1>�️ Blessin Finance Database Dashboard</h1>
+            <h1>📈 Blessin Finance Database Dashboard</h1>
+            <button id="changeBackupBtn" style="float:right;margin-top:-8px;margin-right:8px;padding:8px 18px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:500;cursor:pointer;">Change Backup</button>
+            <input type="file" id="jsonFileInput" accept=".json" style="display:none;">
+            <span id="uploadStatus" style="margin-left:12px;font-size:14px;"></span>
             <p><strong>Generated:</strong> ${metadata.exportedAt}</p>
             <p><strong>Data Version:</strong> ${metadata.version} | <strong>Export ID:</strong> ${metadata.timestamp.slice(0, 8)}</p>
             <p><strong>Coverage:</strong> ${metadata.tableCount} data sources | <strong>Total Records:</strong> ${metadata.totalRecords.toLocaleString()}</p>
             <p style="margin-top: 10px; font-size: 0.9rem; color: #6b7280;"><strong>⌨️ Keyboard Shortcuts:</strong> Use Ctrl + ← / → to navigate between tabs</p>
-        </div>
-
-        <div class="json-upload" id="jsonUpload" style="display: none;">
-            <div style="margin-bottom: 15px;">
-                <h3 style="color: #374151; margin-bottom: 8px;">📁 Load Backup Data</h3>
-                <p style="color: #6b7280; font-size: 14px;">Drop your JSON backup file here or click to select</p>
-            </div>
-            <input type="file" id="jsonFileInput" accept=".json">
-            <button class="json-upload-btn" onclick="document.getElementById('jsonFileInput').click()">
-                📂 Select JSON File
-            </button>
-            <div id="uploadStatus" style="margin-top: 10px; font-size: 14px;"></div>
         </div>
 
         <div id="dashboardContent" class="dashboard-content active">
@@ -386,71 +378,62 @@ export class BackupSystem {
 
     <script>
         let globalData = null;
-        
-        // File upload functionality
-        const jsonUpload = document.getElementById('jsonUpload');
-        const jsonFileInput = document.getElementById('jsonFileInput');
-        const uploadStatus = document.getElementById('uploadStatus');
-        const dashboardContent = document.getElementById('dashboardContent');
-        
-        // Initialize file upload event listeners when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
-            const jsonUpload = document.getElementById('jsonUpload');
             const jsonFileInput = document.getElementById('jsonFileInput');
             const uploadStatus = document.getElementById('uploadStatus');
-            const dashboardContent = document.getElementById('dashboardContent');
-            
-            // Drag and drop functionality
-            if (jsonUpload) {
-                jsonUpload.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    jsonUpload.classList.add('dragover');
+            const changeBackupBtn = document.getElementById('changeBackupBtn');
+
+            if (changeBackupBtn && jsonFileInput) {
+                changeBackupBtn.addEventListener('click', function() {
+                    jsonFileInput.value = '';
+                    jsonFileInput.click();
                 });
-                
-                jsonUpload.addEventListener('dragleave', () => {
-                    jsonUpload.classList.remove('dragover');
-                });
-                
-                jsonUpload.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    jsonUpload.classList.remove('dragover');
-                    const files = e.dataTransfer.files;
-                    if (files.length > 0) {
-                        handleFileUpload(files[0]);
-                    }
-                });
-            }
-            
-            if (jsonFileInput) {
-                jsonFileInput.addEventListener('change', (e) => {
+                jsonFileInput.addEventListener('change', function(e) {
                     if (e.target.files.length > 0) {
                         handleFileUpload(e.target.files[0]);
                     }
                 });
             }
-            
+
             function handleFileUpload(file) {
                 if (!file.name.endsWith('.json')) {
                     uploadStatus.innerHTML = '<span style="color: #ef4444;">❌ Please select a JSON file</span>';
                     return;
                 }
-                
                 uploadStatus.innerHTML = '<span style="color: #3b82f6;">⏳ Loading data...</span>';
-                
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
-                        const jsonData = JSON.parse(e.target.result);
+                        let jsonData = JSON.parse(e.target.result);
                         globalData = jsonData.data || jsonData;
+                        
+                        // Fix currency symbols recursively - replace $ with ₹ only in currency contexts
+                        function replaceCurrency(obj) {
+                            if (typeof obj === 'string') {
+                                // Only replace $ when it appears as currency (followed by numbers or at start of amounts)
+                                return obj.replace(/\$(\d+(?:\.\d{2})?)/g, '₹$1') // $123.45 -> ₹123.45
+                                         .replace(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/g, '₹$1'); // $1,234.56 -> ₹1,234.56
+                            } else if (Array.isArray(obj)) {
+                                return obj.map(replaceCurrency);
+                            } else if (obj && typeof obj === 'object') {
+                                const newObj = {};
+                                for (const key in obj) {
+                                    if (obj.hasOwnProperty(key)) {
+                                        newObj[key] = replaceCurrency(obj[key]);
+                                    }
+                                }
+                                return newObj;
+                            }
+                            return obj;
+                        }
+                        
+                        globalData = replaceCurrency(globalData);
+                        
+                        // Update header with uploaded JSON metadata
+                        updateHeaderWithUploadedData(jsonData);
+                        
                         uploadStatus.innerHTML = '<span style="color: #10b981;">✅ Data loaded successfully!</span>';
-                        
-                        // Hide upload section and show dashboard
-                        jsonUpload.style.display = 'none';
-                        dashboardContent.classList.add('active');
-                        
-                        // Generate dashboard
                         generateDashboard(globalData);
-                        
                     } catch (error) {
                         uploadStatus.innerHTML = '<span style="color: #ef4444;">❌ Invalid JSON file</span>';
                         console.error('JSON parsing error:', error);
@@ -458,10 +441,55 @@ export class BackupSystem {
                 };
                 reader.readAsText(file);
             }
-            
-            // Make functions available globally
             window.handleFileUpload = handleFileUpload;
         });
+        
+        function updateHeaderWithUploadedData(jsonData) {
+            const metadata = jsonData.metadata || {};
+            const data = jsonData.data || jsonData;
+            
+            // Calculate total records from uploaded data
+            let totalRecords = 0;
+            let tableCount = 0;
+            
+            for (const tableName in data) {
+                if (Array.isArray(data[tableName]) && data[tableName].length > 0) {
+                    totalRecords += data[tableName].length;
+                    tableCount++;
+                }
+            }
+            
+            // Update header information
+            const headerElement = document.querySelector('.header');
+            if (headerElement) {
+                // Find existing paragraphs and update them
+                const paragraphs = headerElement.querySelectorAll('p');
+                
+                if (paragraphs.length >= 3) {
+                    // Update Generated date
+                    paragraphs[0].innerHTML = \`<strong>📅 Uploaded Data Generated:</strong> \${metadata.exportedAt || 'Unknown Date'}\`;
+                    
+                    // Update version and export ID
+                    const exportId = metadata.timestamp ? metadata.timestamp.slice(0, 8) : 'Unknown';
+                    paragraphs[1].innerHTML = \`<strong>📋 Data Version:</strong> \${metadata.version || 'Unknown'} | <strong>🆔 Export ID:</strong> \${exportId}\`;
+                    
+                    // Update coverage info
+                    paragraphs[2].innerHTML = \`<strong>📊 Coverage:</strong> \${tableCount} data sources | <strong>📈 Total Records:</strong> \${totalRecords.toLocaleString()}\`;
+                }
+                
+                // Add uploaded file info if it doesn't exist
+                let uploadInfoElement = headerElement.querySelector('.upload-info');
+                if (!uploadInfoElement) {
+                    uploadInfoElement = document.createElement('p');
+                    uploadInfoElement.className = 'upload-info';
+                    uploadInfoElement.style.cssText = 'margin-top: 8px; font-size: 0.95rem; color: #059669; font-weight: 500; background: rgba(16, 185, 129, 0.1); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #059669;';
+                    headerElement.insertBefore(uploadInfoElement, headerElement.lastElementChild);
+                }
+                
+                const uploadTime = new Date().toLocaleString();
+                uploadInfoElement.innerHTML = \`<strong>🔄 Data Source:</strong> Backup JSON File | \${metadata.exportedAt}\`;
+            }
+        }
         
         function generateDashboard(data) {
             generateNavigationTabs(data);
@@ -501,6 +529,14 @@ export class BackupSystem {
             
             if (data.products && data.products.length > 0) {
                 tabs.push('<div class="nav-tab" onclick="showTab(\\'products\\')">📦 Products</div>');
+            }
+            
+            // Inventory Management Tab
+            const hasInventoryData = (data.inventory_transactions && data.inventory_transactions.length > 0) ||
+                                   (data.goods_purchases && data.goods_purchases.length > 0);
+            
+            if (hasInventoryData) {
+                tabs.push('<div class="nav-tab" onclick="showTab(\\'inventory\\')">📋 Inventory</div>');
             }
             
             if (data.expenses && data.expenses.length > 0) {
@@ -588,6 +624,22 @@ export class BackupSystem {
                             \${generateProductsStats(data.products)}
                             <input type="text" class="search-box" placeholder="🔍 Search products..." onkeyup="searchTable(this, 'products-table')">
                             \${generateProductsTable(data.products)}
+                        </div>
+                    </div>
+                \`);
+            }
+            
+            // Inventory Management Tab
+            const hasInventoryData = (data.inventory_transactions && data.inventory_transactions.length > 0) ||
+                                   (data.goods_purchases && data.goods_purchases.length > 0);
+            
+            if (hasInventoryData) {
+                contents.push(\`
+                    <div id="inventory-content" class="tab-content">
+                        <div class="data-section">
+                            <h3>📋 Inventory Management</h3>
+                            \${generateInventoryStats(data)}
+                            \${generateInventoryTables(data)}
                         </div>
                     </div>
                 \`);
@@ -681,15 +733,15 @@ export class BackupSystem {
             return \`
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value amount-positive">$\${totalRevenue.toLocaleString()}</div>
+                        <div class="stat-value amount-positive">₹\${totalRevenue.toLocaleString()}</div>
                         <div class="stat-label">Total Revenue</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value amount-negative">$\${totalCosts.toLocaleString()}</div>
+                        <div class="stat-value amount-negative">₹\${totalCosts.toLocaleString()}</div>
                         <div class="stat-label">Total Costs</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value \${netIncome >= 0 ? 'amount-positive' : 'amount-negative'}">$\${Math.abs(netIncome).toLocaleString()}</div>
+                        <div class="stat-value \${netIncome >= 0 ? 'amount-positive' : 'amount-negative'}">₹\${Math.abs(netIncome).toLocaleString()}</div>
                         <div class="stat-label">Net \${netIncome >= 0 ? 'Profit' : 'Loss'}</div>
                     </div>
                     <div class="stat-card">
@@ -697,11 +749,11 @@ export class BackupSystem {
                         <div class="stat-label">Profit Margin</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$\${investmentValue.toLocaleString()}</div>
+                        <div class="stat-value">₹\${investmentValue.toLocaleString()}</div>
                         <div class="stat-label">Investment Value</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value amount-negative">$\${loansOutstanding.toLocaleString()}</div>
+                        <div class="stat-value amount-negative">₹\${loansOutstanding.toLocaleString()}</div>
                         <div class="stat-label">Loans Outstanding</div>
                     </div>
                 </div>
@@ -771,11 +823,11 @@ export class BackupSystem {
                         <div class="stat-label">Total Sales</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value amount-positive">$\${totalRevenue.toLocaleString()}</div>
+                        <div class="stat-value amount-positive">₹\${totalRevenue.toLocaleString()}</div>
                         <div class="stat-label">Total Revenue</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$\${avgSale.toFixed(2)}</div>
+                        <div class="stat-value">₹\${avgSale.toFixed(2)}</div>
                         <div class="stat-label">Average Sale Value</div>
                     </div>
                     <div class="stat-card">
@@ -783,7 +835,7 @@ export class BackupSystem {
                         <div class="stat-label">Sales This Month</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value amount-positive">$\${thisMonthRevenue.toLocaleString()}</div>
+                        <div class="stat-value amount-positive">₹\${thisMonthRevenue.toLocaleString()}</div>
                         <div class="stat-label">Monthly Revenue</div>
                     </div>
                     <div class="stat-card">
@@ -876,22 +928,22 @@ export class BackupSystem {
                 <table class="data-table" id="users-table">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Phone</th>
-                            <th>Status</th>
-                            <th>Joined</th>
+            <th>Name</th>
+            <th>Region</th>
+            <th>Sub-Region</th>
+            <th>Due Balance</th>
+            <th>Revenue Contribution</th>
+            <th>Joined</th>
                         </tr>
                     </thead>
                     <tbody>
                         \${users.map(user => \`
                             <tr>
-                                <td><strong>\${user.first_name || user.name || 'Unknown'} \${user.last_name || ''}</strong></td>
-                                <td>\${user.email || 'N/A'}</td>
-                                <td><span class="status-badge \${user.role === 'admin' ? 'status-active' : user.role === 'reseller' ? 'status-in-stock' : 'status-inactive'}">\${user.role || 'user'}</span></td>
-                                <td>\${user.phone || 'N/A'}</td>
-                                <td><span class="status-badge \${user.is_active !== false ? 'status-active' : 'status-inactive'}">\${user.is_active !== false ? 'Active' : 'Inactive'}</span></td>
+                                <td><strong>\${user.name || 'Unknown'}</strong></td>
+                                <td>\${user.region || 'N/A'}</td>
+                                <td>\${user.sub_region || 'N/A'}</td>
+                                <td>\${user.due_balance || 'N/A'}</td>
+                                <td>\${user.total_revenue_generated || 'N/A'}</td>
                                 <td>\${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
                             </tr>
                         \`).join('')}
@@ -925,7 +977,7 @@ export class BackupSystem {
                         <div class="stat-label">Out of Stock</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$\${totalValue.toLocaleString()}</div>
+                        <div class="stat-value">₹\${totalValue.toLocaleString()}</div>
                         <div class="stat-label">Total Value</div>
                     </div>
                 </div>
@@ -951,7 +1003,7 @@ export class BackupSystem {
                                 <td><strong>\${product.name || 'Unnamed Product'}</strong></td>
                                 <td>\${product.category || 'Uncategorized'}</td>
                                 <td>\${product.brand || 'N/A'}</td>
-                                <td><strong>$\${product.price || 0}</strong></td>
+                                <td><strong>₹\${product.price || 0}</strong></td>
                                 <td><span class="status-badge \${product.availability === 'in-stock' ? 'status-in-stock' : product.availability === 'low-stock' ? 'status-low-stock' : 'status-out-of-stock'}">\${product.availability || 'Unknown'}</span></td>
                                 <td>\${product.created_at ? new Date(product.created_at).toLocaleDateString() : 'N/A'}</td>
                             </tr>
@@ -959,6 +1011,120 @@ export class BackupSystem {
                     </tbody>
                 </table>
             \`;
+        }
+        
+        function generateInventoryStats(data) {
+            const inventoryTransactions = data.inventory_transactions || [];
+            const goodsPurchases = data.goods_purchases || [];
+            const clearances = data.clearances || [];
+            
+            const totalTransactions = inventoryTransactions.length;
+            const totalPurchases = goodsPurchases.length;
+            const totalClearances = clearances.length;
+            
+            const totalPurchaseValue = goodsPurchases.reduce((sum, purchase) => sum + (purchase.total_amount || purchase.amount || 0), 0);
+            const totalClearanceValue = clearances.reduce((sum, clearance) => sum + (clearance.amount || clearance.value || 0), 0);
+            
+            // Calculate in/out transactions
+            const inboundTransactions = inventoryTransactions.filter(t => t.type === 'in' || t.transaction_type === 'in').length;
+            const outboundTransactions = inventoryTransactions.filter(t => t.type === 'out' || t.transaction_type === 'out').length;
+            
+            return \`
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">\${totalTransactions}</div>
+                        <div class="stat-label">Inventory Transactions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">\${inboundTransactions}</div>
+                        <div class="stat-label">Inbound Movements</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">\${outboundTransactions}</div>
+                        <div class="stat-label">Outbound Movements</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹\${totalPurchaseValue.toLocaleString()}</div>
+                        <div class="stat-label">Total Purchase Value</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹\${totalClearanceValue.toLocaleString()}</div>
+                        <div class="stat-label">Total Clearance Value</div>
+                    </div>
+                </div>
+            \`;
+        }
+        
+        function generateInventoryTables(data) {
+            let content = '';
+            
+            // Inventory Transactions Table
+            if (data.inventory_transactions && data.inventory_transactions.length > 0) {
+                content += \`
+                    <h4 style="margin: 30px 0 15px 0; color: #374151;">📦 Inventory Transactions</h4>
+                    <input type="text" class="search-box" placeholder="🔍 Search inventory transactions..." onkeyup="searchTable(this, 'inventory-transactions-table')">
+                    <table class="data-table" id="inventory-transactions-table">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Product</th>
+                                <th>Type</th>
+                                <th>Quantity</th>
+                                <th>Unit Price</th>
+                                <th>Total Value</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            \${data.inventory_transactions.map(transaction => \`
+                                <tr>
+                                    <td><strong>#\${transaction.id || 'N/A'}</strong></td>
+                                    <td>\${transaction.product_name || transaction.product_id || 'Unknown'}</td>
+                                    <td><span class="status-badge \${transaction.type === 'in' || transaction.transaction_type === 'in' ? 'status-in-stock' : 'status-out-of-stock'}">\${transaction.type || transaction.transaction_type || 'N/A'}</span></td>
+                                    <td>\${transaction.quantity || 0}</td>
+                                    <td>₹\${transaction.unit_price || transaction.price || 0}</td>
+                                    <td><span class="\${transaction.type === 'in' ? 'amount-positive' : 'amount-negative'}">₹\${(transaction.quantity || 0) * (transaction.unit_price || transaction.price || 0)}</span></td>
+                                    <td>\${transaction.date ? new Date(transaction.date).toLocaleDateString() : transaction.created_at ? new Date(transaction.created_at).toLocaleDateString() : 'N/A'}</td>
+                                </tr>
+                            \`).join('')}
+                        </tbody>
+                    </table>
+                \`;
+            }
+            
+            // Goods Purchases Table
+            if (data.goods_purchases && data.goods_purchases.length > 0) {
+                content += \`
+                    <h4 style="margin: 30px 0 15px 0; color: #374151;">🛍️ Goods Purchases</h4>
+                    <input type="text" class="search-box" placeholder="🔍 Search purchases..." onkeyup="searchTable(this, 'goods-purchases-table')">
+                    <table class="data-table" id="goods-purchases-table">
+                        <thead>
+                            <tr>
+                                <th>Purchase ID</th>
+                                <th>Vendor</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Payment Method</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            \${data.goods_purchases.map(purchase => \`
+                                <tr>
+                                    <td><strong>#\${purchase.id || 'N/A'}</strong></td>
+                                    <td>\${purchase.vendor_name || purchase.vendor || 'Unknown'}</td>
+                                    <td>\${purchase.description || purchase.note || 'N/A'}</td>
+                                    <td><span class="amount-negative">₹\${purchase.total_amount || purchase.amount || 0}</span></td>
+                                    <td>\${purchase.payment_method || 'N/A'}</td>
+                                    <td>\${purchase.date ? new Date(purchase.date).toLocaleDateString() : purchase.created_at ? new Date(purchase.created_at).toLocaleDateString() : 'N/A'}</td>
+                                </tr>
+                            \`).join('')}
+                        </tbody>
+                    </table>
+                \`;
+            }
+            
+            return content;
         }
         
         function generateSalesTable(sales) {
@@ -979,7 +1145,7 @@ export class BackupSystem {
                             <tr>
                                 <td><strong>#\${sale.id || 'N/A'}</strong></td>
                                 <td>\${sale.customer_name || sale.customer_id || 'Unknown'}</td>
-                                <td><span class="amount-positive">$\${sale.total_amount || 0}</span></td>
+                                <td><span class="amount-positive">₹\${sale.total_amount || 0}</span></td>
                                 <td>\${sale.payment_method || 'N/A'}</td>
                                 <td><span class="status-badge status-active">\${sale.status || 'Completed'}</span></td>
                                 <td>\${sale.date ? new Date(sale.date).toLocaleDateString() : sale.created_at ? new Date(sale.created_at).toLocaleDateString() : 'N/A'}</td>
@@ -1006,11 +1172,11 @@ export class BackupSystem {
                         <div class="stat-label">Total Expenses</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$\${totalExpenses.toLocaleString()}</div>
+                        <div class="stat-value">₹\${totalExpenses.toLocaleString()}</div>
                         <div class="stat-label">Total Amount</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$\${avgExpense.toFixed(2)}</div>
+                        <div class="stat-value">₹\${avgExpense.toFixed(2)}</div>
                         <div class="stat-label">Average Expense</div>
                     </div>
                     <div class="stat-card">
@@ -1040,7 +1206,7 @@ export class BackupSystem {
                                 <td><strong>#\${expense.id || 'N/A'}</strong></td>
                                 <td>\${expense.description || expense.title || 'No description'}</td>
                                 <td>\${expense.category || 'Uncategorized'}</td>
-                                <td><span class="amount-negative">-$\${expense.amount || 0}</span></td>
+                                <td><span class="amount-negative">-₹\${expense.amount || 0}</span></td>
                                 <td>\${expense.date ? new Date(expense.date).toLocaleDateString() : expense.created_at ? new Date(expense.created_at).toLocaleDateString() : 'N/A'}</td>
                                 <td>\${expense.added_by || 'System'}</td>
                             </tr>
@@ -1062,15 +1228,15 @@ export class BackupSystem {
                         <div class="stat-label">Total Transactions</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value amount-positive">$\${income.toLocaleString()}</div>
+                        <div class="stat-value amount-positive">₹\${income.toLocaleString()}</div>
                         <div class="stat-label">Total Income</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value amount-negative">$\${expenses.toLocaleString()}</div>
+                        <div class="stat-value amount-negative">₹\${expenses.toLocaleString()}</div>
                         <div class="stat-label">Total Expenses</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value \${netFlow >= 0 ? 'amount-positive' : 'amount-negative'}">$\${Math.abs(netFlow).toLocaleString()}</div>
+                        <div class="stat-value \${netFlow >= 0 ? 'amount-positive' : 'amount-negative'}">₹\${Math.abs(netFlow).toLocaleString()}</div>
                         <div class="stat-label">Net \${netFlow >= 0 ? 'Income' : 'Loss'}</div>
                     </div>
                 </div>
@@ -1096,7 +1262,7 @@ export class BackupSystem {
                                 <td><strong>#\${transaction.id || 'N/A'}</strong></td>
                                 <td><span class="status-badge \${transaction.type === 'income' ? 'status-in-stock' : 'status-low-stock'}">\${transaction.type || 'N/A'}</span></td>
                                 <td>\${transaction.description || transaction.title || 'No description'}</td>
-                                <td><span class="\${transaction.type === 'income' ? 'amount-positive' : 'amount-negative'}">\${transaction.type === 'income' ? '+' : '-'}$\${transaction.amount || 0}</span></td>
+                                <td><span class="\${transaction.type === 'income' ? 'amount-positive' : 'amount-negative'}">\${transaction.type === 'income' ? '+' : '-'}₹\${transaction.amount || 0}</span></td>
                                 <td>\${transaction.date ? new Date(transaction.date).toLocaleDateString() : transaction.created_at ? new Date(transaction.created_at).toLocaleDateString() : 'N/A'}</td>
                                 <td><span class="status-badge status-active">\${transaction.status || 'Completed'}</span></td>
                             </tr>
@@ -1126,9 +1292,9 @@ export class BackupSystem {
                                 <tr>
                                     <td><strong>\${investment.name || investment.title || 'Investment'}</strong></td>
                                     <td>\${investment.type || 'N/A'}</td>
-                                    <td>$\${investment.amount || 0}</td>
-                                    <td>$\${investment.current_value || 0}</td>
-                                    <td><span class="\${returns >= 0 ? 'amount-positive' : 'amount-negative'}">\${returns >= 0 ? '+' : ''}$\${returns.toFixed(2)}</span></td>
+                                    <td>₹\${investment.amount || 0}</td>
+                                    <td>₹\${investment.current_value || 0}</td>
+                                    <td><span class="\${returns >= 0 ? 'amount-positive' : 'amount-negative'}">\${returns >= 0 ? '+' : ''}₹\${returns.toFixed(2)}</span></td>
                                     <td>\${investment.date ? new Date(investment.date).toLocaleDateString() : investment.created_at ? new Date(investment.created_at).toLocaleDateString() : 'N/A'}</td>
                                 </tr>
                             \`;
@@ -1156,7 +1322,7 @@ export class BackupSystem {
                             <tr>
                                 <td><strong>#\${loan.id || 'N/A'}</strong></td>
                                 <td>\${loan.borrower_name || loan.borrower || 'N/A'}</td>
-                                <td>$\${loan.amount || 0}</td>
+                                <td>₹\${loan.amount || 0}</td>
                                 <td>\${loan.interest_rate || 0}%</td>
                                 <td><span class="status-badge \${loan.status === 'active' ? 'status-active' : loan.status === 'paid' ? 'status-in-stock' : 'status-out-of-stock'}">\${loan.status || 'N/A'}</span></td>
                                 <td>\${loan.due_date ? new Date(loan.due_date).toLocaleDateString() : 'N/A'}</td>
@@ -1242,7 +1408,7 @@ export class BackupSystem {
                            (backupData.goods_purchases && backupData.goods_purchases.length > 0);
     
     if (hasFinancialData) {
-      tabs.push('<div class="nav-tab" onclick="showTab(\'finances\')">� Financial Overview</div>');
+      tabs.push('<div class="nav-tab" onclick="showTab(\'finances\')">💰 Financial Overview</div>');
     }
     
     if (backupData.sales && backupData.sales.length > 0) {
@@ -1250,11 +1416,11 @@ export class BackupSystem {
     }
     
     if (backupData.users && backupData.users.length > 0) {
-      tabs.push('<div class="nav-tab" onclick="showTab(\'users\')">� Users & Resellers</div>');
+      tabs.push('<div class="nav-tab" onclick="showTab(\'users\')">👥 Users & Resellers</div>');
     }
     
     if (backupData.products && backupData.products.length > 0) {
-      tabs.push('<div class="nav-tab" onclick="showTab(\'products\')">� Products</div>');
+      tabs.push('<div class="nav-tab" onclick="showTab(\'products\')">📦 Products</div>');
     }
     
     if (backupData.expenses && backupData.expenses.length > 0) {
@@ -1303,7 +1469,7 @@ export class BackupSystem {
       contents.push(`
         <div id="finances-content" class="tab-content">
           <div class="data-section">
-            <h3>� Financial Overview & KPIs</h3>
+            <h3>💰 Financial Overview & KPIs</h3>
             ${this.generateFinancialKPIs(backupData)}
             ${this.generateFinancialBreakdown(backupData)}
           </div>
@@ -1330,7 +1496,7 @@ export class BackupSystem {
       contents.push(`
         <div id="users-content" class="tab-content">
           <div class="data-section">
-            <h3>� Users & Resellers Database</h3>
+            <h3>👥 Users & Resellers Database</h3>
             ${this.generateUsersStats(backupData.users)}
             <input type="text" class="search-box" placeholder="🔍 Search users..." onkeyup="searchTable(this, 'users-table')">
             ${this.generateUsersTable(backupData.users)}
@@ -1344,7 +1510,7 @@ export class BackupSystem {
       contents.push(`
         <div id="products-content" class="tab-content">
           <div class="data-section">
-            <h3>� Products Catalog</h3>
+            <h3>📦 Products Catalog</h3>
             ${this.generateProductsStats(backupData.products)}
             <input type="text" class="search-box" placeholder="🔍 Search products..." onkeyup="searchTable(this, 'products-table')">
             ${this.generateProductsTable(backupData.products)}
@@ -1638,24 +1804,22 @@ export class BackupSystem {
         <thead>
           <tr>
             <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Phone</th>
-            <th>Status</th>
+            <th>Region</th>
+            <th>Sub-Region</th>
+            <th>Due Balance</th>
+            <th>Revenue Contribution</th>
             <th>Joined</th>
-            <th>Last Login</th>
           </tr>
         </thead>
         <tbody>
           ${users.map(user => `
             <tr>
               <td><strong>${user.first_name || user.name || 'Unknown'} ${user.last_name || ''}</strong></td>
-              <td>${user.email || 'N/A'}</td>
-              <td><span class="status-badge ${user.role === 'admin' ? 'status-active' : user.role === 'reseller' ? 'status-in-stock' : 'status-inactive'}">${user.role || 'user'}</span></td>
-              <td>${user.phone || 'N/A'}</td>
-              <td><span class="status-badge ${user.is_active !== false ? 'status-active' : 'status-inactive'}">${user.is_active !== false ? 'Active' : 'Inactive'}</span></td>
+              <td>${user.region || 'N/A'}  </td>
+              <td>${user.sub_region || 'N/A'}  </td>
+              <td>${user.due_balance || "N/A"}</td>
+              <td>${user.total_revenue_generated || "N/A"}</td>
               <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
-              <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -1981,7 +2145,10 @@ export class BackupSystem {
       console.log('🖱️ Triggering download...');
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 500);
       
       // Clean up URL after download
       setTimeout(() => {
@@ -2003,14 +2170,17 @@ export class BackupSystem {
   }
 
   public static async exportFullBackup(): Promise<void> {
+    // Show format selection popup
+    BackupSystem.showFormatSelectionPopup();
+  }
+
+
+  private static async runFullBackupExport(formats: string[]): Promise<void> {
     console.log('🚀 Starting comprehensive backup export with enhanced dashboard...');
-    
     try {
       const backupData: BackupData = {};
       let totalRecords = 0;
       let successfulTables = 0;
-
-      // Fetch data from all tables
       for (const tableName of BACKUP_TABLES) {
         const { data, count } = await this.fetchTableData(tableName);
         if (data && data.length > 0) {
@@ -2019,8 +2189,6 @@ export class BackupSystem {
           successfulTables++;
         }
       }
-
-      // Create metadata
       const metadata: BackupMetadata = {
         timestamp: new Date().toISOString(),
         exportedAt: new Date().toLocaleString(),
@@ -2028,52 +2196,152 @@ export class BackupSystem {
         tableCount: successfulTables,
         totalRecords
       };
-
-      // Create full backup object
       const fullBackup: FullBackup = {
         metadata,
         data: backupData
       };
-
-      // Calculate file size
       const jsonString = JSON.stringify(fullBackup);
       const fileSize = new Blob([jsonString]).size;
-
-      console.log('📊 Enhanced Backup Summary:');
-      console.log(`   📅 Generated: ${metadata.exportedAt}`);
-      console.log(`   📁 Data Sources: ${metadata.tableCount}`);
-      console.log(`   📄 Total Records: ${metadata.totalRecords.toLocaleString()}`);
-      console.log(`   💾 Total Size: ${this.formatBytes(fileSize)}`);
-
-      // Generate filename and download
       const filename = this.generateFileName();
-      
-      // Download JSON backup
-      this.downloadAsJSON(fullBackup, filename);
-
-      // Download CSV files for each table
-      Object.entries(backupData).forEach(([tableName, tableData]) => {
-        if (tableData && tableData.length > 0) {
-          this.downloadAsCSV(tableData, filename, tableName);
-        }
-      });
-
-      // Generate enhanced interactive dashboard
-      this.downloadVisualization(fullBackup, filename);
-
-      console.log(`✅ Enhanced backup completed successfully!`);
-      console.log(`📥 Files downloaded:`);
-      console.log(`   📊 Dashboard: ${filename.replace('.json', '-dashboard.html')}`);
-      console.log(`   📄 JSON Backup: ${filename}`);
-      console.log(`   📊 CSV Exports: Individual table files`);
-
-      // Show enhanced user feedback
+      // Download selected files by name
+      if (formats.includes('dashboard_html')) {
+        this.downloadVisualization(fullBackup, filename);
+      }
+      if (formats.includes('full_json')) {
+        this.downloadAsJSON(fullBackup, filename);
+      }
+      if (formats.includes('products_csv') && backupData.products) {
+        this.downloadAsCSV(backupData.products, filename, 'Products');
+      }
+      if (formats.includes('sales_csv') && backupData.sales) {
+        this.downloadAsCSV(backupData.sales, filename, 'Sales');
+      }
+      if (formats.includes('expenses_csv') && backupData.expenses) {
+        this.downloadAsCSV(backupData.expenses, filename, 'Expenses');
+      }
+      if (formats.includes('users_csv') && backupData.users) {
+        this.downloadAsCSV(backupData.users, filename, 'Users');
+      }
+      if (formats.includes('inventory_csv') && backupData.inventory_transactions) {
+        this.downloadAsCSV(backupData.inventory_transactions, filename, 'Inventory');
+      }
+      // Add more file types as needed
       this.showEnhancedBackupNotification(metadata, filename, fileSize);
-
     } catch (error) {
       console.error('❌ Enhanced backup failed:', error);
       this.showErrorNotification(error);
     }
+  }
+
+  private static showFormatSelectionPopup(): void {
+    // File options for selection
+    const fileOptions = [
+      { label: 'Dashboard.html', value: 'dashboard_html', checked: true, icon: '📊' },
+      { label: 'FullBackup.json', value: 'full_json', checked: true, icon: '🗄️' },
+      { label: 'Products.csv', value: 'products_csv', checked: false, icon: '📦' },
+      { label: 'Sales.csv', value: 'sales_csv', checked: false, icon: '🛒' },
+      { label: 'Expenses.csv', value: 'expenses_csv', checked: false, icon: '💸' },
+      { label: 'Users.csv', value: 'users_csv', checked: false, icon: '👤' },
+      { label: 'Inventory.csv', value: 'inventory_csv', checked: false, icon: '📋' }
+    ];
+    // Modal theme (dark mode)
+    const modal = document.createElement('div');
+    modal.id = 'backup-format-modal';
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100vw';
+    modal.style.height = '100vh';
+    modal.style.background = 'rgba(15,23,42,0.85)';
+    modal.style.zIndex = '9999';
+    modal.innerHTML = `
+      <style>
+        @media (max-width: 600px) {
+          #backup-format-modal .backup-modal-content {
+            max-width: 98vw !important;
+            margin: 24px auto !important;
+            padding: 18px 8vw !important;
+          }
+        }
+        .custom-checkbox {
+          position: relative;
+          width: 22px;
+          height: 22px;
+          margin-right: 14px;
+        }
+        .custom-checkbox input[type="checkbox"] {
+          opacity: 0;
+          width: 22px;
+          height: 22px;
+          position: absolute;
+          left: 0;
+          top: 0;
+          cursor: pointer;
+        }
+        .custom-checkbox .checkmark {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 22px;
+          height: 22px;
+          background: #0f172a;
+          border: 2px solid #2563eb;
+          border-radius: 7px;
+          transition: box-shadow 0.2s;
+        }
+        .custom-checkbox input[type="checkbox"]:checked ~ .checkmark {
+          background: #2563eb;
+          box-shadow: 0 0 0 2px #1e40af;
+        }
+        .custom-checkbox .checkmark:after {
+          content: '';
+          position: absolute;
+          display: none;
+        }
+        .custom-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
+          display: block;
+        }
+        .custom-checkbox .checkmark:after {
+          left: 6px;
+          top: 2px;
+          width: 7px;
+          height: 13px;
+          border: solid #fff;
+          border-width: 0 3px 3px 0;
+          transform: rotate(45deg);
+        }
+      </style>
+      <div class="backup-modal-content" style="background: #1e293b; max-width: 420px; margin: 80px auto; padding: 32px 28px; border-radius: 16px; box-shadow: 0 4px 32px #000a; border: 1px solid #334155; font-family: 'Segoe UI', Roboto, sans-serif;">
+        <h2 style="margin-bottom: 18px; font-size: 1.35rem; color: #f1f5f9; font-weight: 600; letter-spacing: 0.01em;">Select Files to Download</h2>
+        <form id="backup-format-form">
+          <div style="margin-bottom: 18px;">
+            ${fileOptions.map(opt => `
+              <label style='display:flex;align-items:center;margin-bottom:12px;padding:8px 0;border-radius:8px;transition:background 0.2s;background:transparent;color:#e2e8f0;'>
+                <span class="custom-checkbox">
+                  <input type='checkbox' name='file' value='${opt.value}' ${opt.checked ? 'checked' : ''}>
+                  <span class="checkmark"></span>
+                </span>
+                <span style='font-size:1.08em;color:#f1f5f9;'>${opt.icon} <strong>${opt.label}</strong></span>
+              </label>
+            `).join('')}
+          </div>
+        </form>
+        <div style="margin-top: 18px; text-align: right;">
+          <button id="backup-format-cancel" style="margin-right: 12px; padding: 7px 22px; background: #334155; color: #e2e8f0; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">Cancel</button>
+          <button id="backup-format-download" style="padding: 7px 22px; background: linear-gradient(90deg,#2563eb,#1e40af); color: #fff; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">Download Selected</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('backup-format-cancel')!.onclick = () => {
+      document.body.removeChild(modal);
+    };
+    document.getElementById('backup-format-download')!.onclick = async () => {
+      const form = document.getElementById('backup-format-form') as HTMLFormElement;
+      const selected: string[] = Array.from(form.querySelectorAll('input[name="file"]:checked')).map((el: any) => el.value);
+      document.body.removeChild(modal);
+      await BackupSystem.runFullBackupExport(selected);
+    };
   }
 
   private static showEnhancedBackupNotification(metadata: BackupMetadata, filename: string, fileSize: number): void {
@@ -2258,7 +2526,7 @@ export class BackupSystem {
           <div class="stat-label">Goods Purchases</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-positive">$${totalPurchaseValue.toLocaleString()}</div>
+          <div class="stat-value amount-positive">₹${totalPurchaseValue.toLocaleString()}</div>
           <div class="stat-label">Purchase Value</div>
         </div>
         <div class="stat-card">
@@ -2266,7 +2534,7 @@ export class BackupSystem {
           <div class="stat-label">Clearances</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value amount-negative">$${totalClearanceValue.toLocaleString()}</div>
+          <div class="stat-value amount-negative">₹${totalClearanceValue.toLocaleString()}</div>
           <div class="stat-label">Clearance Value</div>
         </div>
       </div>
@@ -2332,7 +2600,7 @@ export class BackupSystem {
                 <td><strong>#${purchase.id || 'N/A'}</strong></td>
                 <td>${purchase.supplier_name || purchase.supplier || 'Unknown'}</td>
                 <td>${purchase.items_count || purchase.total_items || 'N/A'}</td>
-                <td><span class="amount-negative">$${purchase.total_amount || purchase.amount || 0}</span></td>
+                <td><span class="amount-negative">₹${purchase.total_amount || purchase.amount || 0}</span></td>
                 <td><span class="status-badge ${purchase.payment_status === 'paid' ? 'status-in-stock' : purchase.payment_status === 'pending' ? 'status-low-stock' : 'status-out-of-stock'}">${purchase.payment_status || purchase.status || 'N/A'}</span></td>
                 <td>${purchase.purchase_date ? new Date(purchase.purchase_date).toLocaleDateString() : purchase.created_at ? new Date(purchase.created_at).toLocaleDateString() : 'N/A'}</td>
               </tr>
@@ -2366,7 +2634,7 @@ export class BackupSystem {
                 <td>${clearance.product_name || clearance.product_id || 'Unknown'}</td>
                 <td><span class="status-badge status-out-of-stock">${clearance.reason || clearance.clearance_reason || 'N/A'}</span></td>
                 <td>${clearance.quantity || clearance.quantity_cleared || 0}</td>
-                <td><span class="amount-negative">-$${clearance.value || clearance.amount || 0}</span></td>
+                <td><span class="amount-negative">-₹${clearance.value || clearance.amount || 0}</span></td>
                 <td>${clearance.clearance_date ? new Date(clearance.clearance_date).toLocaleDateString() : clearance.created_at ? new Date(clearance.created_at).toLocaleDateString() : 'N/A'}</td>
                 <td>${clearance.approved_by || clearance.user_name || 'System'}</td>
               </tr>

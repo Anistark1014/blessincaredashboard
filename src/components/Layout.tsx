@@ -794,6 +794,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <p className="text-xs text-muted-foreground capitalize">{user?.role} Portal</p>
       </div>
             </div>
+                    <CashBalanceNavbar />
+
 
             {/* User Actions */}
             <div className="flex items-center gap-4">

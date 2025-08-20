@@ -74,7 +74,7 @@ const ProductExcelImport: React.FC<ProductExcelImportProps> = ({ onDataParsed, p
         const worksheet = workbook.Sheets[sheetName];
         const json: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet);
 
-        // Smart mapping logic
+        // Map and then sort products in reverse alphabetical order by name
         const parsedData = json.map(row => {
           const newProduct: { [key: string]: any } = {};
           for (const [excelHeader, value] of Object.entries(row)) {
@@ -109,7 +109,14 @@ const ProductExcelImport: React.FC<ProductExcelImportProps> = ({ onDataParsed, p
           return newProduct;
         });
 
-        onDataParsed(parsedData as any[]);
+        // Sort in reverse alphabetical order by name
+        const sortedData = parsedData.sort((a, b) => {
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          return nameB.localeCompare(nameA);
+        });
+
+        onDataParsed(sortedData as any[]);
       } catch (error) {
         console.error("Error parsing Excel file:", error);
         alert("Failed to parse the Excel file. Please ensure it's a valid format.");
