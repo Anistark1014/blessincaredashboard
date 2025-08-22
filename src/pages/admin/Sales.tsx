@@ -51,6 +51,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 
 // --- INTERFACE DEFINITIONS ---
 
@@ -189,6 +190,8 @@ const transactionTypeOptions = [
 // --- MAIN COMPONENT ---
 
 const SalesTable: React.FC = () => {
+  const { toast } = useToast();
+  
   // --- STATE MANAGEMENT ---
   const [sales, setSales] = useState<Sale[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -344,7 +347,11 @@ const SalesTable: React.FC = () => {
 
     if (error) {
       console.error("Error fetching sales:", error);
-      alert(`Error fetching sales: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Error fetching sales: ${error.message}`,
+        variant: "destructive",
+      });
     } else {
       setSales(
         Array.isArray(data)
@@ -405,7 +412,15 @@ const SalesTable: React.FC = () => {
         }));
       setUserOptions(userOpts);
 
-      setProducts(productsResult.data || []);
+      setProducts(
+        (productsResult.data || []).map((p) => ({
+          ...p,
+          price_ranges:
+            typeof p.price_ranges === "string"
+              ? JSON.parse(p.price_ranges)
+              : p.price_ranges,
+        }))
+      );
       const productOpts = (productsResult.data || []).map((p) => ({
         label: p.name,
         value: p.id,
@@ -690,9 +705,11 @@ const SalesTable: React.FC = () => {
     if (transactionType === "Clearance") {
       const requiredFields: (keyof Sale)[] = ["date", "member_id", "paid"];
       if (!requiredFields.every((field) => newSale[field] != null)) {
-        alert(
-          `Please fill all required fields for Clearance: Date, Member, Paid Amount`
-        );
+        toast({
+          title: "Missing Fields",
+          description: "Please fill all required fields for Clearance: Date, Member, Paid Amount",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -701,20 +718,30 @@ const SalesTable: React.FC = () => {
         (m) => m.userId === newSale.member_id
       );
       if (!memberWithDues || memberWithDues.totalDue <= 0) {
-        alert("Selected member has no outstanding dues to clear.");
+        toast({
+          title: "No Outstanding Dues",
+          description: "Selected member has no outstanding dues to clear.",
+          variant: "destructive",
+        });
         return;
       }
 
       const paidAmount = Number(newSale.paid);
       if (paidAmount > memberWithDues.totalDue) {
-        alert(
-          `Payment amount (₹${paidAmount}) cannot exceed member's total due balance (₹${memberWithDues.totalDue})`
-        );
+        toast({
+          title: "Payment Exceeds Due",
+          description: `Payment amount (₹${paidAmount}) cannot exceed member's total due balance (₹${memberWithDues.totalDue})`,
+          variant: "destructive",
+        });
         return;
       }
 
       if (paidAmount <= 0) {
-        alert("Payment amount must be greater than zero.");
+        toast({
+          title: "Invalid Amount",
+          description: "Payment amount must be greater than zero.",
+          variant: "destructive",
+        });
         return;
       }
     } else {
@@ -727,16 +754,22 @@ const SalesTable: React.FC = () => {
         "price",
       ];
       if (!requiredFields.every((field) => newSale[field] != null)) {
-        alert(
-          `Please fill all required fields for Sale: Date, Member, Product, Qty, Price`
-        );
+        toast({
+          title: "Missing Fields",
+          description: "Please fill all required fields for Sale: Date, Member, Product, Qty, Price",
+          variant: "destructive",
+        });
         return;
       }
     }
 
     const user = users.find((u) => u.id === newSale.member_id);
     if (!user) {
-      alert("Selected user not found");
+      toast({
+        title: "User Not Found",
+        description: "Selected user not found",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -860,9 +893,11 @@ const SalesTable: React.FC = () => {
 
         // Double-check against current database balance (in case of concurrent updates)
         if (paid > currentUserBalance) {
-          alert(
-            `Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentUserBalance}). Please refresh and try again.`
-          );
+          toast({
+            title: "Payment Exceeds Balance",
+            description: `Payment amount (₹${paid}) cannot exceed user's current due balance (₹${currentUserBalance}). Please refresh and try again.`,
+            variant: "destructive",
+          });
           // Revert optimistic update
           setSales(prev => prev.filter(s => s.id !== tempId));
           setAddingNew(true);
@@ -923,7 +958,11 @@ const SalesTable: React.FC = () => {
         }
         // Revert optimistic update
         setSales(prev => prev.filter(s => s.id !== tempId));
-        alert("Insert failed: " + error.message);
+        toast({
+          title: "Insert Failed",
+          description: "Insert failed: " + error.message,
+          variant: "destructive",
+        });
       } else if (data) {
         const rawRecord = data[0];
         const addedRecord: Sale = {
@@ -988,21 +1027,29 @@ const SalesTable: React.FC = () => {
         fetchMembersWithDues();
 
         if (transactionType === "Clearance" && updatedSalesRecords.length > 0) {
-          alert(
-            `Clearance applied successfully! Updated ${
+          toast({
+            title: "Clearance Applied",
+            description: `Clearance applied successfully! Updated ${
               updatedSalesRecords.length
             } sales record(s). Total amount cleared: ₹${Number(
               newSale.paid
-            ).toFixed(2)}`
-          );
+            ).toFixed(2)}`,
+          });
         } else if (transactionType === "Sale") {
-          alert(`Sale record added successfully!`);
+          toast({
+            title: "Success",
+            description: "Sale record added successfully!",
+          });
         }
       }
     } catch (error: any) {
       // Revert optimistic update
       setSales(prev => prev.filter(s => s.id !== tempId));
-      alert("Transaction failed: " + error.message);
+      toast({
+        title: "Transaction Failed",
+        description: "Transaction failed: " + error.message,
+        variant: "destructive",
+      });
       console.error("Transaction error:", error);
     }
   };
@@ -1020,9 +1067,11 @@ const SalesTable: React.FC = () => {
       originalSale.transaction_type === "Clearance" &&
       !["date", "member_id", "paid"].includes(field)
     ) {
-      alert(
-        "Clearance records can only have date, member, or paid amount edited. To make other changes, delete this record and create a new one."
-      );
+      toast({
+        title: "Edit Restricted",
+        description: "Clearance records can only have date, member, or paid amount edited. To make other changes, delete this record and create a new one.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1153,7 +1202,11 @@ const SalesTable: React.FC = () => {
           const paymentChange = newPaid - oldPaid;
 
           if (currentBalance + paymentChange < 0) {
-            alert(`Payment amount would exceed user's available balance`);
+            toast({
+              title: "Payment Exceeds Balance",
+              description: "Payment amount would exceed user's available balance",
+              variant: "destructive",
+            });
             // Revert optimistic update
             setSales(prev => prev.map(s => s.id === id ? originalSale : s));
             return;
@@ -1223,7 +1276,11 @@ const SalesTable: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Edit failed:", error.message);
-      alert("Edit failed: " + error.message);
+      toast({
+        title: "Edit Failed",
+        description: "Edit failed: " + error.message,
+        variant: "destructive",
+      });
       // Revert optimistic update
       setSales(prev => prev.map(s => s.id === id ? originalSale : s));
     }
@@ -1256,13 +1313,13 @@ const SalesTable: React.FC = () => {
       for (const record of deletedRecords) {
         let balanceChange = 0;
 
-        if (record.transaction_type === "Sale") {
+        if (record && record.transaction_type === "Sale") {
           balanceChange = -record.outstanding; // Decrease user's due balance
           // Revert inventory: add back sold qty
           if (record.product_id && record.qty > 0) {
             inventoryReverts.push({ productId: record.product_id, revertQty: record.qty });
           }
-        } else {
+        } else if (record) {
           // Clearance - need to reverse the sales record updates
           balanceChange = record.paid; // Increase user's due balance (reverse the clearance)
 
@@ -1381,7 +1438,11 @@ const SalesTable: React.FC = () => {
         // Revert optimistic update
         setSales(prev => [...deletedRecords, ...prev]);
         setSelectedRows(originalSelectedRows);
-        alert("Delete failed: " + error.message);
+        toast({
+          title: "Delete Failed",
+          description: "Delete failed: " + error.message,
+          variant: "destructive",
+        });
       } else {
         // Refresh all data
         fetchDropdownData();
@@ -1390,7 +1451,11 @@ const SalesTable: React.FC = () => {
       // Revert optimistic update
       setSales(prev => [...deletedRecords, ...prev]);
       setSelectedRows(originalSelectedRows);
-      alert("Delete failed: " + error.message);
+      toast({
+        title: "Delete Failed",
+        description: "Delete failed: " + error.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -1416,10 +1481,19 @@ const SalesTable: React.FC = () => {
             const recordsToRestore = lastOperation.data.deletedRecords.map(
               ({ users, products, ...rec }) => ({
                 ...rec,
-                date: new Date(rec.date),
+                date: typeof rec.date === "string" ? rec.date : new Date(rec.date).toISOString().slice(0, 10),
               })
             );
-            await supabase.from("sales").insert(recordsToRestore);
+            await supabase.from("sales").insert(
+              recordsToRestore.map(rec => ({
+                ...rec,
+                date: typeof rec.date === "string"
+                  ? rec.date
+                  : (rec.date && typeof rec.date === "object" && "toISOString" in rec.date && typeof (rec.date as Date).toISOString === "function")
+                  ? (rec.date as Date).toISOString().slice(0, 10)
+                  : new Date(rec.date as string | number | Date).toISOString().slice(0, 10),
+              }))
+            );
           }
           break;
         case "add":
@@ -1438,7 +1512,7 @@ const SalesTable: React.FC = () => {
               .from("sales")
               .update({
                 ...recordData,
-                date: new Date(recordData.date),
+                date: typeof recordData.date === "string" ? recordData.date : new Date(recordData.date).toISOString().slice(0, 10),
               })
               .eq("id", lastOperation.data.originalRecord.id);
           }
@@ -1458,7 +1532,11 @@ const SalesTable: React.FC = () => {
       fetchSales();
       fetchDropdownData(); // Refresh user balances
     } catch (error: any) {
-      alert("Undo failed: " + error.message);
+      toast({
+        title: "Undo Failed",
+        description: "Undo failed: " + error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsUndoing(false);
     }
@@ -1477,7 +1555,7 @@ const SalesTable: React.FC = () => {
               operationToRedo.data.addedRecord;
             await supabase.from("sales").insert({
               ...recordData,
-              date: new Date(recordData.date),
+              date: typeof recordData.date === "string" ? recordData.date : new Date(recordData.date).toISOString().slice(0, 10),
             });
           }
           break;
@@ -1495,7 +1573,7 @@ const SalesTable: React.FC = () => {
               .from("sales")
               .update({
                 ...recordData,
-                date: new Date(recordData.date),
+                date: typeof recordData.date === "string" ? recordData.date : new Date(recordData.date).toISOString().slice(0, 10),
               })
               .eq("id", operationToRedo.data.updatedRecord.id);
           }
@@ -1508,7 +1586,16 @@ const SalesTable: React.FC = () => {
                 date: new Date(rec.date),
               })
             );
-            await supabase.from("sales").insert(recordsToRestore);
+            await supabase.from("sales").insert(
+              recordsToRestore.map(rec => ({
+                ...rec,
+                date: typeof rec.date === "string"
+                  ? rec.date
+                  : (rec.date && typeof rec.date === "object" && "toISOString" in rec.date && typeof (rec.date as Date).toISOString === "function")
+                  ? (rec.date as Date).toISOString().slice(0, 10)
+                  : new Date(rec.date as string | number | Date).toISOString().slice(0, 10),
+              }))
+            );
           }
           break;
       }
@@ -1529,7 +1616,11 @@ const SalesTable: React.FC = () => {
       fetchSales();
       fetchDropdownData(); // Refresh user balances
     } catch (error: any) {
-      alert("Redo failed: " + error.message);
+      toast({
+        title: "Redo Failed",
+        description: "Redo failed: " + error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsUndoing(false);
     }
@@ -1537,7 +1628,11 @@ const SalesTable: React.FC = () => {
 
   const handleExportToExcel = () => {
     if (sortedSales.length === 0) {
-      alert("No data to export.");
+      toast({
+        title: "No Data",
+        description: "No data to export.",
+        variant: "destructive",
+      });
       return;
     }
     const exportData = sortedSales.map((s) => ({
@@ -1560,7 +1655,11 @@ const SalesTable: React.FC = () => {
 
   const handleImportedData = async (importedRows: any[]) => {
     if (!importedRows || importedRows.length === 0) {
-      alert("No data found in the imported file.");
+      toast({
+        title: "No Data Found",
+        description: "No data found in the imported file.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1639,21 +1738,19 @@ const SalesTable: React.FC = () => {
           };
         }
       })
-      .filter(
-        (
-          row
-        ): row is Sale => row !== null
-      );
+      .filter((row: any) => row !== null);
 
     if (processedData.length === 0) {
-      alert(
-        "No valid rows could be processed from the import. Please check user and product names match exactly."
-      );
+      toast({
+        title: "No Valid Rows",
+        description: "No valid rows could be processed from the import. Please check user and product names match exactly.",
+        variant: "destructive",
+      });
       return;
     }
 
     // Optimistically add to UI
-    setSales(prev => [...processedData, ...prev]);
+    setSales(prev => [...(processedData as Sale[]), ...prev]);
 
     try {
       // Calculate and apply user balance changes
@@ -1666,14 +1763,14 @@ const SalesTable: React.FC = () => {
       for (const record of processedData) {
         let balanceChange = 0;
 
-        if (record.transaction_type === "Sale") {
+        if (record && record.transaction_type === "Sale") {
           balanceChange = record.outstanding;
-        } else {
+        } else if (record) {
           // Clearance
           balanceChange = -record.paid;
         }
 
-        if (balanceChange !== 0) {
+        if (record && balanceChange !== 0) {
           const oldBalance = await updateUserBalance(
             record.member_id,
             balanceChange
@@ -1689,13 +1786,20 @@ const SalesTable: React.FC = () => {
       const { data: newRecords, error } = await supabase
         .from("sales")
         .insert(
-          processedData.map((record) => {
-            const { users, products, ...dbRecord } = record;
-            return {
-              ...dbRecord,
-              date: new Date(record.date),
-            };
-          })
+          processedData
+            .filter((record) => record !== null && typeof record === "object")
+            .map((record) => {
+              // Safely destructure users and products, and ensure date is a string
+              const { users, products, ...dbRecord } = record as any;
+              return {
+                ...dbRecord,
+                date: typeof dbRecord.date === "string"
+                  ? dbRecord.date
+                  : (dbRecord.date instanceof Date
+                      ? dbRecord.date.toISOString().slice(0, 10)
+                      : String(dbRecord.date)),
+              };
+            }) as Sale[]
         )
         .select();
 
@@ -1709,9 +1813,16 @@ const SalesTable: React.FC = () => {
         }
         // Revert optimistic update
         setSales(prev => prev.filter(s => !s.id.toString().startsWith('temp-')));
-        alert(`Import failed: ${error.message}`);
+        toast({
+          title: "Import Failed",
+          description: `Import failed: ${error.message}`,
+          variant: "destructive",
+        });
       } else if (newRecords) {
-        alert(`${newRecords.length} rows imported successfully!`);
+        toast({
+          title: "Import Successful",
+          description: `${newRecords.length} rows imported successfully!`,
+        });
 
         const importedSales: Sale[] = (newRecords as any[]).map((rec) => ({
           ...rec,
@@ -1739,7 +1850,11 @@ const SalesTable: React.FC = () => {
     } catch (error: any) {
       // Revert optimistic update
       setSales(prev => prev.filter(s => !s.id.toString().startsWith('temp-')));
-      alert(`Import failed: ${error.message}`);
+      toast({
+        title: "Import Failed",
+        description: `Import failed: ${error.message}`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -2405,7 +2520,11 @@ const SalesTable: React.FC = () => {
 
   const handleSimpleDuplicate = async () => {
     if (selectedRows.length === 0) {
-      alert("Please select records to duplicate");
+      toast({
+        title: "No Selection",
+        description: "Please select records to duplicate",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -2459,15 +2578,21 @@ const SalesTable: React.FC = () => {
           });
         } else {
           // For clearance, we won't duplicate as it doesn't make business sense
-          alert(
-            "Clearance records cannot be duplicated. Only Sale records will be duplicated."
-          );
+          toast({
+            title: "Cannot Duplicate",
+            description: "Clearance records cannot be duplicated. Only Sale records will be duplicated.",
+            variant: "destructive",
+          });
           continue;
         }
       }
 
       if (recordsToInsert.length === 0) {
-        alert("No valid records to duplicate");
+        toast({
+          title: "No Valid Records",
+          description: "No valid records to duplicate",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -2490,7 +2615,11 @@ const SalesTable: React.FC = () => {
             change.oldBalance - change.newBalance
           );
         }
-        alert("Duplication failed: " + error.message);
+        toast({
+          title: "Duplication Failed",
+          description: "Duplication failed: " + error.message,
+          variant: "destructive",
+        });
       } else if (data) {
         const duplicatedRecords: Sale[] = data.map((rawRecord: any) => ({
           id: rawRecord.id,
@@ -2544,12 +2673,17 @@ const SalesTable: React.FC = () => {
         fetchDropdownData();
         fetchMembersWithDues();
 
-        alert(
-          `${duplicatedRecords.length} record(s) duplicated successfully with today's date!`
-        );
+        toast({
+          title: "Duplication Successful",
+          description: `${duplicatedRecords.length} record(s) duplicated successfully with today's date!`,
+        });
       }
     } catch (error: any) {
-      alert("Duplication failed: " + error.message);
+      toast({
+        title: "Duplication Failed",
+        description: "Duplication failed: " + error.message,
+        variant: "destructive",
+      });
       console.error("Duplication error:", error);
     }
   };
@@ -2846,9 +2980,9 @@ return (
           
         </CardHeader>
         <CardContent className="p-0">
-          <div className="relative h-[calc(100vh-300px)]">
-            <div className="absolute inset-0 overflow-y-auto">
-              <div className="min-w-full">
+          <div className="relative h-[calc(100vh-100px)]">
+            <div className="absolute inset-0 overflow-y-auto ">
+              <div className="min-w-full ">
                 <Table>
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
@@ -2879,13 +3013,13 @@ return (
                       </TableHead>
                       <TableHead
                         onClick={() => requestSort("user")}
-                        className="cursor-pointer"
+                        className="cursor-pointer w-[250px] min-w-[200px]"
                       >
                         Member
                       </TableHead>
                       <TableHead
                         onClick={() => requestSort("product")}
-                        className="cursor-pointer"
+                        className="cursor-pointer w-[300px] min-w-[250px]"
                       >
                         Product
                       </TableHead>

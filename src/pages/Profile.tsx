@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface UserProfile {
   name: string;
@@ -13,6 +14,7 @@ interface UserProfile {
 }
 
 export default function Profile() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<UserProfile>({
@@ -37,7 +39,11 @@ export default function Profile() {
       } = await supabase.auth.getUser();
 
       if (authError || !user) {
-        alert("Failed to get user");
+        toast({
+          title: "Authentication Error",
+          description: "Failed to get user",
+          variant: "destructive",
+        });
         setLoading(false);
         return;
       }
@@ -49,7 +55,11 @@ export default function Profile() {
         .single();
 
       if (error || !data) {
-        alert("Failed to load user profile");
+        toast({
+          title: "Load Error",
+          description: "Failed to load user profile",
+          variant: "destructive",
+        });
         setLoading(false);
         return;
       }
@@ -81,7 +91,11 @@ export default function Profile() {
       } = await supabase.auth.getSession();
 
       if (sessionError || !session) {
-        alert("Failed to get session.");
+        toast({
+          title: "Session Error",
+          description: "Failed to get session.",
+          variant: "destructive",
+        });
         setIsSaving(false);
         return;
       }
@@ -109,14 +123,25 @@ export default function Profile() {
       const result = await res.json();
 
       if (res.ok) {
-        alert("Profile updated successfully!");
+        toast({
+          title: "Success",
+          description: "Profile updated successfully!",
+        });
       } else {
         console.error(result);
-        alert("Update failed: " + (result.message || "Unknown error"));
+        toast({
+          title: "Update Failed",
+          description: "Update failed: " + (result.message || "Unknown error"),
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong while updating.");
+      toast({
+        title: "Error",
+        description: "Something went wrong while updating.",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }

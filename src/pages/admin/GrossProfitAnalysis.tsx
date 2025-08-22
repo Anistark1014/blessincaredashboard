@@ -19,6 +19,7 @@ import {
   Package
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from "@/hooks/use-toast";
 
 // Interfaces
 interface Product {
@@ -66,6 +67,8 @@ interface ProductProfitSummary {
 }
 
 const GrossProfitAnalysis: React.FC = () => {
+  const { toast } = useToast();
+  
   // State
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
@@ -126,7 +129,11 @@ const GrossProfitAnalysis: React.FC = () => {
       setSales(data || []);
     } catch (error: any) {
       console.error('Error fetching sales:', error);
-      alert('Error fetching data: ' + error.message);
+      toast({
+        title: "Fetch Error",
+        description: "Error fetching data: " + error.message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }

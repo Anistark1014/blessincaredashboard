@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 
 // Define the required internal keys and the possible header names for each
 const HEADER_ALIASES: { [key: string]: string[] } = {
@@ -34,11 +35,16 @@ interface ProductExcelImportProps {
 
 
 const ProductExcelImport: React.FC<ProductExcelImportProps> = ({ onDataParsed, products }) => {
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Export handler
   const handleExport = () => {
     if (!products || products.length === 0) {
-      alert('No products to export.');
+      toast({
+        title: "No Data",
+        description: "No products to export.",
+        variant: "destructive",
+      });
       return;
     }
     // Remove fields that shouldn't be exported (like internal DB ids)
@@ -119,7 +125,11 @@ const ProductExcelImport: React.FC<ProductExcelImportProps> = ({ onDataParsed, p
         onDataParsed(sortedData as any[]);
       } catch (error) {
         console.error("Error parsing Excel file:", error);
-        alert("Failed to parse the Excel file. Please ensure it's a valid format.");
+        toast({
+          title: "Parse Error",
+          description: "Failed to parse the Excel file. Please ensure it's a valid format.",
+          variant: "destructive",
+        });
       }
     };
 

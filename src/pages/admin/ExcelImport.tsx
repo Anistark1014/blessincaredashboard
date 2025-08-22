@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useToast } from "@/hooks/use-toast";
 
 // Define the required internal keys and the possible header names for each
 const HEADER_ALIASES: { [key: string]: string[] } = {
@@ -24,6 +25,7 @@ interface ExcelImportProps {
 }
 
 const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleButtonClick = () => {
@@ -80,7 +82,11 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
 
       } catch (error) {
         console.error("Error parsing Excel file:", error);
-        alert("Failed to parse the Excel file. Please ensure it's a valid format.");
+        toast({
+          title: "Parse Error",
+          description: "Failed to parse the Excel file. Please ensure it's a valid format.",
+          variant: "destructive",
+        });
       }
     };
 

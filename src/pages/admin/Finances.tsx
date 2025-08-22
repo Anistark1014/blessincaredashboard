@@ -29,13 +29,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
+// ...existing code...
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
+// ...existing code...
 import { supabase } from "@/lib/supabaseClient";
 import * as XLSX from 'xlsx';
 // import EnhancedSalesDashboard from "./EnhancedSalesDashboard";
@@ -113,7 +114,11 @@ const Finance = () => {
   // Export functionality
   const handleExportToExcel = () => {
     if (sales.length === 0 && expenses.length === 0 && investments.length === 0 && loans.length === 0 && loanPayments.length === 0) {
-      alert("No data to export.");
+      toast({
+        title: "No Data",
+        description: "No data to export.",
+        variant: "destructive",
+      });
       return;
     }
     const exportData = sales.map(s => ({
