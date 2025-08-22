@@ -871,8 +871,8 @@ const SalesTable: React.FC = () => {
           transaction_type: transactionType,
         };
 
-        // Update product inventory - subtract qty from stock for sales
-        if (newSale.product_id && qty > 0) {
+        // Update product inventory - subtract qty from stock for sales (allow negative inventory)
+        if (newSale.product_id && qty !== 0) {
           // Get current inventory
           const { data: product, error: prodErr } = await supabase
             .from("products")
@@ -1790,7 +1790,8 @@ const SalesTable: React.FC = () => {
             .filter((record) => record !== null && typeof record === "object")
             .map((record) => {
               // Safely destructure users and products, and ensure date is a string
-              const { users, products, ...dbRecord } = record as any;
+              const { users, products, id, ...dbRecord } = record as any;
+              // Remove temp id before insert
               return {
                 ...dbRecord,
                 date: typeof dbRecord.date === "string"
@@ -1801,7 +1802,7 @@ const SalesTable: React.FC = () => {
               };
             }) as Sale[]
         )
-        .select();
+        .select("id, date, member_id, product_id, qty, price, total, paid, outstanding, payment_status, transaction_type");
 
       if (error) {
         // Revert balance changes if insert fails
@@ -1819,6 +1820,23 @@ const SalesTable: React.FC = () => {
           variant: "destructive",
         });
       } else if (newRecords) {
+        // Subtract inventory for each imported sale
+        for (const rec of newRecords) {
+          if (rec.transaction_type === "Sale" && rec.product_id && rec.qty !== 0) {
+            // Get current inventory
+            const { data: product, error: prodErr } = await supabase
+              .from("products")
+              .select("inventory")
+              .eq("id", rec.product_id)
+              .single();
+            if (!prodErr && product) {
+              const oldInventory = product.inventory || 0;
+              const newInventory = oldInventory - rec.qty;
+              await supabase.from("products").update({ inventory: newInventory }).eq("id", rec.product_id);
+            }
+          }
+        }
+
         toast({
           title: "Import Successful",
           description: `${newRecords.length} rows imported successfully!`,
@@ -1845,6 +1863,7 @@ const SalesTable: React.FC = () => {
           },
         });
 
+        fetchSales(); // Refresh sales data to show member/product names
         fetchDropdownData(); // Refresh user balances
       }
     } catch (error: any) {

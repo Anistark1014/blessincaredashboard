@@ -1295,32 +1295,35 @@ onChange={handleImport}
             <TableHead className="w-[40px] text-center">#</TableHead>
             <TableHead className="w-[80px]">Tier</TableHead>
             <TableHead className="min-w-[150px]">
-              <div
-                className="flex items-center gap-1 cursor-pointer select-none"
-                onClick={() => handleSort('name')}
-              >
-                Name
-                {sortKey === 'name' && (
-                  <span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>
-                )}
+              <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('name')}>
+                Name{sortKey === 'name' && (<span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>)}
               </div>
             </TableHead>
-            <TableHead>Region</TableHead>
-            <TableHead>Sub Region</TableHead>
             <TableHead>
-              {/* NEW: Sortable Revenue Header */}
-              <div
-                className="flex items-center gap-1 cursor-pointer"
-                onClick={() => handleSort('total_revenue_generated')}
-              >
-                Payables
-                {sortKey === 'total_revenue_generated' && (
-                  <span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>
-                )}
+              <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('region')}>
+                Region{sortKey === 'region' && (<span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>)}
               </div>
             </TableHead>
-            <TableHead>Outstanding</TableHead>
-            <TableHead>Reward Points</TableHead>
+            <TableHead>
+              <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('sub_region')}>
+                Sub Region{sortKey === 'sub_region' && (<span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>)}
+              </div>
+            </TableHead>
+            <TableHead>
+              <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleSort('total_revenue_generated')}>
+                Payables{sortKey === 'total_revenue_generated' && (<span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>)}
+              </div>
+            </TableHead>
+            <TableHead>
+              <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('payment_amount_remaining')}>
+                Outstanding{sortKey === 'payment_amount_remaining' && (<span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>)}
+              </div>
+            </TableHead>
+            <TableHead>
+              <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('reward_points')}>
+                Reward Points{sortKey === 'reward_points' && (<span>{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>)}
+              </div>
+            </TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>

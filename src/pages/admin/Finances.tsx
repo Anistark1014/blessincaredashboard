@@ -86,6 +86,8 @@ interface Product {
   mrp: number | null;
 }
 
+import { useToast } from "@/hooks/use-toast";
+
 const Finance = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -196,8 +198,8 @@ const Finance = () => {
     const startDate = date.from.toISOString();
     const endDate = date.to.toISOString();
     const { data, error } = await supabase
-      .from("sales")
-      .select("*, products(*)")
+    .from("sales")
+    .select("id, date, member_id, product_id, qty, price, total, paid, outstanding, payment_status, transaction_type, products(*)")
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date", { ascending: false });
@@ -685,10 +687,53 @@ const Finance = () => {
   const handleDeleteTransaction = async (id: string, type: string) => {
     try {
       if (type === 'Sale') {
+        // Find the sale record to revert inventory and balance
+        const saleRecord = sales.find(s => s.id === id);
+        let revertInventory = false;
+        let revertQty = 0;
+        let productId = null;
+        let outstanding = 0;
+        if (saleRecord) {
+          // Revert inventory: add back sold qty
+          if (saleRecord.product_id && saleRecord.qty > 0) {
+            revertInventory = true;
+            revertQty = saleRecord.qty;
+            productId = saleRecord.product_id;
+          }
+          // Revert user due balance: subtract outstanding
+          outstanding = saleRecord.outstanding;
+          if (outstanding !== 0) {
+            // Fetch current due_balance
+            const { data: user, error: userErr } = await supabase
+              .from('users')
+              .select('due_balance')
+              .eq('id', saleRecord.member_id)
+              .single();
+            if (!userErr && user) {
+              const newBalance = (user.due_balance || 0) - outstanding;
+              await supabase.from('users').update({ due_balance: newBalance }).eq('id', saleRecord.member_id);
+            }
+          }
+        }
+        // Delete sale record
         const { error } = await supabase.from('sales').delete().eq('id', id);
         if (error) throw error;
         setSales(prev => prev.filter(item => item.id !== id));
-        toast({ title: 'Success', description: 'Sale deleted.' });
+        // Revert inventory in products table
+        if (revertInventory && productId) {
+          // Get current inventory
+          const { data: product, error: prodErr } = await supabase
+            .from('products')
+            .select('inventory')
+            .eq('id', productId)
+            .single();
+          if (!prodErr && product) {
+            const oldInventory = product.inventory || 0;
+            const newInventory = oldInventory + revertQty;
+            await supabase.from('products').update({ inventory: newInventory }).eq('id', productId);
+          }
+        }
+        toast({ title: 'Success', description: 'Sale deleted and related data reverted.' });
       } else if (type === 'Expense') {
         const { error } = await supabase.from('expenses').delete().eq('id', id);
         if (error) throw error;

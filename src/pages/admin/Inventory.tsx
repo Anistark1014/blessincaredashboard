@@ -271,7 +271,7 @@ const Inventory: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [sortField, setSortField] = useState<keyof ProductSummary>("name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   // Time range filter states
   const [timeRange, setTimeRange] = useState("all"); // Default to all time
@@ -1472,6 +1472,7 @@ const Inventory: React.FC = () => {
                     }}
                   >
                     <div className="flex items-center">
+                      Stock Purchased
                       {timeRange === "1" && "Purchased (1 Day)"}
                       {timeRange === "2" && "Purchased (2 Days)"}
                       {timeRange === "7" && "Purchased (7 Days)"}
@@ -1523,6 +1524,7 @@ const Inventory: React.FC = () => {
                     }}
                   >
                     <div className="flex items-center">
+                      Stock Sold
                       {timeRange === "1" && "Sold (1 Day)"}
                       {timeRange === "2" && "Sold (2 Days)"}
                       {timeRange === "7" && "Sold (7 Days)"}
