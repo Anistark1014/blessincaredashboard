@@ -24,6 +24,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Popover,
   PopoverContent,
@@ -46,7 +54,7 @@ import {
   Undo,
   Calendar as CalendarIcon,
 } from "lucide-react";
-import Select from "react-select";
+import ReactSelect from "react-select";
 import {
   Dialog,
   DialogContent,
@@ -154,9 +162,13 @@ const AdminExpenses: React.FC = () => {
   } | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  // Monthly filtering state
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [isCustomRange, setIsCustomRange] = useState<boolean>(false);
   const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(2000, 0, 1),
-    to: addDays(new Date(), 0),
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -173,12 +185,28 @@ const AdminExpenses: React.FC = () => {
 
   const fetchExpenses = async () => {
     setLoading(true);
-    // Remove date filter for debugging
-    const { data, error } = await supabase
+    
+    let query = supabase
       .from("expenses")
       .select(
         "id, date, category, description, amount, type, inventory_transaction_id"
       );
+
+    // Apply date filtering based on current mode
+    if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
+      // Monthly filtering
+      const startDate = new Date(selectedYear, selectedMonth, 1).toISOString().slice(0, 10);
+      const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString().slice(0, 10);
+      query = query.gte("date", startDate).lte("date", endDate);
+    } else if (isCustomRange && date?.from && date?.to) {
+      // Custom range filtering
+      const startDate = date.from.toISOString().slice(0, 10);
+      const endDate = date.to.toISOString().slice(0, 10);
+      query = query.gte("date", startDate).lte("date", endDate);
+    }
+
+    const { data, error } = await query.order("date", { ascending: false });
+    
     if (error) {
       console.error("Supabase fetch error:", error);
       toast({
@@ -237,7 +265,7 @@ const AdminExpenses: React.FC = () => {
       supabase.removeChannel(inventoryChannel);
       supabase.removeChannel(productsChannel);
     };
-  }, [date]);
+  }, [selectedYear, selectedMonth, isCustomRange, date]);
 
   // Command palette event listeners
   useEffect(() => {
@@ -301,6 +329,97 @@ const AdminExpenses: React.FC = () => {
     }
     return filtered;
   }, [expenses, searchTerm, sortConfig]);
+
+  // Memo for display date (like Sales page)
+  const displayDate = useMemo(() => {
+    if (isCustomRange && date?.from) {
+      const fromMonth = date.from.toLocaleString("default", { month: "short" });
+      const fromYear = date.from.getFullYear();
+      if (
+        date.to &&
+        date.from.getFullYear() === date.to.getFullYear() &&
+        date.from.getMonth() === date.to.getMonth()
+      ) {
+        return `${fromMonth.toUpperCase()} ${fromYear}`;
+      }
+      if (date.to) {
+        const toMonth = date.to.toLocaleString("default", { month: "short" });
+        const toYear = date.to.getFullYear();
+        if (fromYear === toYear) {
+          return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+        }
+        return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+      }
+      return `${fromMonth.toUpperCase()} ${fromYear}`;
+    } else {
+      // Monthly view
+      const monthNames = [
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+      ];
+      return `${monthNames[selectedMonth]} ${selectedYear}`;
+    }
+  }, [selectedYear, selectedMonth, isCustomRange, date]);
+
+  // Generate year options for the dropdown
+  const generateYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear; year >= currentYear - 10; year--) {
+      years.push(year);
+    }
+    return years;
+  };
+
+  // Month names for tabs
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  // Handler for month tab change
+  const handleMonthChange = (monthIndex: string) => {
+    const month = parseInt(monthIndex);
+    setSelectedMonth(month);
+    setIsCustomRange(false);
+    // Update date range for the selected month
+    setDate({
+      from: new Date(selectedYear, month, 1),
+      to: new Date(selectedYear, month + 1, 0),
+    });
+  };
+
+  // Handler for year change
+  const handleYearChange = (year: string) => {
+    const newYear = parseInt(year);
+    setSelectedYear(newYear);
+    setIsCustomRange(false);
+    // Update date range for the selected month and new year
+    setDate({
+      from: new Date(newYear, selectedMonth, 1),
+      to: new Date(newYear, selectedMonth + 1, 0),
+    });
+  };
+
+  // Handler for custom range
+  const handleCustomRange = () => {
+    setIsCustomRange(true);
+  };
+
+  // Handler for back to monthly view
+  const handleBackToMonthly = () => {
+    setIsCustomRange(false);
+    // Reset to current month and year
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth();
+    setSelectedYear(currentYear);
+    setSelectedMonth(currentMonth);
+    setDate({
+      from: new Date(currentYear, currentMonth, 1),
+      to: new Date(currentYear, currentMonth + 1, 0),
+    });
+  };
 
   // --- CORE LOGIC HANDLERS (CRUD, UNDO, ETC.) ---
   const addToUndoStack = (operation: UndoOperation) => {
@@ -723,7 +842,7 @@ const AdminExpenses: React.FC = () => {
       if (field === "category") {
         return (
           <TableCell className="p-1">
-            <Select
+            <ReactSelect
               options={expenseCategories.map((c) => ({ value: c, label: c }))}
               defaultValue={{
                 value: expense.category,
@@ -882,168 +1001,237 @@ const AdminExpenses: React.FC = () => {
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
-                  <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="date"
-                        variant={"outline"}
-                        className={cn(
-                          "w-[300px] justify-start text-left font-normal",
-                          !date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date?.from
-                          ? date.to
-                            ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
-                            : date.from.toLocaleDateString()
-                          : "Pick a date range"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-auto p-0 flex"
-                      side="bottom"
-                      align="start"
-                    >
-                      <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
+                  {/* Monthly/Custom Range Filter UI */}
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    {!isCustomRange ? (
+                      <>
+                        {/* Year Dropdown */}
+                        <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {generateYearOptions().map((year) => (
+                              <SelectItem key={year} value={year.toString()}>
+                                {year}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {/* Custom Range Button */}
                         <Button
-                          variant="ghost"
-                          className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
-                          onClick={() => {
-                            const now = new Date();
-                            setDate({
-                              from: new Date(
-                                now.getFullYear(),
-                                now.getMonth(),
-                                1
-                              ),
-                              to: addDays(new Date(), 0),
-                            });
-                            setPopoverOpen(false);
-                          }}
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCustomRange}
+                          className="flex items-center gap-2"
                         >
-                          This Month
+                          <CalendarIcon className="h-4 w-4" />
+                          Custom Range
                         </Button>
-                        <Button
-                          variant="ghost"
-                          className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
-                          onClick={() => {
-                            const now = new Date();
-                            const lastMonth = new Date(
-                              now.getFullYear(),
-                              now.getMonth() - 1,
-                              1
-                            );
-                            const lastMonthEnd = new Date(
-                              now.getFullYear(),
-                              now.getMonth(),
-                              0
-                            );
-                            setDate({
-                              from: lastMonth,
-                              to: lastMonthEnd,
-                            });
-                            setPopoverOpen(false);
-                          }}
-                        >
-                          Last Month
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
-                          onClick={() => {
-                            setDate({
-                              from: subMonths(new Date(), 6),
-                              to: new Date(),
-                            });
-                            setPopoverOpen(false);
-                          }}
-                        >
-                          Last 6 Months
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
-                          onClick={() => {
-                            const now = new Date();
-                            setDate({
-                              from: new Date(now.getFullYear(), 0, 1),
-                              to: addDays(new Date(), 0),
-                            });
-                            setPopoverOpen(false);
-                          }}
-                        >
-                          This Year
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
-                          onClick={() => {
-                            setDate({
-                              from: new Date(2000, 0, 1),
-                              to: addDays(new Date(), 0),
-                            });
-                            setPopoverOpen(false);
-                          }}
-                        >
-                          All Time
-                        </Button>
-                      </div>
-                      <div className="p-2 bg-muted/40 rounded-r-lg">
-                        <div className="flex flex-col gap-2">
-                          <label className="text-xs font-medium text-muted-foreground">
-                            From
-                          </label>
-                          <input
-                            type="date"
-                            value={
-                              date?.from
-                                ? date.from.toISOString().slice(0, 10)
-                                : ""
-                            }
-                            onChange={(e) => {
-                              const newFrom = e.target.value
-                                ? new Date(e.target.value)
-                                : undefined;
-                              setDate((prev) => ({ ...prev, from: newFrom! }));
-                            }}
-                            className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
-                          />
-                          <label className="text-xs font-medium text-muted-foreground">
-                            To
-                          </label>
-                          <input
-                            type="date"
-                            value={
-                              date?.to ? date.to.toISOString().slice(0, 10) : ""
-                            }
-                            onChange={(e) => {
-                              const newTo = e.target.value
-                                ? new Date(e.target.value)
-                                : undefined;
-                              setDate((prev) =>
-                                prev && prev.from
-                                  ? { ...prev, to: newTo! }
-                                  : newTo
-                                  ? { from: newTo, to: newTo }
-                                  : prev
-                              );
-                            }}
-                            className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => setPopoverOpen(false)}
-                            className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                      </>
+                    ) : (
+                      <>
+                        {/* Custom Date Range Picker */}
+                        <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              id="date"
+                              variant={"outline"}
+                              className={cn(
+                                "w-[300px] justify-start text-left font-normal",
+                                !date && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {date?.from
+                                ? date.to
+                                  ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
+                                  : date.from.toLocaleDateString()
+                                : "Pick a date range"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-auto p-0 flex"
+                            side="bottom"
+                            align="start"
                           >
-                            Apply
-                          </Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                            <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
+                              <Button
+                                variant="ghost"
+                                className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                                onClick={() => {
+                                  const now = new Date();
+                                  setDate({
+                                    from: new Date(
+                                      now.getFullYear(),
+                                      now.getMonth(),
+                                      1
+                                    ),
+                                    to: addDays(new Date(), 0),
+                                  });
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                This Month
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                                onClick={() => {
+                                  const now = new Date();
+                                  const lastMonth = new Date(
+                                    now.getFullYear(),
+                                    now.getMonth() - 1,
+                                    1
+                                  );
+                                  const lastMonthEnd = new Date(
+                                    now.getFullYear(),
+                                    now.getMonth(),
+                                    0
+                                  );
+                                  setDate({
+                                    from: lastMonth,
+                                    to: lastMonthEnd,
+                                  });
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                Last Month
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                                onClick={() => {
+                                  setDate({
+                                    from: subMonths(new Date(), 6),
+                                    to: new Date(),
+                                  });
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                Last 6 Months
+                              </Button>
+
+                              <Button
+                                variant="ghost"
+                                className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                                onClick={() => {
+                                  const now = new Date();
+                                  setDate({
+                                    from: new Date(now.getFullYear(), 0, 1),
+                                    to: addDays(new Date(), 0),
+                                  });
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                This Year
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                className="justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:bg-lavender/30 focus:outline-none"
+                                onClick={() => {
+                                  setDate({
+                                    from: new Date(2000, 0, 1),
+                                    to: addDays(new Date(), 0),
+                                  });
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                All Time
+                              </Button>
+                            </div>
+                            <div className="p-2 bg-muted/40 rounded-r-lg">
+                              <div className="flex flex-col gap-2">
+                                <label className="text-xs font-medium text-muted-foreground">
+                                  From
+                                </label>
+                                <input
+                                  type="date"
+                                  value={
+                                    date?.from
+                                      ? date.from.toISOString().slice(0, 10)
+                                      : ""
+                                  }
+                                  onChange={(e) => {
+                                    const newFrom = e.target.value
+                                      ? new Date(e.target.value)
+                                      : undefined;
+                                    setDate((prev) => ({ ...prev, from: newFrom! }));
+                                  }}
+                                  className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                                />
+                                <label className="text-xs font-medium text-muted-foreground">
+                                  To
+                                </label>
+                                <input
+                                  type="date"
+                                  value={
+                                    date?.to ? date.to.toISOString().slice(0, 10) : ""
+                                  }
+                                  onChange={(e) => {
+                                    const newTo = e.target.value
+                                      ? new Date(e.target.value)
+                                      : undefined;
+                                    setDate((prev) =>
+                                      prev && prev.from
+                                        ? { ...prev, to: newTo! }
+                                        : newTo
+                                        ? { from: newTo, to: newTo }
+                                        : prev
+                                    );
+                                  }}
+                                  className="border border-lavender/30 focus:border-lavender rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-lavender/40 transition-colors"
+                                />
+                                <Button
+                                  type="button"
+                                  onClick={() => setPopoverOpen(false)}
+                                  className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                                >
+                                  Apply
+                                </Button>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                        {/* Back to Monthly Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleBackToMonthly}
+                          className="flex items-center gap-2"
+                        >
+                          ← Back to Monthly
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
+                {/* Month Tabs - Only show when not in custom range mode */}
+                {!isCustomRange && (
+                  <div className="mt-4">
+                    <Tabs value={selectedMonth.toString()} onValueChange={handleMonthChange}>
+                      <TabsList className="grid w-full grid-cols-6 lg:grid-cols-12 bg-muted">
+                        {monthNames.map((month, index) => (
+                          <TabsTrigger
+                            key={index}
+                            value={index.toString()}
+                            className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                          >
+                            {month}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                  </div>
+                )}
+                {/* Display current filter */}
+                {displayDate && (
+                  <div className="mt-2 text-center">
+                    <span className="text-sm font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                      {displayDate}
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -1141,7 +1329,7 @@ const AdminExpenses: React.FC = () => {
                             </Popover>
                           </TableCell>
                           <TableCell className="p-1">
-                            <Select
+                            <ReactSelect
                               options={expenseCategories.map((c) => ({
                                 value: c,
                                 label: c,

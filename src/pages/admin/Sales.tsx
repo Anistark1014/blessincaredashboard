@@ -51,6 +51,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import {
+  Select as UISelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 // --- INTERFACE DEFINITIONS ---
@@ -218,6 +231,11 @@ const SalesTable: React.FC = () => {
     to: addDays(new Date(), 0),
   });
 
+  // Month/Year filter states
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
+  const [isMonthYearFilter, setIsMonthYearFilter] = useState(true); // Default to monthly view
+
   const [customDate, setCustomDate] = useState<DateRange | undefined>(date);
   const [isPopoverOpen, setPopoverOpen] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
@@ -331,12 +349,23 @@ const SalesTable: React.FC = () => {
   // --- DATA FETCHING ---
 
   const fetchSales = async () => {
-    if (!date?.from || !date?.to) {
-      return;
-    }
+    let startDate: string;
+    let endDate: string;
 
-    const startDate = date.from.toISOString();
-    const endDate = date.to.toISOString();
+    if (isMonthYearFilter) {
+      // Use month/year filter
+      const start = new Date(selectedYear, selectedMonth - 1, 1);
+      const end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+      startDate = start.toISOString();
+      endDate = end.toISOString();
+    } else {
+      // Use date range filter
+      if (!date?.from || !date?.to) {
+        return;
+      }
+      startDate = date.from.toISOString();
+      endDate = date.to.toISOString();
+    }
 
     const { data, error } = await supabase
       .from("sales")
@@ -562,7 +591,7 @@ const SalesTable: React.FC = () => {
       supabase.removeChannel(inventoryChannel);
       supabase.removeChannel(productsChannel);
     };
-  }, [date]);
+  }, [date, isMonthYearFilter, selectedYear, selectedMonth]);
 
   // Command palette event listeners
   useEffect(() => {
@@ -2819,6 +2848,22 @@ return (
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
               <CardTitle className="text-2xl">Transaction Records</CardTitle>
+              {isMonthYearFilter ? (
+                <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span className="font-semibold">
+                    {new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { 
+                      month: 'long', 
+                      year: 'numeric' 
+                    })}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span className="font-semibold">Custom Range</span>
+                </div>
+              )}
               {/* {displayDate && (
                 <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
                   <CalendarIcon className="h-4 w-4" />
@@ -2827,6 +2872,57 @@ return (
               )} */}
             </div>
           </div>
+
+          {/* Month/Year Filter Tabs */}
+          <div className="space-y-4 mt-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <UISelect value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const year = new Date().getFullYear() - 5 + i;
+                      return (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </UISelect>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMonthYearFilter(false)}
+                  className="flex items-center gap-2"
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                  Custom Range
+                </Button>
+              </div>
+            </div>
+
+            <Tabs value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))} className="w-full">
+              <TabsList className="grid w-full grid-cols-6 sm:grid-cols-12 gap-1 h-auto p-1">
+                <TabsTrigger value="1" className="text-xs px-1 py-2">Jan</TabsTrigger>
+                <TabsTrigger value="2" className="text-xs px-1 py-2">Feb</TabsTrigger>
+                <TabsTrigger value="3" className="text-xs px-1 py-2">Mar</TabsTrigger>
+                <TabsTrigger value="4" className="text-xs px-1 py-2">Apr</TabsTrigger>
+                <TabsTrigger value="5" className="text-xs px-1 py-2">May</TabsTrigger>
+                <TabsTrigger value="6" className="text-xs px-1 py-2">Jun</TabsTrigger>
+                <TabsTrigger value="7" className="text-xs px-1 py-2">Jul</TabsTrigger>
+                <TabsTrigger value="8" className="text-xs px-1 py-2">Aug</TabsTrigger>
+                <TabsTrigger value="9" className="text-xs px-1 py-2">Sep</TabsTrigger>
+                <TabsTrigger value="10" className="text-xs px-1 py-2">Oct</TabsTrigger>
+                <TabsTrigger value="11" className="text-xs px-1 py-2">Nov</TabsTrigger>
+                <TabsTrigger value="12" className="text-xs px-1 py-2">Dec</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
           <div className="flex flex-col md:flex-row items-center gap-4 mt-4">
             <div className="relative flex-grow">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -2838,7 +2934,17 @@ return (
               />
             </div>
 
-            <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+            {!isMonthYearFilter && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMonthYearFilter(true)}
+                  className="flex items-center gap-2"
+                >
+                  ← Back to Monthly
+                </Button>
+                <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
                   id="date"
@@ -2991,6 +3097,8 @@ return (
                 </div>
               </PopoverContent>
             </Popover>
+              </div>
+            )}
             
 
             <div className="flex items-center gap-2">

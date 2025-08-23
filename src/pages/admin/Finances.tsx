@@ -102,9 +102,13 @@ const Finance = () => {
   const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // Monthly filtering state
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [isCustomRange, setIsCustomRange] = useState<boolean>(false);
   const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(2000, 0, 1),
-    to: addDays(new Date(), 0),
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
   });
   const [isPopoverOpen, setPopoverOpen] = useState(false);
 
@@ -156,20 +160,33 @@ const Finance = () => {
   });
 
   useEffect(() => {
-    fetchData(date);
-  }, [date]);
+    fetchData();
+  }, [selectedYear, selectedMonth, isCustomRange, date]);
 
   useEffect(() => {
     fetchSalesData();
     fetchExpensesData();
     fetchProductsData();
-  }, [date]);
+  }, [selectedYear, selectedMonth, isCustomRange, date]);
 
   // Fetch expenses data filtered by date range
   const fetchExpensesData = async () => {
-    if (!date?.from || !date?.to) return;
-    const startDate = date.from.toISOString();
-    const endDate = date.to.toISOString();
+    let startDate: string, endDate: string;
+    
+    if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
+      // Monthly filtering
+      const start = new Date(selectedYear, selectedMonth, 1);
+      const end = new Date(selectedYear, selectedMonth + 1, 0);
+      startDate = start.toISOString();
+      endDate = end.toISOString();
+    } else if (isCustomRange && date?.from && date?.to) {
+      // Custom range filtering
+      startDate = date.from.toISOString();
+      endDate = date.to.toISOString();
+    } else {
+      return;
+    }
+
     const { data, error } = await supabase
       .from("expenses")
       .select("*")
@@ -194,9 +211,22 @@ const Finance = () => {
 
   // Fetch sales data with products for KPI calculations, filtered by date range
   const fetchSalesData = async () => {
-    if (!date?.from || !date?.to) return;
-    const startDate = date.from.toISOString();
-    const endDate = date.to.toISOString();
+    let startDate: string, endDate: string;
+    
+    if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
+      // Monthly filtering
+      const start = new Date(selectedYear, selectedMonth, 1);
+      const end = new Date(selectedYear, selectedMonth + 1, 0);
+      startDate = start.toISOString();
+      endDate = end.toISOString();
+    } else if (isCustomRange && date?.from && date?.to) {
+      // Custom range filtering
+      startDate = date.from.toISOString();
+      endDate = date.to.toISOString();
+    } else {
+      return;
+    }
+
     const { data, error } = await supabase
     .from("sales")
     .select("id, date, member_id, product_id, qty, price, total, paid, outstanding, payment_status, transaction_type, products(*)")
@@ -208,11 +238,23 @@ const Finance = () => {
     }
   };
 
-  const fetchData = async (date: DateRange | undefined) => {
+  const fetchData = async () => {
     try {
-      // Create proper date ranges that cover full days
-      const startDate = date?.from ? new Date(date.from.getFullYear(), date.from.getMonth(), date.from.getDate(), 0, 0, 0, 0).toISOString() : "";
-      const endDate = date?.to ? new Date(date.to.getFullYear(), date.to.getMonth(), date.to.getDate(), 23, 59, 59, 999).toISOString() : "";
+      let startDate: string, endDate: string;
+      
+      if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
+        // Monthly filtering
+        const start = new Date(selectedYear, selectedMonth, 1);
+        const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      } else if (isCustomRange && date?.from && date?.to) {
+        // Custom range filtering
+        startDate = new Date(date.from.getFullYear(), date.from.getMonth(), date.from.getDate(), 0, 0, 0, 0).toISOString();
+        endDate = new Date(date.to.getFullYear(), date.to.getMonth(), date.to.getDate(), 23, 59, 59, 999).toISOString();
+      } else {
+        return;
+      }
 
       // Fetch investments
       const { data: investmentsData, error: investmentsError } = await supabase
@@ -275,8 +317,6 @@ const Finance = () => {
           payment_date: payment.payment_date,
         }))
       );
-
-      const turnover = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
 
       // Calculate balance locally
       const totalInvestments = 0;
@@ -425,28 +465,96 @@ const Finance = () => {
     });
   }, [sales, expenses, investments, loans, loanPayments, searchTerm, sortField, sortDirection]);
 
-  // Memo for display date (like SalesTable)
+  // Memo for display date (like Sales page)
   const displayDate = useMemo(() => {
-    if (!date?.from) return null;
-    const fromMonth = date.from.toLocaleString("default", { month: "short" });
-    const fromYear = date.from.getFullYear();
-    if (
-      date.to &&
-      date.from.getFullYear() === date.to.getFullYear() &&
-      date.from.getMonth() === date.to.getMonth()
-    ) {
-      return `${fromMonth.toUpperCase()} ${fromYear}`;
-    }
-    if (date.to) {
-      const toMonth = date.to.toLocaleString("default", { month: "short" });
-      const toYear = date.to.getFullYear();
-      if (fromYear === toYear) {
-        return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+    if (isCustomRange && date?.from) {
+      const fromMonth = date.from.toLocaleString("default", { month: "short" });
+      const fromYear = date.from.getFullYear();
+      if (
+        date.to &&
+        date.from.getFullYear() === date.to.getFullYear() &&
+        date.from.getMonth() === date.to.getMonth()
+      ) {
+        return `${fromMonth.toUpperCase()} ${fromYear}`;
       }
-      return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+      if (date.to) {
+        const toMonth = date.to.toLocaleString("default", { month: "short" });
+        const toYear = date.to.getFullYear();
+        if (fromYear === toYear) {
+          return `${fromMonth.toUpperCase()} - ${toMonth.toUpperCase()} ${fromYear}`;
+        }
+        return `${fromMonth.toUpperCase()} ${fromYear} - ${toMonth.toUpperCase()} ${toYear}`;
+      }
+      return `${fromMonth.toUpperCase()} ${fromYear}`;
+    } else {
+      // Monthly view
+      const monthNames = [
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+      ];
+      return `${monthNames[selectedMonth]} ${selectedYear}`;
     }
-    return `${fromMonth.toUpperCase()} ${fromYear}`;
-  }, [date]);
+  }, [selectedYear, selectedMonth, isCustomRange, date]);
+
+  // Generate year options for the dropdown
+  const generateYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear; year >= currentYear - 10; year--) {
+      years.push(year);
+    }
+    return years;
+  };
+
+  // Month names for tabs
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  // Handler for month tab change
+  const handleMonthChange = (monthIndex: string) => {
+    const month = parseInt(monthIndex);
+    setSelectedMonth(month);
+    setIsCustomRange(false);
+    // Update date range for the selected month
+    setDate({
+      from: new Date(selectedYear, month, 1),
+      to: new Date(selectedYear, month + 1, 0),
+    });
+  };
+
+  // Handler for year change
+  const handleYearChange = (year: string) => {
+    const newYear = parseInt(year);
+    setSelectedYear(newYear);
+    setIsCustomRange(false);
+    // Update date range for the selected month and new year
+    setDate({
+      from: new Date(newYear, selectedMonth, 1),
+      to: new Date(newYear, selectedMonth + 1, 0),
+    });
+  };
+
+  // Handler for custom range
+  const handleCustomRange = () => {
+    setIsCustomRange(true);
+  };
+
+  // Handler for back to monthly view
+  const handleBackToMonthly = () => {
+    setIsCustomRange(false);
+    // Reset to current month and year
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth();
+    setSelectedYear(currentYear);
+    setSelectedMonth(currentMonth);
+    setDate({
+      from: new Date(currentYear, currentMonth, 1),
+      to: new Date(currentYear, currentMonth + 1, 0),
+    });
+  };
 
 
 
@@ -801,187 +909,230 @@ const Finance = () => {
           </div>
         </div>
               <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-end">
-        <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
+        {/* Monthly/Custom Range Filter UI */}
+        {!isCustomRange ? (
+          <>
+            {/* Year Dropdown */}
+            <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
+              <SelectTrigger className="w-[100px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {generateYearOptions().map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* Custom Range Button */}
             <Button
-              id="date"
-              variant={"outline"}
-              className={cn(
-                "w-full sm:w-[300px] justify-start text-left font-normal",
-                !date && "text-muted-foreground"
-              )}
+              variant="outline"
+              size="sm"
+              onClick={handleCustomRange}
+              className="flex items-center gap-2"
             >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {date?.from
-                ? date.to
-                  ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
-                  : date.from.toLocaleDateString()
-                : "Pick a date range"}
+              <CalendarIcon className="h-4 w-4" />
+              Custom Range
             </Button>
-          </PopoverTrigger>
-            <PopoverContent
-              className="w-auto p-0 flex"
-              side="bottom"
-              align="start"
-            >
-              <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
-                {/* <Button
-                  variant="ghost"
-                  className={cn(
-                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
-                    date && date.from && date.to &&
-                      date.from.getFullYear() === new Date().getFullYear() &&
-                      date.from.getMonth() === new Date().getMonth() &&
-                      date.from.getDate() === new Date().getDate() &&
-                      date.to.getFullYear() === new Date().getFullYear() &&
-                      date.to.getMonth() === new Date().getMonth() &&
-                      date.to.getDate() === new Date().getDate() &&
-                      date.from.getTime() === date.to.getTime()
-                      ? "bg-lavender/30" : ""
-                  )}
-                  onClick={() => {
-                    const now = new Date();
-                    setDate({
-                      from: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-                      to: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-                    });
-                    setPopoverOpen(false);
-                  }}
-                >
-                  Today
-                </Button> */}
+          </>
+        ) : (
+          <>
+            {/* Custom Date Range Picker */}
+            <Popover open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
                 <Button
-                  variant="ghost"
+                  id="date"
+                  variant={"outline"}
                   className={cn(
-                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
-                    date && date.from && date.to &&
-                      date.from.getFullYear() === new Date().getFullYear() &&
-                      date.from.getMonth() === new Date().getMonth() &&
-                      date.from.getDate() === 1 &&
-                      date.to.getFullYear() === new Date().getFullYear() &&
-                      date.to.getMonth() === new Date().getMonth() &&
-                      date.to.getDate() === new Date().getDate() &&
-                      date.from.getTime() !== date.to.getTime()
-                      ? "bg-lavender/30" : ""
+                    "w-full sm:w-[300px] justify-start text-left font-normal",
+                    !date && "text-muted-foreground"
                   )}
-                  onClick={() => {
-                    const now = new Date();
-                    setDate({
-                      from: new Date(now.getFullYear(), now.getMonth(), 1),
-                      to: addDays(new Date(), 0),
-                    });
-                    setPopoverOpen(false);
-                  }}
                 >
-                  This Month
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date?.from
+                    ? date.to
+                      ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}`
+                      : date.from.toLocaleDateString()
+                    : "Pick a date range"}
                 </Button>
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
-                    date && date.from && date.to &&
-                      date.from.getFullYear() === new Date().getFullYear() &&
-                      date.from.getMonth() === new Date().getMonth() - 1 &&
-                      date.to.getFullYear() === new Date().getFullYear() &&
-                      date.to.getMonth() === new Date().getMonth() - 1
-                      ? "bg-lavender/30" : ""
-                  )}
-                  onClick={() => {
-                    const now = new Date();
-                    const lastMonth = new Date(
-                      now.getFullYear(),
-                      now.getMonth() - 1,
-                      1
-                    );
-                    const lastMonthEnd = new Date(
-                      now.getFullYear(),
-                      now.getMonth(),
-                      0
-                    );
-                    setDate({
-                      from: lastMonth,
-                      to: lastMonthEnd,
-                    });
-                    setPopoverOpen(false);
-                  }}
-                >
-                  Last Month
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
-                    date && date.from && date.to &&
-                      date.from.getFullYear() === new Date().getFullYear() &&
-                      date.from.getMonth() === 0 &&
-                      date.to.toDateString() === new Date().toDateString()
-                      ? "bg-lavender/30" : ""
-                  )}
-                  onClick={() => {
-                    const now = new Date();
-                    setDate({
-                      from: new Date(now.getFullYear(), 0, 1),
-                      to: addDays(new Date(), 0),
-                    });
-                    setPopoverOpen(false);
-                  }}
-                >
-                  This Year
-                </Button>
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
-                    date && date.from && date.to &&
-                      date.from.getFullYear() === 2000 &&
-                      date.from.getMonth() === 0
-                      ? "bg-lavender/30" : ""
-                  )}
-                  onClick={() => {
-                    setDate({
-                      from: new Date(2000, 0, 1),
-                      to: addDays(new Date(), 0),
-                    });
-                    setPopoverOpen(false);
-                  }}
-                >
-                  All Time
-                </Button>
-              </div>
-              <div className="p-2 bg-muted/40 rounded-r-lg">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-muted-foreground mb-1">
-                    Date Range
-                  </label>
-                  <div className="rounded-md border border-lavender/30 bg-background">
-                    <Calendar
-                      mode="range"
-                      selected={date}
-                      onSelect={setDate}
-                      numberOfMonths={1}
-                      className="rounded-md"
-                      initialFocus
-                    />
-                  </div>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0 flex"
+                side="bottom"
+                align="start"
+              >
+                <div className="flex flex-col space-y-1 p-2 border-r min-w-[140px] bg-muted/40 rounded-l-lg">
                   <Button
-                    type="button"
-                    onClick={() => setPopoverOpen(false)}
-                    className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                    variant="ghost"
+                    className={cn(
+                      "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                      date && date.from && date.to &&
+                        date.from.getFullYear() === new Date().getFullYear() &&
+                        date.from.getMonth() === new Date().getMonth() &&
+                        date.from.getDate() === 1 &&
+                        date.to.getFullYear() === new Date().getFullYear() &&
+                        date.to.getMonth() === new Date().getMonth() &&
+                        date.to.getDate() === new Date().getDate() &&
+                        date.from.getTime() !== date.to.getTime()
+                        ? "bg-lavender/30" : ""
+                    )}
+                    onClick={() => {
+                      const now = new Date();
+                      setDate({
+                        from: new Date(now.getFullYear(), now.getMonth(), 1),
+                        to: addDays(new Date(), 0),
+                      });
+                      setPopoverOpen(false);
+                    }}
                   >
-                    Apply
+                    This Month
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                      date && date.from && date.to &&
+                        date.from.getFullYear() === new Date().getFullYear() &&
+                        date.from.getMonth() === new Date().getMonth() - 1 &&
+                        date.to.getFullYear() === new Date().getFullYear() &&
+                        date.to.getMonth() === new Date().getMonth() - 1
+                        ? "bg-lavender/30" : ""
+                    )}
+                    onClick={() => {
+                      const now = new Date();
+                      const lastMonth = new Date(
+                        now.getFullYear(),
+                        now.getMonth() - 1,
+                        1
+                      );
+                      const lastMonthEnd = new Date(
+                        now.getFullYear(),
+                        now.getMonth(),
+                        0
+                      );
+                      setDate({
+                        from: lastMonth,
+                        to: lastMonthEnd,
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    Last Month
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                      date && date.from && date.to &&
+                        date.from.getFullYear() === new Date().getFullYear() &&
+                        date.from.getMonth() === 0 &&
+                        date.to.toDateString() === new Date().toDateString()
+                        ? "bg-lavender/30" : ""
+                    )}
+                    onClick={() => {
+                      const now = new Date();
+                      setDate({
+                        from: new Date(now.getFullYear(), 0, 1),
+                        to: addDays(new Date(), 0),
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    This Year
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-lavender/20 focus:outline-none",
+                      date && date.from && date.to &&
+                        date.from.getFullYear() === 2000 &&
+                        date.from.getMonth() === 0
+                        ? "bg-lavender/30" : ""
+                    )}
+                    onClick={() => {
+                      setDate({
+                        from: new Date(2000, 0, 1),
+                        to: addDays(new Date(), 0),
+                      });
+                      setPopoverOpen(false);
+                    }}
+                  >
+                    All Time
                   </Button>
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+                <div className="p-2 bg-muted/40 rounded-r-lg">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-medium text-muted-foreground mb-1">
+                      Date Range
+                    </label>
+                    <div className="rounded-md border border-lavender/30 bg-background">
+                      <Calendar
+                        mode="range"
+                        selected={date}
+                        onSelect={setDate}
+                        numberOfMonths={1}
+                        className="rounded-md"
+                        initialFocus
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => setPopoverOpen(false)}
+                      className="mt-2 bg-lavender/80 hover:bg-lavender text-white font-semibold rounded-md"
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {/* Back to Monthly Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBackToMonthly}
+              className="flex items-center gap-2"
+            >
+              ← Back to Monthly
+            </Button>
+          </>
+        )}
           {displayDate && (
-            <span className="text-muted-foreground text-sm"></span>
+            <span className="text-muted-foreground text-sm">({displayDate})</span>
           )}
           <button title={hideKpi ? "Show KPI" : "Hide KPI"} onClick={() => setHideKpi(!hideKpi)} className="ml-auto duration-300">{hideKpi ? <ArrowDownCircle className="h-6 w-6 text-foreground hover:text-white duration-300" /> : <ArrowUpCircle className="h-6 w-6 text-foreground hover:text-white duration-300" />}</button>
 
         </div>
       </div>
 
+      {/* Month Tabs - Only show when not in custom range mode */}
+      {!isCustomRange && (
+        <div className="px-4 sm:px-6">
+          <Tabs value={selectedMonth.toString()} onValueChange={handleMonthChange}>
+            <TabsList className="grid w-full grid-cols-6 lg:grid-cols-12 bg-muted">
+              {monthNames.map((month, index) => (
+                <TabsTrigger
+                  key={index}
+                  value={index.toString()}
+                  className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                >
+                  {month}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
+      {/* Display current filter */}
+      {displayDate && (
+        <div className="text-center">
+          <span className="text-sm font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+            {displayDate}
+          </span>
+        </div>
+      )}
 
 
     <div className="space-y-6">
