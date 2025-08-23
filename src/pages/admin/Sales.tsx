@@ -1113,7 +1113,14 @@ const SalesTable: React.FC = () => {
               const priceRange = product.price_ranges.find(
                 (range) => newQty >= range.min && newQty <= range.max
               );
-              const newPrice = priceRange ? priceRange.price : product.mrp || 0;
+              let newPrice;
+              if (priceRange) {
+                newPrice = priceRange.price;
+              } else {
+                // No exact range found, use the highest range's price
+                const sortedRanges = [...product.price_ranges].sort((a, b) => b.max - a.max);
+                newPrice = sortedRanges[0].price;
+              }
               updatePayload.price = newPrice;
               updatedRecordForUI.price = newPrice;
             } else {
@@ -1693,13 +1700,31 @@ const SalesTable: React.FC = () => {
         if (transactionType === "Sale") {
           const qty = Number(row.qty || 0);
           let price = 0;
-          if (product && Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
-            const priceRange = product.price_ranges.find(
-              (r) => qty >= r.min && qty <= r.max
-            );
-            price = priceRange ? priceRange.price : product.mrp || 0;
-          } else if (product) {
-            price = product.mrp || 0;
+          
+          // Check if imported row has a valid price, use it if available
+          const importedPrice = Number(row.price);
+          if (row.price !== null && row.price !== undefined && !isNaN(importedPrice) && importedPrice > 0) {
+            price = importedPrice;
+            console.log(`Using imported price: ${price} for product: ${product?.name}, qty: ${qty}`);
+          } else {
+            // Fallback to calculated price based on product price ranges
+            if (product && Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
+              const priceRange = product.price_ranges.find(
+                (r) => qty >= r.min && qty <= r.max
+              );
+              if (priceRange) {
+                price = priceRange.price;
+                console.log(`Found exact price range: ${price} for product: ${product?.name}, qty: ${qty}`);
+              } else {
+                // No exact range found, use the highest range's price
+                const sortedRanges = [...product.price_ranges].sort((a, b) => b.max - a.max);
+                price = sortedRanges[0].price;
+                console.log(`Using highest range price: ${price} for product: ${product?.name}, qty: ${qty} (exceeds all ranges)`);
+              }
+            } else if (product) {
+              price = product.mrp || 0;
+              console.log(`Using MRP: ${price} for product: ${product?.name}, qty: ${qty} (no price ranges)`);
+            }
           }
 
           const paid = Number(row.paid || 0);
@@ -1977,29 +2002,51 @@ const SalesTable: React.FC = () => {
       // Handle product selection - set initial price based on current quantity or 1
       if (field === "product_id" && value) {
         const currentQty = prev.qty || 1; // Use current qty or default to 1
-        // Always use imported price if present
-        let importedPriceRaw = updated.price ?? prev.price;
-        if (typeof importedPriceRaw === 'string') {
-          let numberMatch = importedPriceRaw.match(/\d+(\.\d+)?/);
-          updated.price = numberMatch ? Number(numberMatch[0]) : 0;
-        } else if (typeof importedPriceRaw === 'number') {
-          updated.price = importedPriceRaw;
-        } else {
-          updated.price = 0;
+        const product = products.find((p) => p.id === value);
+        
+        if (product) {
+          // Calculate price based on product price ranges
+          let calculatedPrice = 0;
+          if (Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
+            const priceRange = product.price_ranges.find(
+              (range) => currentQty >= range.min && currentQty <= range.max
+            );
+            if (priceRange) {
+              calculatedPrice = priceRange.price;
+            } else {
+              // No exact range found, use the highest range's price
+              const sortedRanges = [...product.price_ranges].sort((a, b) => b.max - a.max);
+              calculatedPrice = sortedRanges[0].price;
+            }
+          } else {
+            calculatedPrice = product.mrp || 0;
+          }
+          updated.price = calculatedPrice;
         }
       }
 
       // Handle quantity change - update price based on new quantity
       if (field === "qty" && value && prev.product_id) {
-        // Always use imported price if present
-        let importedPriceRaw = updated.price ?? prev.price;
-        if (typeof importedPriceRaw === 'string') {
-          let numberMatch = importedPriceRaw.match(/\d+(\.\d+)?/);
-          updated.price = numberMatch ? Number(numberMatch[0]) : 0;
-        } else if (typeof importedPriceRaw === 'number') {
-          updated.price = importedPriceRaw;
-        } else {
-          updated.price = 0;
+        const product = products.find((p) => p.id === prev.product_id);
+        
+        if (product) {
+          // Calculate price based on new quantity
+          let calculatedPrice = 0;
+          if (Array.isArray(product.price_ranges) && product.price_ranges.length > 0) {
+            const priceRange = product.price_ranges.find(
+              (range) => value >= range.min && value <= range.max
+            );
+            if (priceRange) {
+              calculatedPrice = priceRange.price;
+            } else {
+              // No exact range found, use the highest range's price
+              const sortedRanges = [...product.price_ranges].sort((a, b) => b.max - a.max);
+              calculatedPrice = sortedRanges[0].price;
+            }
+          } else {
+            calculatedPrice = product.mrp || 0;
+          }
+          updated.price = calculatedPrice;
         }
       }
 
