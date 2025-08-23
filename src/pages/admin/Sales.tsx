@@ -1491,6 +1491,11 @@ const SalesTable: React.FC = () => {
           variant: "destructive",
         });
       } else {
+        // Show success notification
+        toast({
+          title: "Records Deleted",
+          description: `Successfully deleted ${originalSelectedRows.length} record(s).`,
+        });
         // Refresh all data
         fetchDropdownData();
       }

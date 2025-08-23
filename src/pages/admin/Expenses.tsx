@@ -974,21 +974,14 @@ const AdminExpenses: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <CardTitle>Expense Records</CardTitle>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setAddingNew(true)}
-                      disabled={addingNew}
-                    >
-                      Add Expense
-                    </Button>
-                    {/* <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setHideKpi(!hideKpi)}
-                    >
-                      {hideKpi ? "Expand KPI" : "Collapse KPI"}
-                    </Button> */}
+                                  {/* Display current filter */}
+                {displayDate && (
+                  <div className="mt-2 text-center">
+                    <span className="text-sm font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                      {displayDate}
+                    </span>
+                  </div>
+                )}
                   </div>
                 </div>
                 <div className="flex flex-col md:flex-row items-center gap-2 mt-4">
@@ -1224,14 +1217,7 @@ const AdminExpenses: React.FC = () => {
                     </Tabs>
                   </div>
                 )}
-                {/* Display current filter */}
-                {displayDate && (
-                  <div className="mt-2 text-center">
-                    <span className="text-sm font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                      {displayDate}
-                    </span>
-                  </div>
-                )}
+
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
