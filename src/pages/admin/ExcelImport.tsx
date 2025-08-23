@@ -59,21 +59,55 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
           }
           
           // **FIXED**: Robust date parsing to prevent crashes
-          if (newSale.date) {
-            try {
-              // The 'cellDates: true' option often provides a JS Date object directly
-              const dateObj = new Date(newSale.date);
-              // Check if the date is valid
-              if (isNaN(dateObj.getTime())) {
-                  throw new Error('Invalid date value');
+            if (newSale.date) {
+              try {
+                let formattedDate = null;
+                if (newSale.date instanceof Date) {
+                  // Manually add 1 day to fix offset
+                  const fixedDate = new Date(newSale.date.getTime() + 24 * 60 * 60 * 1000);
+                  const year = fixedDate.getUTCFullYear();
+                  const month = String(fixedDate.getUTCMonth() + 1).padStart(2, '0');
+                  const day = String(fixedDate.getUTCDate()).padStart(2, '0');
+                  formattedDate = `${year}-${month}-${day}`;
+                } else if (typeof newSale.date === 'number') {
+                  // Excel sometimes gives dates as numbers (days since 1900)
+                  // Use XLSX to parse and add 1 day
+                  const excelDate = XLSX.SSF.parse_date_code(newSale.date + 1);
+                  if (excelDate) {
+                    const year = excelDate.y;
+                    const month = String(excelDate.m).padStart(2, '0');
+                    const day = String(excelDate.d).padStart(2, '0');
+                    formattedDate = `${year}-${month}-${day}`;
+                  }
+                } else if (typeof newSale.date === 'string') {
+                  // Try to parse string as YYYY-MM-DD or DD/MM/YYYY
+                  const dateStr = newSale.date.trim();
+                  // If already in YYYY-MM-DD, keep as is
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                    formattedDate = dateStr;
+                  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+                    // Convert DD/MM/YYYY to YYYY-MM-DD
+                    const [day, month, year] = dateStr.split('/');
+                    formattedDate = `${year}-${month}-${day}`;
+                  } else {
+                    // Fallback: try Date parsing and add 1 day
+                    const dateObj = new Date(dateStr);
+                    if (!isNaN(dateObj.getTime())) {
+                      const fixedDate = new Date(dateObj.getTime() + 24 * 60 * 60 * 1000);
+                      const year = fixedDate.getUTCFullYear();
+                      const month = String(fixedDate.getUTCMonth() + 1).padStart(2, '0');
+                      const day = String(fixedDate.getUTCDate()).padStart(2, '0');
+                      formattedDate = `${year}-${month}-${day}`;
+                    }
+                  }
+                }
+                if (!formattedDate) throw new Error('Invalid date value');
+                newSale.date = formattedDate;
+              } catch (dateError) {
+                console.warn(`Could not parse date for row, skipping:`, row);
+                return null; // Skip rows with invalid dates
               }
-              // Format to YYYY-MM-DD
-              newSale.date = dateObj.toISOString().split('T')[0];
-            } catch (dateError) {
-              console.warn(`Could not parse date for row, skipping:`, row);
-              return null; // Skip rows with invalid dates
             }
-          }
           
           return newSale;
         }).filter(Boolean); // Filter out any null (skipped) rows
