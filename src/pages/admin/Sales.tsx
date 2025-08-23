@@ -1102,13 +1102,24 @@ const SalesTable: React.FC = () => {
             Array.isArray(product.price_ranges) &&
             product.price_ranges.length > 0
           ) {
-            const priceRange = product.price_ranges.find(
-              (range) => newQty >= range.min && newQty <= range.max
-            );
-            const newPrice = priceRange ? priceRange.price : product.mrp || 0;
-
-            updatePayload.price = newPrice;
-            updatedRecordForUI.price = newPrice;
+            // Only update price if imported price is missing or invalid
+            let importedPrice = updatedRecordForUI.price;
+            // Remove currency symbol and commas if present
+            if (typeof importedPrice === 'string') {
+              importedPrice = importedPrice.replace(/[^\d.]/g, '');
+            }
+            importedPrice = Number(importedPrice);
+            if (importedPrice === null || importedPrice === undefined || isNaN(importedPrice) || importedPrice <= 0) {
+              const priceRange = product.price_ranges.find(
+                (range) => newQty >= range.min && newQty <= range.max
+              );
+              const newPrice = priceRange ? priceRange.price : product.mrp || 0;
+              updatePayload.price = newPrice;
+              updatedRecordForUI.price = newPrice;
+            } else {
+              updatePayload.price = importedPrice;
+              updatedRecordForUI.price = importedPrice;
+            }
           }
 
           // Update inventory for quantity change
@@ -1966,16 +1977,30 @@ const SalesTable: React.FC = () => {
       // Handle product selection - set initial price based on current quantity or 1
       if (field === "product_id" && value) {
         const currentQty = prev.qty || 1; // Use current qty or default to 1
-        const calculatedPrice = calculatePriceForQuantity(value, currentQty);
-        console.log(`Product selected: ${value}, Qty: ${currentQty}, Calculated Price: ${calculatedPrice}`);
-        updated.price = calculatedPrice;
+        // Always use imported price if present
+        let importedPriceRaw = updated.price ?? prev.price;
+        if (typeof importedPriceRaw === 'string') {
+          let numberMatch = importedPriceRaw.match(/\d+(\.\d+)?/);
+          updated.price = numberMatch ? Number(numberMatch[0]) : 0;
+        } else if (typeof importedPriceRaw === 'number') {
+          updated.price = importedPriceRaw;
+        } else {
+          updated.price = 0;
+        }
       }
 
       // Handle quantity change - update price based on new quantity
       if (field === "qty" && value && prev.product_id) {
-        const calculatedPrice = calculatePriceForQuantity(prev.product_id, value);
-        console.log(`Quantity changed: ${value}, Product: ${prev.product_id}, Calculated Price: ${calculatedPrice}`);
-        updated.price = calculatedPrice;
+        // Always use imported price if present
+        let importedPriceRaw = updated.price ?? prev.price;
+        if (typeof importedPriceRaw === 'string') {
+          let numberMatch = importedPriceRaw.match(/\d+(\.\d+)?/);
+          updated.price = numberMatch ? Number(numberMatch[0]) : 0;
+        } else if (typeof importedPriceRaw === 'number') {
+          updated.price = importedPriceRaw;
+        } else {
+          updated.price = 0;
+        }
       }
 
       return updated;

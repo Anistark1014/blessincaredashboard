@@ -52,7 +52,13 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onDataParsed }) => {
             const lowerCaseHeader = excelHeader.toLowerCase().trim();
             for (const [internalKey, aliases] of Object.entries(HEADER_ALIASES)) {
               if (aliases.includes(lowerCaseHeader)) {
-                newSale[internalKey] = value;
+                if (internalKey === 'price') {
+                  // Only set price if it's a valid number
+                  const num = Number(value);
+                  newSale[internalKey] = (value === '' || value === null || value === undefined || isNaN(num)) ? null : num;
+                } else {
+                  newSale[internalKey] = value;
+                }
                 break;
               }
             }
