@@ -233,7 +233,7 @@ const SalesTable: React.FC = () => {
 
   // Month/Year filter states
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
+  const [selectedMonth, setSelectedMonth] = useState<number | "all">(new Date().getMonth() + 1); // 1-12 or "all"
   const [isMonthYearFilter, setIsMonthYearFilter] = useState(true); // Default to monthly view
 
   const [customDate, setCustomDate] = useState<DateRange | undefined>(date);
@@ -354,10 +354,19 @@ const SalesTable: React.FC = () => {
 
     if (isMonthYearFilter) {
       // Use month/year filter
-      const start = new Date(selectedYear, selectedMonth - 1, 1);
-      const end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
-      startDate = start.toISOString();
-      endDate = end.toISOString();
+      if (selectedMonth === "all") {
+        // Show entire year
+        const start = new Date(selectedYear, 0, 1);
+        const end = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      } else {
+        // Show specific month
+        const start = new Date(selectedYear, selectedMonth - 1, 1);
+        const end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      }
     } else {
       // Use date range filter
       if (!date?.from || !date?.to) {
@@ -2857,10 +2866,13 @@ return (
                 <div className="flex items-center gap-2 text-muted-foreground border rounded-lg px-3 py-1">
                   <CalendarIcon className="h-4 w-4" />
                   <span className="font-semibold">
-                    {new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { 
-                      month: 'long', 
-                      year: 'numeric' 
-                    })}
+                    {selectedMonth === "all" 
+                      ? `All ${selectedYear}` 
+                      : new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })
+                    }
                   </span>
                 </div>
               ) : (
@@ -2910,8 +2922,9 @@ return (
               </div>
             </div>
 
-            <Tabs value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))} className="w-full">
-              <TabsList className="grid w-full grid-cols-6 sm:grid-cols-12 gap-1 h-auto p-1">
+            <Tabs value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(value === "all" ? "all" : parseInt(value))} className="w-full">
+              <TabsList className="grid w-full grid-cols-13 gap-1 h-auto p-1">
+                <TabsTrigger value="all" className="text-xs px-1 py-2 font-medium">All</TabsTrigger>
                 <TabsTrigger value="1" className="text-xs px-1 py-2">Jan</TabsTrigger>
                 <TabsTrigger value="2" className="text-xs px-1 py-2">Feb</TabsTrigger>
                 <TabsTrigger value="3" className="text-xs px-1 py-2">Mar</TabsTrigger>

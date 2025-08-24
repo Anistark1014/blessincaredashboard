@@ -104,7 +104,7 @@ const Finance = () => {
   const [products, setProducts] = useState<Product[]>([]);
   // Monthly filtering state
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedMonth, setSelectedMonth] = useState<number | "all">(new Date().getMonth());
   const [isCustomRange, setIsCustomRange] = useState<boolean>(false);
   const [date, setDate] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -174,11 +174,20 @@ const Finance = () => {
     let startDate: string, endDate: string;
     
     if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
-      // Monthly filtering
-      const start = new Date(selectedYear, selectedMonth, 1);
-      const end = new Date(selectedYear, selectedMonth + 1, 0);
-      startDate = start.toISOString();
-      endDate = end.toISOString();
+      // Monthly or yearly filtering
+      if (selectedMonth === "all") {
+        // Show all data for the selected year
+        const start = new Date(selectedYear, 0, 1);
+        const end = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      } else {
+        // Monthly filtering
+        const start = new Date(selectedYear, selectedMonth, 1);
+        const end = new Date(selectedYear, selectedMonth + 1, 0);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      }
     } else if (isCustomRange && date?.from && date?.to) {
       // Custom range filtering
       startDate = date.from.toISOString();
@@ -214,11 +223,20 @@ const Finance = () => {
     let startDate: string, endDate: string;
     
     if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
-      // Monthly filtering
-      const start = new Date(selectedYear, selectedMonth, 1);
-      const end = new Date(selectedYear, selectedMonth + 1, 0);
-      startDate = start.toISOString();
-      endDate = end.toISOString();
+      // Monthly or yearly filtering
+      if (selectedMonth === "all") {
+        // Show all data for the selected year
+        const start = new Date(selectedYear, 0, 1);
+        const end = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      } else {
+        // Monthly filtering
+        const start = new Date(selectedYear, selectedMonth, 1);
+        const end = new Date(selectedYear, selectedMonth + 1, 0);
+        startDate = start.toISOString();
+        endDate = end.toISOString();
+      }
     } else if (isCustomRange && date?.from && date?.to) {
       // Custom range filtering
       startDate = date.from.toISOString();
@@ -243,11 +261,20 @@ const Finance = () => {
       let startDate: string, endDate: string;
       
       if (!isCustomRange && selectedYear && selectedMonth !== undefined) {
-        // Monthly filtering
-        const start = new Date(selectedYear, selectedMonth, 1);
-        const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
-        startDate = start.toISOString();
-        endDate = end.toISOString();
+        // Monthly or yearly filtering
+        if (selectedMonth === "all") {
+          // Show all data for the selected year
+          const start = new Date(selectedYear, 0, 1);
+          const end = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+          startDate = start.toISOString();
+          endDate = end.toISOString();
+        } else {
+          // Monthly filtering
+          const start = new Date(selectedYear, selectedMonth, 1);
+          const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+          startDate = start.toISOString();
+          endDate = end.toISOString();
+        }
       } else if (isCustomRange && date?.from && date?.to) {
         // Custom range filtering
         startDate = new Date(date.from.getFullYear(), date.from.getMonth(), date.from.getDate(), 0, 0, 0, 0).toISOString();
@@ -487,11 +514,14 @@ const Finance = () => {
       }
       return `${fromMonth.toUpperCase()} ${fromYear}`;
     } else {
-      // Monthly view
+      // Monthly or yearly view
       const monthNames = [
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
         "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
       ];
+      if (selectedMonth === "all") {
+        return `ALL ${selectedYear}`;
+      }
       return `${monthNames[selectedMonth]} ${selectedYear}`;
     }
   }, [selectedYear, selectedMonth, isCustomRange, date]);
@@ -514,14 +544,24 @@ const Finance = () => {
 
   // Handler for month tab change
   const handleMonthChange = (monthIndex: string) => {
-    const month = parseInt(monthIndex);
-    setSelectedMonth(month);
-    setIsCustomRange(false);
-    // Update date range for the selected month
-    setDate({
-      from: new Date(selectedYear, month, 1),
-      to: new Date(selectedYear, month + 1, 0),
-    });
+    if (monthIndex === "all") {
+      setSelectedMonth("all");
+      setIsCustomRange(false);
+      // Update date range for the entire year
+      setDate({
+        from: new Date(selectedYear, 0, 1),
+        to: new Date(selectedYear, 11, 31),
+      });
+    } else {
+      const month = parseInt(monthIndex);
+      setSelectedMonth(month);
+      setIsCustomRange(false);
+      // Update date range for the selected month
+      setDate({
+        from: new Date(selectedYear, month, 1),
+        to: new Date(selectedYear, month + 1, 0),
+      });
+    }
   };
 
   // Handler for year change
@@ -530,10 +570,17 @@ const Finance = () => {
     setSelectedYear(newYear);
     setIsCustomRange(false);
     // Update date range for the selected month and new year
-    setDate({
-      from: new Date(newYear, selectedMonth, 1),
-      to: new Date(newYear, selectedMonth + 1, 0),
-    });
+    if (selectedMonth === "all") {
+      setDate({
+        from: new Date(newYear, 0, 1),
+        to: new Date(newYear, 11, 31),
+      });
+    } else {
+      setDate({
+        from: new Date(newYear, selectedMonth, 1),
+        to: new Date(newYear, selectedMonth + 1, 0),
+      });
+    }
   };
 
   // Handler for custom range
@@ -1110,12 +1157,18 @@ const Finance = () => {
       {!isCustomRange && (
         <div className="px-4 sm:px-6">
           <Tabs value={selectedMonth.toString()} onValueChange={handleMonthChange}>
-            <TabsList className="grid w-full grid-cols-6 lg:grid-cols-12 bg-muted">
+            <TabsList className="grid w-full grid-cols-13 bg-muted">
+              <TabsTrigger
+                value="all"
+                className="text-xs px-1 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                All {selectedYear}
+              </TabsTrigger>
               {monthNames.map((month, index) => (
                 <TabsTrigger
                   key={index}
                   value={index.toString()}
-                  className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  className="text-xs px-1 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   {month}
                 </TabsTrigger>
